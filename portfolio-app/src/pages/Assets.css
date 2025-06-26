@@ -1,0 +1,252 @@
+/* src/styles/Assets.css */
+
+:root {
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #3d3d3d;
+  --text-primary: #f0f0f0;
+  --text-secondary: #cccccc;
+  --accent-primary: #4CAF50;
+  --accent-secondary: #2196F3;
+  --accent-danger: #dc3545;
+  --accent-warning: #ff9800;
+  --border-color: #444;
+  --hover-color: #3d3d3d;
+}
+
+.assets-container {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 20px;
+  padding-top: 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.assets-container h1 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+/* Buttons */
+.add-asset-btn,
+.add-transaction-btn,
+.view-transactions-btn,
+.delete-asset-btn,
+.modal-submit-btn,
+.update-asset-btn,
+.modal-cancel-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  margin: 2px;
+  color: white;
+}
+
+.add-asset-btn {
+  background-color: var(--accent-primary);
+  margin-bottom: 20px;
+}
+
+.add-transaction-btn {
+  background-color: var(--accent-secondary);
+}
+
+.view-transactions-btn {
+  background-color: var(--accent-warning);
+}
+
+.delete-asset-btn {
+  background-color: var(--accent-danger);
+}
+
+.modal-submit-btn {
+  background-color: var(--accent-primary);
+}
+
+.modal-cancel-btn {
+  background-color: #6c757d;
+}
+
+.update-asset-btn {
+  background-color: #4CAF50;
+}
+
+button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
+th, td {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+th {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+td {
+  background-color: var(--bg-secondary);
+}
+
+tr:hover td {
+  background-color: var(--hover-color);
+}
+
+.transactions {
+  background-color: var(--bg-tertiary);
+  padding: 15px;
+  border-radius: 6px;
+  margin-top: 10px;
+}
+
+.transactions h3 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.transactions table {
+  font-size: 0.85rem;
+}
+
+/* Form */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+input, select {
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: var(--bg-secondary);
+  padding: 25px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  font-size: 1.3rem;
+  color: var(--text-primary);
+}
+
+/* Loading & Error */
+.loading, .error {
+  padding: 20px;
+  text-align: center;
+  margin: 20px 0;
+  border-radius: 6px;
+}
+
+.loading {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.error {
+  background-color: rgba(220, 53, 69, 0.15);
+  color: var(--accent-danger);
+  border: 1px solid var(--accent-danger);
+}
+
+/* Balance coloring */
+.positive-balance {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.negative-balance {
+  color: var(--accent-danger);
+  font-weight: 500;
+}
+
+.type-deposit {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.type-withdraw {
+  color: var(--accent-danger);
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  th, td {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+
+  .actions-cell {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .btn, .modal-submit-btn, .modal-cancel-btn {
+    width: 100%;
+  }
+
+  .modal-content {
+    width: 95%;
+    padding: 15px;
+  }
+}
