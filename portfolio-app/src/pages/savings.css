@@ -1,0 +1,388 @@
+/* src/pages/savings.css */
+
+:root {
+  --bg-primary: #1a1a1a;
+  --bg-secondary: #2d2d2d;
+  --bg-tertiary: #3d3d3d;
+  --text-primary: #f0f0f0;
+  --text-secondary: #cccccc;
+  --accent-primary: #4CAF50;
+  --accent-secondary: #2196F3;
+  --accent-danger: #dc3545;
+  --accent-warning: #ff9800;
+  --border-color: #444;
+  --hover-color: #3d3d3d;
+}
+
+.savings-container {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 20px;
+  padding-top: 80px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.savings-header {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+/* Buttons */
+.savings-add-btn,
+.savings-action-btn,
+.savings-submit-btn,
+.savings-cancel-btn {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  margin: 2px;
+  color: white;
+}
+
+.savings-add-btn {
+  background-color: var(--accent-primary);
+  margin-bottom: 20px;
+}
+
+.savings-edit-btn {
+  background-color: var(--accent-warning);
+}
+
+.savings-transaction-btn {
+  background-color: var(--accent-secondary);
+}
+
+.savings-view-btn {
+  background-color: #9c27b0;
+}
+
+.savings-delete-btn {
+  background-color: var(--accent-danger);
+}
+
+.savings-submit-btn {
+  background-color: var(--accent-primary);
+}
+
+.savings-cancel-btn {
+  background-color: #6c757d;
+}
+
+.savings-action-btn:hover,
+.savings-add-btn:hover,
+.savings-submit-btn:hover,
+.savings-cancel-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Table */
+.savings-table-container {
+  overflow-x: auto;
+}
+
+.savings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
+.savings-table th, 
+.savings-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.savings-table th {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.savings-table td {
+  background-color: var(--bg-secondary);
+}
+
+.savings-table tr:hover td {
+  background-color: var(--hover-color);
+}
+
+.savings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* Transactions Section */
+.transactions-row {
+  background-color: var(--bg-tertiary);
+}
+
+.transactions-container {
+  padding: 15px;
+  background-color: var(--bg-tertiary);
+}
+
+.transactions-container h3 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+}
+
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.transactions-table th,
+.transactions-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+}
+
+.transactions-table th {
+  background-color: var(--bg-secondary);
+}
+
+.no-transactions {
+  color: var(--text-secondary);
+  font-style: italic;
+  text-align: center;
+  padding: 10px;
+}
+
+/* Form Styles */
+.savings-form-group {
+  margin-bottom: 15px;
+}
+
+.savings-form-group label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-primary);
+}
+
+.savings-form-group input,
+.savings-form-group select {
+  padding: 10px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.savings-form-group input:focus,
+.savings-form-group select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+/* Modal Styles */
+.savings-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.savings-modal-content {
+  background-color: var(--bg-secondary);
+  padding: 25px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.savings-modal-content h2 {
+  margin-top: 0;
+  font-size: 1.3rem;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.savings-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Balance coloring */
+.positive-balance {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.negative-balance {
+  color: var(--accent-danger);
+  font-weight: 500;
+}
+
+.tx-type-deposit {
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.tx-type-withdrawal {
+  color: var(--accent-danger);
+  font-weight: 500;
+}
+
+/* Loading & Error States */
+.savings-loading {
+  padding: 20px;
+  text-align: center;
+  margin: 20px 0;
+  border-radius: 6px;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.savings-error {
+  padding: 20px;
+  text-align: center;
+  margin: 20px 0;
+  border-radius: 6px;
+  background-color: rgba(220, 53, 69, 0.15);
+  color: var(--accent-danger);
+  border: 1px solid var(--accent-danger);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .savings-table th, 
+  .savings-table td {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+
+  .savings-actions {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .savings-action-btn {
+    width: 100%;
+  }
+
+  .savings-modal-content {
+    width: 95%;
+    padding: 15px;
+  }
+
+  .savings-modal-actions {
+    flex-direction: column;
+  }
+
+  .savings-submit-btn,
+  .savings-cancel-btn {
+    width: 100%;
+  }
+}
+
+/* Bank Balance Display Styles */
+.bank-balance-display {
+  background-color: var(--bg-tertiary);
+  padding: 12px 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  border-left: 4px solid var(--accent-secondary);
+}
+
+.bank-balance-display p {
+  margin: 5px 0;
+  color: var(--text-primary);
+}
+
+.balance-amount {
+  font-weight: 600;
+  margin-left: 5px;
+  color: var(--accent-primary);
+}
+
+.balance-error {
+  font-weight: 500;
+  margin-left: 5px;
+  color: var(--accent-danger);
+}
+
+.balance-warning {
+  color: var(--accent-warning);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+/* Transaction Form Adjustments */
+.savings-modal-content .savings-form-group:first-child {
+  margin-top: 0;
+}
+
+/* Enhanced Modal Scroll for Transaction Form */
+.savings-modal-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-primary) var(--bg-tertiary);
+}
+
+.savings-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.savings-modal-content::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.savings-modal-content::-webkit-scrollbar-thumb {
+  background-color: var(--accent-primary);
+  border-radius: 4px;
+}
+
+/* Responsive Adjustments for New Elements */
+@media (max-width: 768px) {
+  .bank-balance-display {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+  
+  .balance-warning {
+    font-size: 0.8rem;
+  }
+}
+
+/* Bank change warnings */
+.bank-change-warning {
+  background-color: #fff3cd;
+  border-left: 4px solid #ffc107;
+  padding: 10px;
+  margin-bottom: 15px;
+  border-radius: 4px;
+}
+
+.bank-change-warning p {
+  margin: 0;
+  color: #856404;
+}

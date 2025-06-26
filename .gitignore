@@ -7,7 +7,6 @@ instance/
 
 # Node
 node_modules/
-package-lock.json
 
 # Virtual Environment
 venv/
@@ -27,3 +26,6 @@ portfolio-app/venv/
 # Database backups
 *.db.backup
 *.db~
+
+# macOS
+.DS_Store

@@ -3,31 +3,23 @@ import Dashboard from './pages/Dashboard';
 import Assets from './pages/Assets';
 import Savings from './pages/savings';
 import CreditCard from './pages/creditcard';
+import Users from './pages/users';
+import Bank from './pages/bank';
+import 'c:/Users/Rushw/Documents/PPA/portfolio-app/src/App.css';
 
 function App() {
   return (
     <div>
-      <header>
-        <p>Welcome to My Portfolio.</p>
-        
-        <Link to="/dashboard" style={{ color: 'black', textDecoration: 'none' }}>
-          Dashboard Page
-        </Link>
-        <p>
-          <Link to="/assets" style={{ color: 'black', textDecoration: 'none' }}>
-                    Assets Page
-                  </Link>
-        </p>
-        <p>
-          <Link to="/savings" style={{ color: 'black', textDecoration: 'none' }}>
-                    Savings Page
-                  </Link>
-        </p>
-        <p>
-          <Link to="/creditcard" style={{ color: 'black', textDecoration: 'none' }}>
-                    Credit Cards Page
-                  </Link>
-        </p>
+      <header className="app-header">
+        <div className="logo">My Portfolio</div>
+        <nav className="nav-tabs">
+          <Link to="/dashboard" className="nav-link">Dashboard</Link>
+          <Link to="/assets" className="nav-link">Assets</Link>
+          <Link to="/savings" className="nav-link">Savings</Link>
+          <Link to="/creditcard" className="nav-link">Credit Cards</Link>
+          <Link to="/bank" className="nav-link">Banks</Link>
+          <Link to="/users" className="nav-link">Users</Link>
+        </nav>
       </header>
 
       <Routes>
@@ -36,6 +28,8 @@ function App() {
         <Route path="/assets" element={<Assets />} />
         <Route path="/savings" element={<Savings />} />
         <Route path="/creditcard" element={<CreditCard />} />
+        <Route path="/bank" element={<Bank />} />
+        <Route path="/users" element={<Users />} />
       </Routes>
     </div>
   );
