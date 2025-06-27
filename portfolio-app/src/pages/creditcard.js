@@ -33,7 +33,7 @@ export default function CreditCard() {
     date: format(new Date(), 'yyyy-MM-dd'), // User-friendly format
     description: '',
     category: '',
-    isPayment: false
+    isPayment: ''
   });
   const [showForm, setShowForm] = useState(false);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
@@ -151,6 +151,12 @@ export default function CreditCard() {
 
   const handleTransactionSubmit = async (e) => {
     e.preventDefault();
+
+    if (transactionData.isPayment === '') {
+      alert('Please select whether this is a Payment or Expense.');
+      return;
+    }
+
     try {
       setLoading(true);
       
@@ -285,7 +291,7 @@ const handleEditCard = (card) => {
       date: format(new Date(), 'yyyy-MM-dd'),
       description: '',
       category: '',
-      isPayment: false
+      isPayment: ''
     });
     setShowTransactionForm(false);
   };
@@ -444,17 +450,32 @@ const handleEditCard = (card) => {
                 />
               </div>
               
-              <div className="form-group checkbox">
+              <div className="form-group radio-group">
+              <label>Transaction Type</label>
+              <div className="radio-options">
                 <label>
                   <input
-                    type="checkbox"
+                    type="radio"
                     name="isPayment"
-                    checked={transactionData.isPayment}
-                    onChange={handleTransactionChange}
+                    value="true"
+                    checked={transactionData.isPayment === true}
+                    onChange={() => setTransactionData(prev => ({ ...prev, isPayment: true }))}
                   />
-                  Is this a payment?
+                  Payment
+                </label>
+                <label style={{ marginLeft: '20px' }}>
+                  <input
+                    type="radio"
+                    name="isPayment"
+                    value="false"
+                    checked={transactionData.isPayment === false && transactionData.isPayment !== ''}
+                    onChange={() => setTransactionData(prev => ({ ...prev, isPayment: false }))}
+                  />
+                  Expense
                 </label>
               </div>
+            </div>
+
               
               <div className="form-actions">
                 <button type="submit" className="primary">Submit</button>

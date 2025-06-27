@@ -435,29 +435,50 @@ def add_credit_card_transaction(card_id):
     card = CreditCard.query.with_for_update().get(card_id)
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
-    
+
     data = request.json
-    
+
     # Validate required fields
     if 'amount' not in data:
         return jsonify({"error": "Amount is required"}), 400
     if 'date' not in data:
         return jsonify({"error": "Transaction date is required (DDMMYYYY format)"}), 400
-    
+
     try:
         # Parse and validate date
         transaction_date = datetime.strptime(data['date'], '%d%m%Y').replace(tzinfo=timezone.utc)
         if transaction_date > datetime.now(timezone.utc):
             return jsonify({"error": "Transaction date cannot be in the future"}), 400
-            
+
         amount = float(data['amount'])
         if amount == 0:
             return jsonify({"error": "Amount cannot be zero"}), 400
-            
+
+        # ✅ Enforce chronological transaction order
+        latest_txn = CreditCardTransaction.query.filter_by(
+            credit_card_id=card.id
+        ).order_by(CreditCardTransaction.date.desc()).first()
+
+        if latest_txn:
+            latest_txn_date = latest_txn.date
+            if latest_txn_date.tzinfo is None:
+                latest_txn_date = latest_txn_date.replace(tzinfo=timezone.utc)
+
+            if transaction_date < latest_txn_date:
+                return jsonify({
+                    "error": "Transaction date must be on or after the last transaction's date."
+                }), 400
+
+        # ✅ Reject early payments if no expenses exist yet
+        if amount > 0 and (card.used == 0 or card.available_limit == card.limit):
+            return jsonify({
+                "error": "Cannot add payment without any prior expenses."
+            }), 400
+
         # Check available limit for expenses
         if amount < 0 and abs(amount) > card.available_limit:
             return jsonify({"error": "Transaction would exceed available credit limit"}), 400
-        
+
         # Determine if this transaction is already past a billing cycle
         today = datetime.now(timezone.utc).date()
         txn_date = transaction_date.date()
@@ -478,58 +499,45 @@ def add_credit_card_transaction(card_id):
             is_payment=data.get('is_payment', amount > 0),
             is_billed=(already_billed if amount < 0 else True)  # Payments are always marked billed
         )
-        
+
         # Update card balances
         if amount < 0:  # Expense
             card.used += abs(amount)
 
-            # Determine which billing cycle the transaction belongs to
-            today = datetime.now(timezone.utc).date()
-            txn_date = transaction_date.date()
-
             current_cycle_start, current_cycle_end = get_billing_cycle_range(today, card.billing_cycle_start)
 
             if txn_date < current_cycle_start:
-                # Expense belongs to a past billing cycle → billed
                 card.billed_unpaid += abs(amount)
             else:
-                # Expense belongs to current billing cycle → unbilled
                 card.unbilled_spends += abs(amount)
 
-
-        # In the payment handling section (amount > 0):
         else:  # Payment
-            # First validate the payment doesn't exceed total owed
             total_owed = card.billed_unpaid + card.unbilled_spends
             if amount > total_owed:
                 return jsonify({"error": "Payment amount exceeds total owed amount"}), 400
-            
+
             payment_remaining = amount
-            
-            # Apply to billed_unpaid first if exists
+
             if card.billed_unpaid > 0:
                 paid = min(payment_remaining, card.billed_unpaid)
                 card.billed_unpaid -= paid
                 payment_remaining -= paid
-            
-            # Then apply to unbilled_spends
+
             if payment_remaining > 0 and card.unbilled_spends > 0:
                 paid = min(payment_remaining, card.unbilled_spends)
                 card.unbilled_spends -= paid
                 payment_remaining -= paid
-            
-            # Update used amount
+
             total_paid = amount - payment_remaining
             card.used -= total_paid
-            
-            # Update payment tracking
+
             if total_paid > 0:
                 card.last_payment_date = transaction_date
                 card.last_payment_amount = amount
-        
+
         db.session.add(transaction)
         db.session.commit()
-        
+
         return jsonify({
             "message": "Transaction added successfully",
             "transaction": {
@@ -544,16 +552,17 @@ def add_credit_card_transaction(card_id):
             "card": {
                 "used": card.used,
                 "available_limit": card.available_limit,
-                "billed_unpaid": card.billed_unpaid,  # New field
-                "unbilled_spends": card.unbilled_spends,  # New field
-                "total_payable": card.total_payable  # New field
+                "billed_unpaid": card.billed_unpaid,
+                "unbilled_spends": card.unbilled_spends,
+                "total_payable": card.total_payable
             }
         }), 201
-        
+
     except ValueError as e:
         return jsonify({"error": f"Invalid data format: {str(e)}"}), 400
     except Exception as e:
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
 
 
 #When to Call This Endpoint /process_billing
