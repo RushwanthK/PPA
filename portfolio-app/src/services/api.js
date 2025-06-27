@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { format } from 'date-fns';
 
-const API_URL = 'http://localhost:5000';
+const API_URL = 'https://rs-ppa-backend.onrender.com';
+//const API_URL = 'http://localhost:5000';
 
 // User API calls
 export const createUser = async (userData) => {
