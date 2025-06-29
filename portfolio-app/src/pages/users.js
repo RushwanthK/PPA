@@ -35,7 +35,7 @@ const Users = () => {
         setLoading(true);
         const response = await getUsers();
         console.log('API Response:', response);
-        setUsers(Array.isArray(response) ? response : []);
+        setUsers(response);
         setError(null);
       } catch (err) {
         console.error('Failed to fetch users:', err);
