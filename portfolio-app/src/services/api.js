@@ -10,8 +10,13 @@ export const createUser = async (userData) => {
 };
 
 export const getUsers = async () => {
-  const response = await axios.get('/users'); // No need to specify full URL
-  return response.data;
+  try {
+    const response = await axios.get(`${API_URL}/users`);
+    return { data: response.data }; // ✅ consistent with rest of your api.js
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    throw error;
+  }
 };
 /*
 //new getusers
