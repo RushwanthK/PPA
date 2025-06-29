@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getUsers, createUser, updateUser, deleteUser, canDeleteUser } from '../services/api';
-import 'C:/Users/Rushw/Documents/PPA/portfolio-app/src/pages/users.css';
+import './users.css';
 
 const Users = () => {
   const [users, setUsers] = useState([]);

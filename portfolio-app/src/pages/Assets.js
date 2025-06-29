@@ -8,7 +8,7 @@ import {
   deleteAsset,
   updateAsset
 } from '../services/api';
-import 'C:/Users/Rushw/Documents/PPA/portfolio-app/src/pages/Assets.css';
+import './Assets.css';
 
 export default function Assets() {
   const [assets, setAssets] = useState([]);

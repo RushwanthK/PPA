@@ -8,7 +8,7 @@ import {
   addBankTransaction,
   getBankTransactions
 } from '../services/api';
-import 'C:/Users/Rushw/Documents/PPA/portfolio-app/src/pages/bank.css';
+import './bank.css';
 
 export default function Bank() {
   const [banks, setBanks] = useState([]);

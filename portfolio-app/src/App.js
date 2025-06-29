@@ -5,7 +5,7 @@ import Savings from './pages/savings';
 import CreditCard from './pages/creditcard';
 import Users from './pages/users';
 import Bank from './pages/bank';
-import 'c:/Users/Rushw/Documents/PPA/portfolio-app/src/App.css';
+import './App.css';
 
 function App() {
   return (

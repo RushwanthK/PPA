@@ -11,7 +11,7 @@ import {
   getBanksByUser,
   getBankBalance
 } from '../services/api';
-import 'C:/Users/Rushw/Documents/PPA/portfolio-app/src/pages/savings.css';
+import './savings.css';
 
 export default function Savings() {
   const [savings, setSavings] = useState([]);

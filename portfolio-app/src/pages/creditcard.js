@@ -11,7 +11,7 @@ import {
   processBilling,
   getUsers
 } from '../services/api';
-import 'C:/Users/Rushw/Documents/PPA/portfolio-app/src/pages/creditcard.css';
+import './creditcard.css';
 import { format, parse } from 'date-fns';
 
 export default function CreditCard() {
