@@ -9,6 +9,7 @@
     "@mui/material": "^6.4.1",
     "axios": "^1.7.9",
     "cra-template": "1.2.0",
+    "date-fns": "^4.1.0",
     "postcss": "^8.5.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -43,6 +44,7 @@
     ]
   },
   "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@testing-library/react": "^16.2.0"
   }
 }
