@@ -29,12 +29,16 @@ def create_app():
     # ✅ ADD HEADERS FOR SECURITY & CACHING
     @app.after_request
     def add_headers(response):
-        # Optional: If you're serving HTML routes (usually for server-side rendered Flask apps)
-        if response.content_type and response.content_type.startswith('text/html'):
-            response.headers['Content-Type'] = 'text/html; charset=utf-8'
+        if response.content_type:
+            if response.content_type.startswith('text/html'):
+                response.headers['Content-Type'] = 'text/html; charset=utf-8'
+
+            elif response.content_type.startswith('application/json'):
+                response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+                response.headers['Pragma'] = 'no-cache'
+                response.headers['Expires'] = '0'
 
         response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['Cache-Control'] = 'public, max-age=3600'
         return response
 
     # Create database tables
