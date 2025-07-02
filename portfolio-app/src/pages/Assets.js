@@ -24,6 +24,7 @@ export default function Assets() {
     description: '', 
     category: '' 
   });
+  const [refreshFlag, setRefreshFlag] = useState(false);
   const [newAsset, setNewAsset] = useState({ 
     name: '', 
     userId: '',
@@ -43,7 +44,7 @@ export default function Assets() {
           getUsers()
         ]);
 
-        setAssets(assetsResponse.data || assetsResponse);
+        setAssets(assetsResponse);
         setUsers(usersResponse.data || usersResponse);
         setLoading(false);
       } catch (error) {
@@ -54,7 +55,7 @@ export default function Assets() {
     };
 
     fetchData();
-  }, []);
+  }, [refreshFlag]);
 
   // Handle transaction submission
   const handleTransactionSubmit = async (e) => {
@@ -164,8 +165,7 @@ export default function Assets() {
   
     try {
       await deleteAsset(assetId);
-      const updatedAssets = await getAssets(); // Refresh asset list after deletion
-      setAssets(updatedAssets);
+      setRefreshFlag(prev => !prev); // ✅ triggers useEffect to refresh
     } catch (error) {
       console.error("Failed to delete asset:", error);
       alert(`Failed to delete asset: ${error.response?.data?.error || "Unknown error occurred"}`);
@@ -184,8 +184,7 @@ export default function Assets() {
       });
       
       // Refresh assets list
-      const response = await getAssets();
-      setAssets(response.data || response);
+      setRefreshFlag(prev => !prev);
       
       // Reset form
       setEditingAsset(null);
