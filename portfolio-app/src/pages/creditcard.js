@@ -161,16 +161,16 @@ export default function CreditCard() {
       setLoading(true);
       
       // Convert date to DDMMYYYY format for backend
-      const formattedDate = format(
-        parse(transactionData.date, 'yyyy-MM-dd', new Date()),
-        'ddMMyyyy'
-      );
+      //const formattedDate = format(
+      //  parse(transactionData.date, 'yyyy-MM-dd', new Date()),
+      //  'ddMMyyyy'
+      //);
 
       await addCreditCardTransaction(transactionData.cardId, {
         amount: parseFloat(transactionData.isPayment ? 
           Math.abs(transactionData.amount) : 
           -Math.abs(transactionData.amount)),
-        date: formattedDate,
+        date: transactionData.date,
         description: transactionData.description,
         category: transactionData.category,
         is_payment: transactionData.isPayment
@@ -651,10 +651,7 @@ const handleEditCard = (card) => {
                     transactions.map(tx => (
                       <tr key={tx.id} className={tx.is_payment ? 'payment' : 'expense'}>
                         <td>
-                          {format(
-                            parse(tx.date, 'ddMMyyyy', new Date()),
-                            'MMM dd, yyyy'
-                          )}
+                          {tx.date}
                         </td>
                         <td>
                           {tx.amount > 0 ? '+' : ''}{tx.amount?.toFixed(2)}

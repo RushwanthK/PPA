@@ -6,6 +6,8 @@ from . import db
 from .models import (User, CreditCard, Bank, Asset, Saving,
                     Transaction, BankTransaction, CreditCardTransaction,
                     AssetTransaction, SavingTransaction, TransferTransaction)
+import pytz
+IST = pytz.timezone('Asia/Kolkata')
 
 routes = Blueprint('routes', __name__)
 
@@ -421,7 +423,7 @@ def get_credit_card_transactions(card_id):
     return jsonify([{
         "id": t.id,
         "amount": t.amount,
-        "date": t.date.strftime('%d%m%Y'),
+        "date": t.date.astimezone(IST).strftime('%Y-%m-%d %H:%M:%S'),
         "description": t.description,
         "category": t.category,
         "type": t.transaction_type,
@@ -446,7 +448,18 @@ def add_credit_card_transaction(card_id):
 
     try:
         # Parse and validate date
-        transaction_date = datetime.strptime(data['date'], '%d%m%Y').replace(tzinfo=timezone.utc)
+        date_part = datetime.strptime(data['date'], '%Y-%m-%d')
+        now_ist = datetime.now(IST)
+
+        transaction_date = IST.localize(datetime(
+            year=date_part.year,
+            month=date_part.month,
+            day=date_part.day,
+            hour=now_ist.hour,
+            minute=now_ist.minute,
+            second=now_ist.second,
+            microsecond=now_ist.microsecond
+        ))
         if transaction_date > datetime.now(timezone.utc):
             return jsonify({"error": "Transaction date cannot be in the future"}), 400
 
@@ -543,7 +556,7 @@ def add_credit_card_transaction(card_id):
             "transaction": {
                 "id": transaction.id,
                 "amount": transaction.amount,
-                "date": transaction.date.strftime('%d%m%Y'),
+                "date": transaction.date.strftime('%Y-%m-%d %H:%M:%S.%f'),
                 "description": transaction.description,
                 "category": transaction.category,
                 "type": transaction.transaction_type,
