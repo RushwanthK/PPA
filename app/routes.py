@@ -423,7 +423,7 @@ def get_credit_card_transactions(card_id):
     return jsonify([{
         "id": t.id,
         "amount": t.amount,
-        "date": t.date.astimezone(IST).strftime('%Y-%m-%d %H:%M:%S'),
+        "date": t.date.astimezone(IST).strftime('%d-%m-%Y %H:%M:%S'),
         "description": t.description,
         "category": t.category,
         "type": t.transaction_type,
