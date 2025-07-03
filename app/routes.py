@@ -591,33 +591,57 @@ def process_billing(card_id):
         today = datetime.now(timezone.utc).date()
         billing_start, billing_end = get_billing_cycle_range(today, card.billing_cycle_start)
 
-        # Fetch all relevant transactions (expenses + payments)
         transactions = CreditCardTransaction.query.filter(
             CreditCardTransaction.credit_card_id == card.id
-        ).all()
+        ).order_by(CreditCardTransaction.date.asc()).all()
 
-        billed_unpaid = 0
-        unbilled_spends = 0
-        updated_billed_count = 0
+        billed_expenses = []
+        unbilled_expenses = []
+        payments = []
 
         for txn in transactions:
-            if txn.amount > 0:  # Payments are always billed
+            if txn.amount > 0:
                 txn.is_billed = True
-                continue
-
-            txn_date = txn.date.date()
-
-            if txn_date < billing_start:
-                if not txn.is_billed:
-                    txn.is_billed = True
-                    updated_billed_count += 1
-                billed_unpaid += abs(txn.amount)
+                payments.append(txn)
             else:
-                txn.is_billed = False
-                unbilled_spends += abs(txn.amount)
+                if txn.date.date() < billing_start:
+                    txn.is_billed = True
+                    billed_expenses.append(txn)
+                else:
+                    txn.is_billed = False
+                    unbilled_expenses.append(txn)
 
-        card.billed_unpaid = billed_unpaid
-        card.unbilled_spends = unbilled_spends
+        # Reset values
+        card.billed_unpaid = sum(abs(e.amount) for e in billed_expenses)
+        card.unbilled_spends = sum(abs(e.amount) for e in unbilled_expenses)
+        card.used = card.billed_unpaid + card.unbilled_spends
+
+        # Reapply payments
+        payments_applied = 0
+        payment_remaining = sum(p.amount for p in payments)
+
+        for p in payments:
+            apply_amt = p.amount
+
+            if card.billed_unpaid > 0:
+                paid = min(card.billed_unpaid, apply_amt)
+                card.billed_unpaid -= paid
+                card.used -= paid
+                apply_amt -= paid
+                payments_applied += paid
+
+            if apply_amt > 0 and card.unbilled_spends > 0:
+                paid = min(card.unbilled_spends, apply_amt)
+                card.unbilled_spends -= paid
+                card.used -= paid
+                apply_amt -= paid
+                payments_applied += paid
+
+        # Update last payment info
+        if payments:
+            last_payment = payments[-1]
+            card.last_payment_date = last_payment.date
+            card.last_payment_amount = last_payment.amount
 
         db.session.commit()
 
@@ -627,10 +651,10 @@ def process_billing(card_id):
                 "id": card.id,
                 "billed_unpaid": card.billed_unpaid,
                 "unbilled_spends": card.unbilled_spends,
+                "used": card.used,
+                "available_limit": card.available_limit,
                 "total_payable": card.total_payable
-            },
-            "transactions_billed": updated_billed_count,
-            "total_amount_billed": billed_unpaid
+            }
         })
 
     except Exception as e:
