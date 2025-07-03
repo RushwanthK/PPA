@@ -5,15 +5,13 @@ import './users.css';
 const Users = () => {
   const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ 
-    name: '', 
-    age: '', 
+    name: '',  
     dob: '', 
     place: '' 
   });
   const [updatedUser, setUpdatedUser] = useState({ 
     id: '', 
-    name: '', 
-    age: '', 
+    name: '',  
     dob: '', 
     place: '' 
   });
@@ -55,14 +53,14 @@ const Users = () => {
       setLoading(true);
       const response = await createUser(newUser);
       
-      setUsers(prevUsers => [...prevUsers, response.data]); // Ensure response.data contains user details
-      
-      setNewUser({ name: '', age: '', dob: '', place: '' });
+      setUsers(prevUsers => [...prevUsers, response.data]);
+      setNewUser({ name: '', dob: '', place: '' }); // Removed age from reset
       setIsAddingUser(false);
       showNotification('User created successfully!');
     } catch (err) {
       console.error('Failed to create user:', err);
-      showNotification('Failed to create user. Please try again.', 'error');
+      const errorMessage = err.response?.data?.error || 'Failed to create user. Please try again.';
+      showNotification(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -72,7 +70,11 @@ const Users = () => {
   const handleUpdateUser = async () => {
     try {
       setLoading(true);
-      const response = await updateUser(updatedUser.id, updatedUser);
+      const response = await updateUser(updatedUser.id, {
+        name: updatedUser.name,
+        dob: updatedUser.dob,
+        place: updatedUser.place
+      });
       
       setUsers(prevUsers => 
         prevUsers.map(user => 
@@ -80,12 +82,13 @@ const Users = () => {
         )
       );
       
-      setUpdatedUser({ id: '', name: '', age: '', dob: '', place: '' });
+      setUpdatedUser({ id: '', name: '', dob: '', place: '' }); // Removed age from reset
       setIsEditing(false);
       showNotification('User updated successfully!');
     } catch (err) {
       console.error('Failed to update user:', err);
-      showNotification('Failed to update user. Please try again.', 'error');
+      const errorMessage = err.response?.data?.error || 'Failed to update user. Please try again.';
+      showNotification(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -138,7 +141,6 @@ const Users = () => {
     setUpdatedUser({
       id: user.id,
       name: user.name,
-      age: user.age,
       dob: formattedDob,
       place: user.place
     });
@@ -227,15 +229,7 @@ const Users = () => {
               required
               disabled={loading}
             />
-            <input 
-              type="number" 
-              placeholder="Age" 
-              value={newUser.age} 
-              onChange={(e) => setNewUser({ ...newUser, age: e.target.value })} 
-              required
-              min="1"
-              disabled={loading}
-            />
+            
             <input 
               type="date" 
               placeholder="Date of Birth" 
@@ -243,6 +237,7 @@ const Users = () => {
               onChange={(e) => setNewUser({ ...newUser, dob: e.target.value })} 
               required
               disabled={loading}
+              max={new Date().toISOString().split('T')[0]} // Prevent future dates
             />
             <input 
               type="text" 
@@ -288,15 +283,7 @@ const Users = () => {
               required
               disabled={loading}
             />
-            <input 
-              type="number" 
-              placeholder="Age" 
-              value={updatedUser.age} 
-              onChange={(e) => setUpdatedUser({ ...updatedUser, age: e.target.value })} 
-              required
-              min="1"
-              disabled={loading}
-            />
+            
             <input 
               type="date" 
               placeholder="Date of Birth" 
@@ -304,6 +291,7 @@ const Users = () => {
               onChange={(e) => setUpdatedUser({ ...updatedUser, dob: e.target.value })} 
               required
               disabled={loading}
+              max={new Date().toISOString().split('T')[0]} // Prevent future dates
             />
             <input 
               type="text" 

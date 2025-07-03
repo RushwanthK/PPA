@@ -21,14 +21,22 @@ def home():
     return "Welcome to the Personal Portfolio App!"
 
 # ========== USER ROUTES ==========
+def calculate_age(dob):
+    today = datetime.today()
+    return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
 @routes.route('/users', methods=['POST'])
 def create_user():
     data = request.json
     try:
+        if 'age' in data:
+            return jsonify({"error": "Age should not be provided manually. It will be calculated from date of birth."}), 400
+            
+        dob = parse_date(data['dob'])
         new_user = User(
             name=data['name'],
-            age=data['age'],
-            dob=parse_date(data['dob']),
+            age=calculate_age(dob),  # Auto-calculate age
+            dob=dob,
             place=data['place']
         )
         db.session.add(new_user)
@@ -63,9 +71,13 @@ def update_user(id):
         return jsonify({'message': 'User not found'}), 404
     
     try:
+        if 'age' in data:
+            return jsonify({"error": "Age should not be provided manually. It will be calculated from date of birth."}), 400
+            
+        dob = parse_date(data['dob'])
         user.name = data['name']
-        user.age = data['age']
-        user.dob = parse_date(data['dob'])
+        user.age = calculate_age(dob)  # Auto-calculate age
+        user.dob = dob
         user.place = data['place']
         db.session.commit()
         return jsonify({
