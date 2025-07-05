@@ -207,7 +207,7 @@ def get_credit_cards():
         "unbilled_spends": card.unbilled_spends,
         "billing_cycle_start": card.billing_cycle_start,
         "total_payable": card.total_payable,
-        "last_payment_date": card.last_payment_date.strftime('%d%m%Y') if card.last_payment_date else None,
+        "last_payment_date": card.last_payment_date.astimezone(IST).strftime('%d%m%Y') if card.last_payment_date else None,
         "last_payment_amount": card.last_payment_amount
     } for card in cards])
 
@@ -228,7 +228,7 @@ def get_credit_card(card_id):
         "unbilled_spends": card.unbilled_spends,
         "billing_cycle_start": card.billing_cycle_start,
         "total_payable": card.total_payable,
-        "last_payment_date": card.last_payment_date.strftime('%d%m%Y') if card.last_payment_date else None,
+        "last_payment_date": card.last_payment_date.astimezone(IST).strftime('%d%m%Y') if card.last_payment_date else None,
         "last_payment_amount": card.last_payment_amount
     })
 
@@ -365,7 +365,7 @@ def update_credit_card(card_id):
 
 def calculate_current_cycle_start(billing_cycle_start):
     """Calculate the start date of the current billing cycle"""
-    today = datetime.now(IST)
+    today = datetime.now(timezone.utc)
     
     if today.day >= billing_cycle_start:
         # Current month's cycle
@@ -462,8 +462,7 @@ def add_credit_card_transaction(card_id):
         # Parse and validate date
         date_part = datetime.strptime(data['date'], '%Y-%m-%d')
         now_ist = datetime.now(IST)
-
-        transaction_date = IST.localize(datetime(
+        local_dt = IST.localize(datetime(
             year=date_part.year,
             month=date_part.month,
             day=date_part.day,
@@ -472,7 +471,8 @@ def add_credit_card_transaction(card_id):
             second=now_ist.second,
             microsecond=now_ist.microsecond
         ))
-        if transaction_date > datetime.now(IST):
+        transaction_date = local_dt.astimezone(pytz.utc)
+        if transaction_date > datetime.now(timezone.utc):
             return jsonify({"error": "Transaction date cannot be in the future"}), 400
 
         amount = float(data['amount'])
@@ -487,11 +487,10 @@ def add_credit_card_transaction(card_id):
         if latest_txn:
             latest_txn_date = latest_txn.date
 
-            # Ensure latest_txn_date is in IST
             if latest_txn_date.tzinfo is None:
-                latest_txn_date = IST.localize(latest_txn_date)
+                latest_txn_date = pytz.utc.localize(latest_txn_date)
             else:
-                latest_txn_date = latest_txn_date.astimezone(IST)
+                latest_txn_date = latest_txn_date.astimezone(pytz.utc)
 
             # Compare using IST-aware transaction_date
             if transaction_date < latest_txn_date:
@@ -510,7 +509,7 @@ def add_credit_card_transaction(card_id):
             return jsonify({"error": "Transaction would exceed available credit limit"}), 400
 
         # Determine if this transaction is already past a billing cycle
-        today = datetime.now(IST).date()
+        today = datetime.now(timezone.utc).date()
         txn_date = transaction_date.date()
         cycle_start, _ = get_billing_cycle_range(today, card.billing_cycle_start)
 
@@ -605,7 +604,7 @@ def process_billing(card_id):
         return jsonify({"error": "Credit card not found"}), 404
 
     try:
-        today = datetime.now(IST).date()
+        today = datetime.now(timezone.utc).date()
         billing_start, billing_end = get_billing_cycle_range(today, card.billing_cycle_start)
 
         transactions = CreditCardTransaction.query.filter(
@@ -681,7 +680,7 @@ def process_billing(card_id):
 
 def is_in_current_billing_cycle(transaction_date, cycle_start_day):
     """Check if transaction falls in current billing cycle based on CURRENT DATE"""
-    today = datetime.now(IST)
+    today = datetime.now(timezone.utc)
     
     # Calculate current cycle start date
     if today.day >= cycle_start_day:
@@ -842,7 +841,8 @@ def add_bank_transaction(bank_id):
             description=description,
             category=category,
             transaction_type=transaction_type,
-            bank_balance_after=new_balance
+            bank_balance_after=new_balance,
+            date=datetime.now(timezone.utc)
         )
         
         bank.balance = new_balance
@@ -878,7 +878,7 @@ def get_bank_transactions(bank_id):
         "description": tx.description or '',
         "category": tx.category or '',
         "transaction_type": tx.transaction_type,
-        "date": tx.date.strftime("%Y-%m-%d %H:%M:%S"),
+        "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
         "bank_balance_after": tx.bank_balance_after
     } for tx in transactions])
 
@@ -978,7 +978,8 @@ def add_asset_transaction(asset_id):
         description=data.get('description'),
         category=data.get('category'),
         transaction_type=transaction_type,
-        asset_balance_after=new_balance
+        asset_balance_after=new_balance,
+        date=datetime.now(timezone.utc)
     )
     
     asset.balance = new_balance
@@ -1000,7 +1001,7 @@ def get_asset_transactions(asset_id):
             "description": tx.description or '',
             "category": tx.category or '',
             "transaction_type": tx.transaction_type,
-            "date": tx.date.strftime("%Y-%m-%d %H:%M:%S"),
+            "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
             "asset_balance_after": tx.asset_balance_after
         }
         for tx in transactions
@@ -1172,7 +1173,8 @@ def add_saving_transaction(saving_id):
         description=data.get('description'),
         category=data.get('category'),
         transaction_type=transaction_type,
-        saving_balance_after=new_saving_balance
+        saving_balance_after=new_saving_balance,
+        date=datetime.now(timezone.utc)
     )
     
     saving.balance = new_saving_balance
@@ -1203,7 +1205,7 @@ def get_saving_transactions(saving_id):
             "description": tx.description or '',
             "category": tx.category or '',
             "transaction_type": tx.transaction_type,
-            "date": tx.date.strftime("%Y-%m-%d %H:%M:%S"),
+            "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
             "saving_balance_after": tx.saving_balance_after
         }
         for tx in transactions
@@ -1254,7 +1256,8 @@ def create_transfer():
         to_account_id=data['to_account_id'],
         amount=amount,
         fee=fee,
-        description=data.get('description')
+        description=data.get('description'),
+        date=datetime.now(timezone.utc)
     )
     
     db.session.add(transfer)
