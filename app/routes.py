@@ -365,7 +365,7 @@ def update_credit_card(card_id):
 
 def calculate_current_cycle_start(billing_cycle_start):
     """Calculate the start date of the current billing cycle"""
-    today = datetime.now(timezone.utc)
+    today = datetime.now(IST)
     
     if today.day >= billing_cycle_start:
         # Current month's cycle
@@ -472,7 +472,7 @@ def add_credit_card_transaction(card_id):
             second=now_ist.second,
             microsecond=now_ist.microsecond
         ))
-        if transaction_date > datetime.now(timezone.utc):
+        if transaction_date > datetime.now(IST):
             return jsonify({"error": "Transaction date cannot be in the future"}), 400
 
         amount = float(data['amount'])
@@ -486,9 +486,14 @@ def add_credit_card_transaction(card_id):
 
         if latest_txn:
             latest_txn_date = latest_txn.date
-            if latest_txn_date.tzinfo is None:
-                latest_txn_date = latest_txn_date.replace(tzinfo=timezone.utc)
 
+            # Ensure latest_txn_date is in IST
+            if latest_txn_date.tzinfo is None:
+                latest_txn_date = IST.localize(latest_txn_date)
+            else:
+                latest_txn_date = latest_txn_date.astimezone(IST)
+
+            # Compare using IST-aware transaction_date
             if transaction_date < latest_txn_date:
                 return jsonify({
                     "error": "Transaction date must be on or after the last transaction's date."
@@ -505,7 +510,7 @@ def add_credit_card_transaction(card_id):
             return jsonify({"error": "Transaction would exceed available credit limit"}), 400
 
         # Determine if this transaction is already past a billing cycle
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(IST).date()
         txn_date = transaction_date.date()
         cycle_start, _ = get_billing_cycle_range(today, card.billing_cycle_start)
 
@@ -600,7 +605,7 @@ def process_billing(card_id):
         return jsonify({"error": "Credit card not found"}), 404
 
     try:
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(IST).date()
         billing_start, billing_end = get_billing_cycle_range(today, card.billing_cycle_start)
 
         transactions = CreditCardTransaction.query.filter(
@@ -676,7 +681,7 @@ def process_billing(card_id):
 
 def is_in_current_billing_cycle(transaction_date, cycle_start_day):
     """Check if transaction falls in current billing cycle based on CURRENT DATE"""
-    today = datetime.now(timezone.utc)
+    today = datetime.now(IST)
     
     # Calculate current cycle start date
     if today.day >= cycle_start_day:
