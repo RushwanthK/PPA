@@ -1,18 +1,24 @@
 import axios from 'axios';
 import { format } from 'date-fns';
 
-const API_URL = 'https://rs-ppa-backend.onrender.com';
+//const API_URL = 'https://rs-ppa-backend.onrender.com';
 //const API_URL = 'http://localhost:5000';
+
+// Create an axios instance with base URL
+const api = axios.create({
+  baseURL: process.env.REACT_APP_API_URL,
+  withCredentials: true
+});
 
 // User API calls
 export const createUser = async (userData) => {
-  return axios.post(`${API_URL}/users`, userData);
+  return api.post('/users', userData);
 };
 
 export const getUsers = async () => {
   try {
-    const response = await axios.get(`${API_URL}/users`);
-    return response.data;// ✅ consistent with rest of your api.js
+    const response = await api.get('/users');
+    return response.data;
   } catch (error) {
     console.error('Error fetching users:', error);
     throw error;
@@ -31,21 +37,21 @@ export const getUsers = async () => {
 };*/
 
 export const updateUser = async (id, userData) => {
-  return axios.put(`${API_URL}/users/${id}`, userData);
+  return api.put(`/users/${id}`, userData);
 };
 
 export const deleteUser = async (id) => {
-  return axios.delete(`${API_URL}/users/${id}`);
+  return api.delete(`/users/${id}`);
 };
 
 export const canDeleteUser = async (id) => {
-  return axios.get(`${API_URL}/users/${id}/can_delete`);
+  return api.get(`/users/${id}/can_delete`);
 };
 
 // Bank API calls
 export const getBanks = async () => {
   try {
-    const response = await axios.get(`${API_URL}/banks`);
+    const response = await api.get('/banks');
     return { data: response.data };
   } catch (error) {
     const errorMsg = error.response?.data?.error || 'Failed to fetch banks';
@@ -56,7 +62,7 @@ export const getBanks = async () => {
 
 export const createBank = async (bankData) => {
   try {
-    const response = await axios.post(`${API_URL}/banks`, {
+    const response = await api.post('/banks', {
       name: bankData.name,
       user_id: bankData.userId,
       balance: 0
@@ -81,7 +87,7 @@ export const createBank = async (bankData) => {
 
 export const updateBank = async (id, bankData) => {
   try {
-    const response = await axios.put(`${API_URL}/banks/${id}`, {
+    const response = await api.put(`/banks/${id}`, {
       name: bankData.name,
       user_id: bankData.user_id
     });
@@ -95,7 +101,7 @@ export const updateBank = async (id, bankData) => {
 
 export const deleteBank = async (id) => {
   try {
-    const response = await axios.delete(`${API_URL}/banks/${id}`);
+    const response = await api.delete(`/banks/${id}`);
     return response.data;
   } catch (error) {
     const errorMsg = error.response?.data?.error || 
@@ -107,7 +113,7 @@ export const deleteBank = async (id) => {
 
 export const addBankTransaction = async (bankId, transactionData) => {
   try {
-    const response = await axios.post(`${API_URL}/banks/${bankId}/transactions`, {
+    const response = await api.post(`/banks/${bankId}/transactions`, {
       amount: transactionData.amount,
       type: transactionData.type || 'income',
       description: transactionData.description,
@@ -123,7 +129,7 @@ export const addBankTransaction = async (bankId, transactionData) => {
 
 export const getBankTransactions = async (bankId) => {
   try {
-    const response = await axios.get(`${API_URL}/banks/${bankId}/transactions`);
+    const response = await api.get(`/banks/${bankId}/transactions`);
     return { data: response.data };
   } catch (error) {
     const errorMsg = error.response?.data?.error || 'Failed to fetch bank transactions';
@@ -134,10 +140,10 @@ export const getBankTransactions = async (bankId) => {
 
 export const getBanksForUser = async (userId) => {
   try {
-    const response = await axios.get(`${API_URL}/banks_dropdown`, {
+    const response = await api.get('/banks_dropdown', {
       params: { user_id: userId }
     });
-    return { data: response.data }; // Wrap in data property
+    return { data: response.data };
   } catch (error) {
     console.error('Error fetching user banks:', error);
     throw error;
@@ -147,10 +153,10 @@ export const getBanksForUser = async (userId) => {
 // Bank Balance API call
 export const getBankBalance = async (bankId) => {
   try {
-    const response = await axios.get(`${API_URL}/bank_balance`, {
+    const response = await api.get('/bank_balance', {
       params: { bank_id: bankId }
     });
-    return response.data; // Returns { id, name, balance }
+    return response.data;
   } catch (error) {
     const errorMsg = error.response?.data?.error || 
       `Failed to fetch balance for bank ${bankId}`;
@@ -162,8 +168,8 @@ export const getBankBalance = async (bankId) => {
 // Add this new function specifically for Bank page
 export const getUsersForBank = async () => {
   try {
-    const response = await axios.get(`${API_URL}/users`);
-    return { data: response.data }; // Wrap the array in a data property
+    const response = await api.get('/users');
+    return { data: response.data };
   } catch (error) {
     console.error('Error fetching users:', error);
     throw error;
@@ -173,7 +179,7 @@ export const getUsersForBank = async () => {
 // Asset API calls
 export const createAsset = async (assetData) => {
   try {
-    const response = await axios.post(`${API_URL}/assets`, assetData);
+    const response = await api.post('/assets', assetData);
     return response.data;
   } catch (error) {
     console.error("Error creating asset:", error.response?.data || error.message);
@@ -183,8 +189,8 @@ export const createAsset = async (assetData) => {
 
 export const getAssets = async () => {
   try {
-    const response = await axios.get(`${API_URL}/assets`);
-    console.log("Fetched assets:", response.data); // Debugging line
+    const response = await api.get('/assets');
+    console.log("Fetched assets:", response.data);
     return response.data;
   } catch (error) {
     console.error("Error fetching assets:", error);
@@ -193,10 +199,9 @@ export const getAssets = async () => {
 };
 
 export const updateAsset = async (id, assetData) => {
-  // Explicitly remove balance if included
   const { balance, ...safeData } = assetData; 
   try {
-    const response = await axios.put(`${API_URL}/assets/${id}`, safeData);
+    const response = await api.put(`/assets/${id}`, safeData);
     return response.data;
   } catch (error) {
     console.error("Error updating asset:", error.response?.data || error.message);
@@ -206,7 +211,7 @@ export const updateAsset = async (id, assetData) => {
 
 export const deleteAsset = async (id) => {
   try {
-    const response = await axios.delete(`${API_URL}/assets/${id}`);
+    const response = await api.delete(`/assets/${id}`);
     return response.data;
   } catch (error) {
     console.error("Error deleting asset:", error.response?.data || error.message);
@@ -215,17 +220,17 @@ export const deleteAsset = async (id) => {
 };
 
 export const createAssetTransaction = async (assetId, transactionData) => {
-  return axios.post(`${API_URL}/assets/${assetId}/transactions`, transactionData);
+  return api.post(`/assets/${assetId}/transactions`, transactionData);
 };
 
 export const getAssetTransactions = async (assetId) => {
-  return axios.get(`${API_URL}/assets/${assetId}/transactions`);
+  return api.get(`/assets/${assetId}/transactions`);
 };
 
 // Credit Card API calls
 export const createCreditCard = async (cardData) => {
   try {
-    const response = await axios.post(`${API_URL}/credit_cards`, cardData);
+    const response = await api.post('/credit_cards', cardData);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -235,7 +240,7 @@ export const createCreditCard = async (cardData) => {
 
 export const getCreditCards = async () => {
   try {
-    const response = await axios.get(`${API_URL}/credit_cards`);
+    const response = await api.get('/credit_cards');
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -245,7 +250,7 @@ export const getCreditCards = async () => {
 
 export const getCreditCard = async (cardId) => {
   try {
-    const response = await axios.get(`${API_URL}/credit_cards/${cardId}`);
+    const response = await api.get(`/credit_cards/${cardId}`);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -255,7 +260,7 @@ export const getCreditCard = async (cardId) => {
 
 export const getUserCreditCards = async (userId) => {
   try {
-    const response = await axios.get(`${API_URL}/users/${userId}/credit_cards`);
+    const response = await api.get(`/users/${userId}/credit_cards`);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -265,7 +270,6 @@ export const getUserCreditCards = async (userId) => {
 
 export const updateCreditCard = async (cardId, updateData) => {
   try {
-    // Client-side validation for calculated fields
     const forbiddenFields = ['used', 'available_limit', 'billed_unpaid', 'unbilled_spends'];
     for (const field of forbiddenFields) {
       if (field in updateData) {
@@ -273,7 +277,7 @@ export const updateCreditCard = async (cardId, updateData) => {
       }
     }
 
-    const response = await axios.put(`${API_URL}/credit_cards/${cardId}`, updateData);
+    const response = await api.put(`/credit_cards/${cardId}`, updateData);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -283,7 +287,7 @@ export const updateCreditCard = async (cardId, updateData) => {
 
 export const deleteCreditCard = async (cardId) => {
   try {
-    const response = await axios.delete(`${API_URL}/credit_cards/${cardId}`);
+    const response = await api.delete(`/credit_cards/${cardId}`);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -293,7 +297,7 @@ export const deleteCreditCard = async (cardId) => {
 
 export const getCreditCardTransactions = async (cardId) => {
   try {
-    const response = await axios.get(`${API_URL}/credit_cards/${cardId}/transactions`);
+    const response = await api.get(`/credit_cards/${cardId}/transactions`);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -303,18 +307,16 @@ export const getCreditCardTransactions = async (cardId) => {
 
 export const addCreditCardTransaction = async (cardId, transactionData) => {
   try {
-    // Validate required fields
     if (!transactionData.amount || !transactionData.date) {
       throw new Error('Amount and transaction date are required');
     }
 
-    // Format date to DDMMYYYY if not already formatted
     if (typeof transactionData.date === 'object') {
       transactionData.date = format(transactionData.date, 'ddMMyyyy');
     }
 
-    const response = await axios.post(
-      `${API_URL}/credit_cards/${cardId}/transactions`,
+    const response = await api.post(
+      `/credit_cards/${cardId}/transactions`,
       transactionData
     );
     return response.data;
@@ -326,7 +328,7 @@ export const addCreditCardTransaction = async (cardId, transactionData) => {
 
 export const processBilling = async (cardId) => {
   try {
-    const response = await axios.post(`${API_URL}/credit_cards/${cardId}/process_billing`);
+    const response = await api.post(`/credit_cards/${cardId}/process_billing`);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -337,7 +339,7 @@ export const processBilling = async (cardId) => {
 // Saving API calls
 export const createSaving = async (savingData) => {
   try {
-    const response = await axios.post(`${API_URL}/savings`, savingData);
+    const response = await api.post('/savings', savingData);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -347,7 +349,7 @@ export const createSaving = async (savingData) => {
 
 export const getSavings = async () => {
   try {
-    const response = await axios.get(`${API_URL}/savings`);
+    const response = await api.get('/savings');
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -357,14 +359,12 @@ export const getSavings = async () => {
 
 export const updateSaving = async (savingId, updateData) => {
   try {
-    // Client-side validation to prevent direct balance updates
     if ('balance' in updateData) {
       throw new Error('Cannot update balance directly. Use transactions instead.');
     }
 
-    const response = await axios.put(`${API_URL}/savings/${savingId}`, updateData);
+    const response = await api.put(`/savings/${savingId}`, updateData);
     
-    // Handle the case where bank balance might be included in response
     if (response.data.bank_balance !== undefined) {
       return {
         ...response.data,
@@ -374,7 +374,6 @@ export const updateSaving = async (savingId, updateData) => {
     
     return response.data;
   } catch (error) {
-    // Handle specific error cases from the new backend logic
     if (error.response?.data?.error?.includes('insufficient funds')) {
       throw new Error(
         `Bank change failed: ${error.response.data.error}. ` +
@@ -389,7 +388,7 @@ export const updateSaving = async (savingId, updateData) => {
 
 export const deleteSaving = async (savingId) => {
   try {
-    const response = await axios.delete(`${API_URL}/savings/${savingId}`);
+    const response = await api.delete(`/savings/${savingId}`);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -399,7 +398,7 @@ export const deleteSaving = async (savingId) => {
 
 export const getSavingTransactions = async (savingId) => {
   try {
-    const response = await axios.get(`${API_URL}/savings/${savingId}/transactions`);
+    const response = await api.get(`/savings/${savingId}/transactions`);
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -409,13 +408,12 @@ export const getSavingTransactions = async (savingId) => {
 
 export const addSavingTransaction = async (savingId, transactionData) => {
   try {
-    // Validate required fields
     if (!transactionData.amount || !transactionData.type) {
       throw new Error('Amount and transaction type are required');
     }
     
-    const response = await axios.post(
-      `${API_URL}/savings/${savingId}/transactions`,
+    const response = await api.post(
+      `/savings/${savingId}/transactions`,
       transactionData
     );
     return response.data;
@@ -427,12 +425,12 @@ export const addSavingTransaction = async (savingId, transactionData) => {
 
 // Transfer API calls
 export const createTransfer = async (transferData) => {
-  return axios.post(`${API_URL}/transfers`, transferData);
+  return api.post('/transfers', transferData);
 };
 
 export const getBanksByUser = async (userId) => {
   try {
-    const response = await axios.get(`${API_URL}/banks_dropdown?user_id=${userId}`);
+    const response = await api.get(`/banks_dropdown?user_id=${userId}`);
     return response.data;
   } catch (error) {
     throw error.response?.data || error.message;

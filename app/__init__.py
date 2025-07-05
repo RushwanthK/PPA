@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 from dotenv import load_dotenv
+import os  # You'll need this for the environment check
 
 load_dotenv()
 
@@ -16,11 +17,14 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # ✅ ALLOW CORS ONLY FROM YOUR FRONTEND DOMAIN
-    CORS(app, resources={r"/*": {"origins": [
-        "https://rs-ppa.vercel.app",  # production frontend
-        "http://localhost:3000"       # dev frontend
-    ]}}, supports_credentials=True)
+    # Enhanced CORS configuration
+    if os.environ.get('FLASK_ENV') == 'development':
+        CORS(app, supports_credentials=True)
+    else:
+        CORS(app, resources={r"/*": {"origins": [
+            "https://rs-ppa.vercel.app",
+            "http://localhost:3000"
+        ]}}, supports_credentials=True)
 
     # ✅ REGISTER ROUTES
     from .routes import routes
