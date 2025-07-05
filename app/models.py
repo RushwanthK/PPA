@@ -5,7 +5,7 @@ from sqlalchemy.orm import validates, declared_attr
 
 class User(db.Model):
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=False, unique=True)  # Added unique=True
     age = Column(Integer, nullable=False)
     dob = Column(Date, nullable=False)
     place = Column(String(100), nullable=False)
@@ -20,7 +20,7 @@ class User(db.Model):
 
 class CreditCard(db.Model):
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)  # CC name
+    name = Column(String(100), nullable=False, unique=True)  # Added unique=True
     user_id = Column(Integer, ForeignKey('user.id'), nullable=False)  # user id
     billing_cycle_start = Column(Integer, nullable=False, default=1)  # Day of month when billing cycle starts
     limit = Column(Float, nullable=False)  # CC limit
@@ -57,7 +57,7 @@ class CreditCard(db.Model):
 
 class Asset(db.Model):
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=False, unique=True)  # Added unique=True
     user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
     platform = Column(String(100), nullable=True)  # New column
     category = Column(String(50), nullable=True)    # New column
@@ -69,7 +69,7 @@ class Asset(db.Model):
 
 class Bank(db.Model):
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=False, unique=True)  # Added unique=True
     user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
     balance = Column(Float, nullable=False, default=0)
     transactions = db.relationship('BankTransaction', backref='bank', lazy=True)
@@ -91,7 +91,7 @@ class Bank(db.Model):
 
 class Saving(db.Model):
     id = Column(Integer, primary_key=True)
-    name = Column(String(100), nullable=False)
+    name = Column(String(100), nullable=False, unique=True)  # Added unique=True
     bank_id = Column(Integer, ForeignKey('bank.id'), nullable=True)
     user_id = Column(Integer, ForeignKey('user.id'), nullable=False)
     balance = Column(Float, nullable=False, default=0)
