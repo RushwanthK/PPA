@@ -110,7 +110,7 @@ def can_delete_user(id):
     has_bank_balances = any(bank.balance != 0 for bank in user.banks)
     has_asset_balances = any(asset.balance != 0 for asset in user.assets)
     has_saving_balances = any(saving.balance != 0 for saving in user.savings)
-    has_credit_balances = any(card.balance != 0 for card in user.credit_cards)
+    has_credit_balances = any(card.used != 0 for card in user.credit_cards)
     
     can_delete = not (has_bank_balances or has_asset_balances or 
                      has_saving_balances or has_credit_balances)
