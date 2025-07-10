@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  getBanks, 
-  getUsersForBank, 
+  getBanks,
   createBank, 
   updateBank, 
   deleteBank,
@@ -12,12 +11,11 @@ import './bank.css';
 
 export default function Bank() {
   const [banks, setBanks] = useState([]);
-  const [users, setUsers] = useState([]);
+  
   const [transactions, setTransactions] = useState([]);
   const [formData, setFormData] = useState({
     id: '',
-    name: '',
-    userId: ''
+    name: ''
   });
   const [transactionData, setTransactionData] = useState({
     bankId: '',
@@ -41,13 +39,8 @@ export default function Bank() {
         setLoading(true);
         setError(null);
         
-        const [banksResponse, usersResponse] = await Promise.all([
-          getBanks(),
-          getUsersForBank()
-        ]);
-        
+        const banksResponse = await getBanks();
         setBanks(Array.isArray(banksResponse?.data) ? banksResponse.data : []);
-        setUsers(Array.isArray(usersResponse?.data) ? usersResponse.data : []);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Failed to fetch data');
@@ -60,11 +53,6 @@ export default function Bank() {
   }, []);
 
   // Helper function to get user name
-  const getUserName = (userId) => {
-    if (!userId) return 'N/A';
-    const user = users.find(u => u.id.toString() === userId.toString());
-    return user ? user.name : 'N/A';
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -83,14 +71,13 @@ export default function Bank() {
       setSuccess(null);
       setLoading(true);
       
-      if (!formData.name || !formData.userId) {
-        throw new Error("Please fill all required fields");
+      if (!formData.name) {
+        throw new Error("Please enter a bank name");
       }
       
       if (formData.id) {
         const updatedBank = await updateBank(formData.id, {
-          name: formData.name,
-          user_id: formData.userId
+          name: formData.name
         });
         
         setBanks(banks.map(bank => 
@@ -99,8 +86,7 @@ export default function Bank() {
         setSuccess('Bank updated successfully!');
       } else {
         const newBank = await createBank({
-          name: formData.name,
-          userId: formData.userId
+          name: formData.name
         });
         
         setBanks([...banks, newBank]);
@@ -185,8 +171,7 @@ export default function Bank() {
   const handleEdit = (bank) => {
     setFormData({
       id: bank.id,
-      name: bank.name,
-      userId: bank.user_id?.toString() || ''
+      name: bank.name
     });
     setShowForm(true);
   };
@@ -276,24 +261,7 @@ export default function Bank() {
                 />
               </div>
               
-              <div className="form-group">
-                <label htmlFor="userId">User:</label>
-                <select
-                  id="userId"
-                  name="userId"
-                  value={formData.userId}
-                  onChange={handleInputChange}
-                  required
-                  disabled={loading}
-                >
-                  <option value="">Select User</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id.toString()}>
-                      {user.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              
               
               <div className="form-actions">
                 <button 
@@ -462,7 +430,6 @@ export default function Bank() {
             <tr>
               <th>Name</th>
               <th>Balance</th>
-              <th>User</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -472,7 +439,6 @@ export default function Bank() {
                 <tr key={bank.id}>
                   <td>{bank.name}</td>
                   <td>Rs. {bank.balance?.toFixed(2) || '0.00'}</td>
-                  <td>{getUserName(bank.user_id)}</td>
                   <td className="actions-cell">
                     <button 
                       onClick={() => handleEdit(bank)}

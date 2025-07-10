@@ -2,8 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { 
   getAssets, 
   createAssetTransaction, 
-  createAsset, 
-  getUsers, 
+  createAsset,
   getAssetTransactions, 
   deleteAsset,
   updateAsset
@@ -12,7 +11,6 @@ import './Assets.css';
 
 export default function Assets() {
   const [assets, setAssets] = useState([]);
-  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingAsset, setEditingAsset] = useState(null);
@@ -26,8 +24,7 @@ export default function Assets() {
   });
   const [refreshFlag, setRefreshFlag] = useState(false);
   const [newAsset, setNewAsset] = useState({ 
-    name: '', 
-    userId: '',
+    name: '',
     platform: '',
     category: ''
   });
@@ -39,13 +36,8 @@ export default function Assets() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [assetsResponse, usersResponse] = await Promise.all([
-          getAssets(),
-          getUsers()
-        ]);
-
+        const assetsResponse = await getAssets();
         setAssets(assetsResponse);
-        setUsers(usersResponse.data || usersResponse);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -97,7 +89,6 @@ export default function Assets() {
     try {
       await createAsset({
         name: newAsset.name,
-        user_id: parseInt(newAsset.userId),
         platform: newAsset.platform,
         category: newAsset.category
       });
@@ -107,7 +98,7 @@ export default function Assets() {
       setAssets(response.data || response);
       
       // Reset form
-      setNewAsset({ name: '', userId: '', platform: '', category: '' });
+      setNewAsset({ name: '', platform: '', category: '' });
       setShowAddAssetForm(false);
     } catch (error) {
       console.error('Failed to add asset:', error);
@@ -178,7 +169,6 @@ export default function Assets() {
       const { id, ...updateData } = editingAsset;
       await updateAsset(id, {
         name: updateData.name,
-        user_id: parseInt(updateData.userId),
         platform: updateData.platform,
         category: updateData.category
       });
@@ -216,16 +206,6 @@ export default function Assets() {
                 required
               />
               
-              <select
-                value={newAsset.userId}
-                onChange={(e) => setNewAsset({...newAsset, userId: e.target.value})}
-                required
-              >
-                <option value="">Select User</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>{user.name}</option>
-                ))}
-              </select>
               
               <input
                 type="text"
@@ -262,16 +242,7 @@ export default function Assets() {
                 required
               />
               
-              <select
-                value={editingAsset.userId}
-                onChange={(e) => setEditingAsset({...editingAsset, userId: e.target.value})}
-                required
-              >
-                <option value="">Select User</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>{user.name}</option>
-                ))}
-              </select>
+              
               
               <input
                 type="text"
@@ -300,7 +271,6 @@ export default function Assets() {
           <tr>
             <th>Name</th>
             <th>Balance</th>
-            <th>User</th>
             <th>Platform</th>
             <th>Category</th>
             <th>Actions</th>
@@ -312,7 +282,6 @@ export default function Assets() {
               <tr>
                 <td>{asset.name}</td>
                 <td>{asset.balance?.toFixed(2) || '0.00'}</td>
-                <td>{users.find(u => u.id === asset.user_id)?.name || 'N/A'}</td>
                 <td>{asset.platform || 'N/A'}</td>
                 <td>{asset.category || 'N/A'}</td>
                 <td>
@@ -321,7 +290,6 @@ export default function Assets() {
                     onClick={() => setEditingAsset({
                       id: asset.id,
                       name: asset.name,
-                      userId: asset.user_id,
                       platform: asset.platform,
                       category: asset.category
                     })}

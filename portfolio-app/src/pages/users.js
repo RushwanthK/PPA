@@ -1,22 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, createUser, updateUser, deleteUser, canDeleteUser } from '../services/api';
+import { getUsers, updateUser, deleteUser, canDeleteUser } from '../services/api';
 import './users.css';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
-  const [newUser, setNewUser] = useState({ 
-    name: '',  
-    dob: '', 
-    place: '' 
-  });
   const [updatedUser, setUpdatedUser] = useState({ 
     id: '', 
     name: '',  
     dob: '', 
-    place: '' 
+    place: '',
+    password: '',       
+    confirmPassword: '' 
   });
   const [isEditing, setIsEditing] = useState(false);
-  const [isAddingUser, setIsAddingUser] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
@@ -48,33 +44,26 @@ const Users = () => {
     fetchUsers();
   }, []);
 
-  const handleCreateUser = async () => {
-    try {
-      setLoading(true);
-      const response = await createUser(newUser);
-      
-      setUsers(prevUsers => [...prevUsers, response.data]);
-      setNewUser({ name: '', dob: '', place: '' }); // Removed age from reset
-      setIsAddingUser(false);
-      showNotification('User created successfully!');
-    } catch (err) {
-      console.error('Failed to create user:', err);
-      const errorMessage = err.response?.data?.error || 'Failed to create user. Please try again.';
-      showNotification(errorMessage, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-
   const handleUpdateUser = async () => {
+    // Password validation
+    if (updatedUser.password && updatedUser.password !== updatedUser.confirmPassword) {
+      showNotification("Passwords do not match", "error");
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await updateUser(updatedUser.id, {
+      const updatePayload = {
         name: updatedUser.name,
         dob: updatedUser.dob,
         place: updatedUser.place
-      });
+      };
+
+      if (updatedUser.password) {
+        updatePayload.password = updatedUser.password;
+      }
+
+      const response = await updateUser(updatedUser.id, updatePayload);
       
       setUsers(prevUsers => 
         prevUsers.map(user => 
@@ -82,7 +71,7 @@ const Users = () => {
         )
       );
       
-      setUpdatedUser({ id: '', name: '', dob: '', place: '' }); // Removed age from reset
+      setUpdatedUser({ id: '', name: '', dob: '', place: '', password: '', confirmPassword: '' });
       setIsEditing(false);
       showNotification('User updated successfully!');
     } catch (err) {
@@ -93,7 +82,6 @@ const Users = () => {
       setLoading(false);
     }
   };
-  
 
   const handleDeleteUser = async (id) => {
     if (isDeleting) return;
@@ -127,6 +115,10 @@ const Users = () => {
       await deleteUser(id);
       setUsers(prevUsers => prevUsers.filter(user => user.id !== id));
       showNotification('User deleted successfully!');
+      
+      // Log out after deletion
+      localStorage.removeItem('token');
+      window.location.href = '/';
     } catch (err) {
       console.error('Failed to delete user:', err);
       showNotification('Failed to delete user. Please try again.', 'error');
@@ -142,12 +134,14 @@ const Users = () => {
       id: user.id,
       name: user.name,
       dob: formattedDob,
-      place: user.place
+      place: user.place,
+      password: '',       // Initialize empty
+      confirmPassword: '' // Initialize empty
     });
     setIsEditing(true);
   };
 
-  if (loading && !isEditing && !isAddingUser) {
+  if (loading && !isEditing) {
     return (
       <div className="loading-overlay">
         <div className="loading-spinner"></div>
@@ -167,15 +161,7 @@ const Users = () => {
         </div>
       )}
 
-      <h2>Users</h2>
-      
-      <button 
-        className="add-user-btn" 
-        onClick={() => setIsAddingUser(!isAddingUser)}
-        disabled={loading}
-      >
-        {isAddingUser ? 'Cancel' : 'Add User'}
-      </button>
+      <h2>Edit Profile</h2>
 
       {loading ? (
         <div className="loading">Loading users...</div>
@@ -214,60 +200,6 @@ const Users = () => {
         <p>No users found.</p>
       )}
 
-      {isAddingUser && (
-        <div className="form-container">
-          <h3>Create User</h3>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleCreateUser();
-          }}>
-            <input 
-              type="text" 
-              placeholder="Name" 
-              value={newUser.name} 
-              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} 
-              required
-              disabled={loading}
-            />
-            
-            <input 
-              type="date" 
-              placeholder="Date of Birth" 
-              value={newUser.dob} 
-              onChange={(e) => setNewUser({ ...newUser, dob: e.target.value })} 
-              required
-              disabled={loading}
-              max={new Date().toISOString().split('T')[0]} // Prevent future dates
-            />
-            <input 
-              type="text" 
-              placeholder="Place" 
-              value={newUser.place} 
-              onChange={(e) => setNewUser({ ...newUser, place: e.target.value })} 
-              required
-              disabled={loading}
-            />
-            <div className="form-buttons">
-              <button 
-                type="submit" 
-                className="create-btn"
-                disabled={loading}
-              >
-                {loading ? 'Creating...' : 'Create'}
-              </button>
-              <button 
-                type="button" 
-                className="cancel-btn" 
-                onClick={() => setIsAddingUser(false)}
-                disabled={loading}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {isEditing && (
         <div className="form-container">
           <h3>Update User</h3>
@@ -291,7 +223,7 @@ const Users = () => {
               onChange={(e) => setUpdatedUser({ ...updatedUser, dob: e.target.value })} 
               required
               disabled={loading}
-              max={new Date().toISOString().split('T')[0]} // Prevent future dates
+              max={new Date().toISOString().split('T')[0]}
             />
             <input 
               type="text" 
@@ -299,6 +231,20 @@ const Users = () => {
               value={updatedUser.place} 
               onChange={(e) => setUpdatedUser({ ...updatedUser, place: e.target.value })} 
               required
+              disabled={loading}
+            />
+            <input
+              type="password"
+              placeholder="New Password (optional)"
+              value={updatedUser.password}
+              onChange={(e) => setUpdatedUser({ ...updatedUser, password: e.target.value })}
+              disabled={loading}
+            />
+            <input
+              type="password"
+              placeholder="Confirm Password"
+              value={updatedUser.confirmPassword}
+              onChange={(e) => setUpdatedUser({ ...updatedUser, confirmPassword: e.target.value })}
               disabled={loading}
             />
             <div className="form-buttons">

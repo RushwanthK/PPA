@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 from dotenv import load_dotenv
+from flask_jwt_extended import JWTManager
 import os  # You'll need this for the environment check
 
 load_dotenv()
@@ -13,6 +14,8 @@ migrate = Migrate()
 def create_app():
     app = Flask(__name__)
     app.config.from_object("config.Config")
+    # Initialize JWT Manager
+    jwt = JWTManager(app)
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -24,7 +27,7 @@ def create_app():
         CORS(app, resources={r"/*": {"origins": [
             "https://rs-ppa.vercel.app",
             "http://localhost:3000"
-        ]}}, supports_credentials=True)
+        ]}}, supports_credentials=True, expose_headers=["Authorization"], allow_headers=["Content-Type", "Authorization"])
 
     # ✅ REGISTER ROUTES
     from .routes import routes

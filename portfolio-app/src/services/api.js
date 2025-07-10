@@ -10,31 +10,28 @@ const api = axios.create({
   withCredentials: true
 });
 
+// Attach token from localStorage
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export default api;
+
 // User API calls
+/*
 export const createUser = async (userData) => {
   return api.post('/users', userData);
 };
+*/
 
 export const getUsers = async () => {
-  try {
-    const response = await api.get('/users');
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    throw error;
-  }
+  const response = await api.get('/users');  // now returns only the logged-in user
+  return response.data; // already an array with one user
 };
-/*
-//new getusers
-export const getUsers = async () => {
-  try {
-    const response = await axios.get(`${API_URL}/users`);
-    return { data: response.data }; // Wrap the array in a data property
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    throw error;
-  }
-};*/
 
 export const updateUser = async (id, userData) => {
   return api.put(`/users/${id}`, userData);
@@ -64,7 +61,6 @@ export const createBank = async (bankData) => {
   try {
     const response = await api.post('/banks', {
       name: bankData.name,
-      user_id: bankData.userId,
       balance: 0
     }, {
       headers: { 'Content-Type': 'application/json' }
@@ -88,8 +84,7 @@ export const createBank = async (bankData) => {
 export const updateBank = async (id, bankData) => {
   try {
     const response = await api.put(`/banks/${id}`, {
-      name: bankData.name,
-      user_id: bankData.user_id
+      name: bankData.name
     });
     return response.data;
   } catch (error) {
@@ -138,11 +133,9 @@ export const getBankTransactions = async (bankId) => {
   }
 };
 
-export const getBanksForUser = async (userId) => {
+export const getBanksForUser = async () => {
   try {
-    const response = await api.get('/banks_dropdown', {
-      params: { user_id: userId }
-    });
+    const response = await api.get('/banks/dropdown');
     return { data: response.data };
   } catch (error) {
     console.error('Error fetching user banks:', error);
@@ -428,9 +421,9 @@ export const createTransfer = async (transferData) => {
   return api.post('/transfers', transferData);
 };
 
-export const getBanksByUser = async (userId) => {
+export const getBanksByUser = async () => {
   try {
-    const response = await api.get(`/banks_dropdown?user_id=${userId}`);
+    const response = await api.get('/banks/dropdown');
     return response.data;
   } catch (error) {
     throw error.response?.data || error.message;

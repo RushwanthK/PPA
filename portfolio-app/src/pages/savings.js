@@ -30,9 +30,8 @@ export default function Savings() {
     description: '', 
     category: '' 
   });
-  const [newSaving, setNewSaving] = useState({ 
-    name: '', 
-    userId: '',
+  const [newSaving, setNewSaving] = useState({
+    name: '',
     bankId: '',
     balance: 0
   });
@@ -44,15 +43,13 @@ export default function Savings() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [savingsResponse, usersResponse, banksResponse] = await Promise.all([
+        const [savingsResponse, banksDropdownResponse] = await Promise.all([
           getSavings(),
-          getUsers(),
-          getBanks()
+          getBanksByUser()
         ]);
 
         setSavings(savingsResponse.data || savingsResponse);
-        setUsers(usersResponse.data || usersResponse);
-        setBanks(banksResponse.data || banksResponse);
+        setFilteredBanks(banksDropdownResponse.data || banksDropdownResponse);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -108,17 +105,12 @@ export default function Savings() {
     try {
       await createSaving({
         name: newSaving.name,
-        user_id: parseInt(newSaving.userId),
-        bank_id: newSaving.bankId || null,
-        //balance: parseFloat(newSaving.balance) || 0
+        bank_id: newSaving.bankId || null
       });
-      
-      // Refresh savings list
+
       const response = await getSavings();
       setSavings(response.data || response);
-      
-      // Reset form
-      setNewSaving({ name: '', userId: '', bankId: '', balance: 0 });
+      setNewSaving({ name: '', bankId: '', balance: 0 });
       setShowAddSavingForm(false);
     } catch (error) {
       console.error('Failed to add saving:', error);
@@ -212,7 +204,6 @@ export default function Savings() {
 
     const response = await updateSaving(id, {
       name: updateData.name,
-      user_id: parseInt(updateData.userId),
       bank_id: updateData.bankId || null
     });
 
@@ -265,34 +256,16 @@ export default function Savings() {
                 <input
                   type="text"
                   value={newSaving.name}
-                  onChange={(e) => setNewSaving({...newSaving, name: e.target.value})}
+                  onChange={(e) => setNewSaving({ ...newSaving, name: e.target.value })}
                   required
                 />
               </div>
-              
-              <div className="savings-form-group">
-                <label>User</label>
-                <select
-                  value={newSaving.userId}
-                  onChange={async (e) => {
-                    setNewSaving({...newSaving, userId: e.target.value, bankId: ''});
-                    await handleUserChange(e.target.value);
-                  }}
-                  required
-                >
-                  <option value="">Select User</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>{user.name}</option>
-                  ))}
-                </select>
-              </div>
-              
+
               <div className="savings-form-group">
                 <label>Bank (Optional)</label>
                 <select
                   value={newSaving.bankId}
-                  onChange={(e) => setNewSaving({...newSaving, bankId: e.target.value})}
-                  disabled={!newSaving.userId}
+                  onChange={(e) => setNewSaving({ ...newSaving, bankId: e.target.value })}
                 >
                   <option value="">Select Bank</option>
                   {filteredBanks.map(bank => (
@@ -300,16 +273,10 @@ export default function Savings() {
                   ))}
                 </select>
               </div>
-              
-              
-              
+
               <div className="savings-modal-actions">
-                <button type="button" className="savings-cancel-btn" onClick={() => setShowAddSavingForm(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="savings-submit-btn">
-                  Create Account
-                </button>
+                <button type="submit" className="savings-submit-btn">Create</button>
+                <button type="button" className="savings-cancel-btn" onClick={() => setShowAddSavingForm(false)}>Cancel</button>
               </div>
             </form>
           </div>
@@ -343,29 +310,13 @@ export default function Savings() {
                 />
               </div>
               
-              <div className="savings-form-group">
-                <label>User</label>
-                <select
-                  value={editingSaving.userId}
-                  onChange={async (e) => {
-                    setEditingSaving({...editingSaving, userId: e.target.value, bankId: ''});
-                    await handleUserChange(e.target.value);
-                  }}
-                  required
-                >
-                  <option value="">Select User</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>{user.name}</option>
-                  ))}
-                </select>
-              </div>
+              
               
               <div className="savings-form-group">
                 <label>Bank (Optional)</label>
                 <select
                   value={editingSaving.bankId}
-                  onChange={(e) => setEditingSaving({...editingSaving, bankId: e.target.value})}
-                  disabled={!editingSaving.userId}
+                  onChange={(e) => setEditingSaving({ ...editingSaving, bankId: e.target.value })}
                 >
                   <option value="">Select Bank</option>
                   {filteredBanks.map(bank => (
@@ -394,7 +345,6 @@ export default function Savings() {
             <tr>
               <th>Account Name</th>
               <th>Balance</th>
-              <th>User</th>
               <th>Bank</th>
               <th>Actions</th>
             </tr>
@@ -407,15 +357,13 @@ export default function Savings() {
                   <td className={saving.balance >= 0 ? 'positive-balance' : 'negative-balance'}>
                     ${saving.balance?.toFixed(2) || '0.00'}
                   </td>
-                  <td>{users.find(u => u.id === saving.user_id)?.name || 'N/A'}</td>
-                  <td>{banks.find(b => b.id === saving.bank_id)?.name || 'N/A'}</td>
+                  <td>{filteredBanks.find(b => b.id === saving.bank_id)?.name || 'N/A'}</td>
                   <td className="savings-actions">
                     <button 
                       className="savings-action-btn savings-edit-btn"
                       onClick={() => setEditingSaving({
                         id: saving.id,
                         name: saving.name,
-                        userId: saving.user_id,
                         bankId: saving.bank_id
                       })}
                     >

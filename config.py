@@ -1,5 +1,7 @@
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
+
 load_dotenv()
 
 class Config:
@@ -11,6 +13,13 @@ class Config:
         if os.environ.get('FLASK_ENV') == 'development'
         else os.environ['DATABASE_URL']
     )
+
+    # ✅ JWT configuration
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'super-secret')  # Pull from .env
+    JWT_TOKEN_LOCATION = ['headers']
+    JWT_HEADER_NAME = 'Authorization'           # ✅ Required
+    JWT_HEADER_TYPE = 'Bearer'                  # ✅ Required
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=1)
 
 class DevelopmentConfig(Config):
     DEBUG = True

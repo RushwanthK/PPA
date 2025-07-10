@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from werkzeug.security import check_password_hash
 from . import db
 from .models import (User, CreditCard, Bank, Asset, Saving,
                     Transaction, BankTransaction, CreditCardTransaction,
@@ -20,13 +22,71 @@ def parse_date(date_str):
 def home():
     return "Welcome to the Personal Portfolio App!"
 
+# ========== Register/Login ==========
+@routes.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+
+    if not data.get('name') or not data.get('password') or not data.get('dob') or not data.get('place'):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    if User.query.filter_by(name=data['name']).first():
+        return jsonify({'error': 'Username already taken'}), 400
+
+    try:
+        dob = parse_date(data['dob'])
+        user = User(
+            name=data['name'],
+            dob=dob,
+            age=calculate_age(dob),
+            place=data['place']
+        )
+        user.set_password(data['password'])
+        db.session.add(user)
+        db.session.commit()
+
+        return jsonify({'message': 'User registered successfully'}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@routes.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    name = data.get('name')
+    password = data.get('password')
+
+    if not name or not password:
+        return jsonify({'error': 'Name and password required'}), 400
+
+    user = User.query.filter_by(name=name).first()
+
+    if not user or not user.check_password(password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+    access_token = create_access_token(identity=str(user.id))
+    return jsonify({
+        'token': access_token,
+        'user': {
+            'id': user.id,
+            'name': user.name,
+            'dob': user.dob.strftime("%Y-%m-%d"),
+            'place': user.place,
+            'age': user.age
+        }
+    }), 200
+
+
 # ========== USER ROUTES ==========
 def calculate_age(dob):
     today = datetime.today()
     return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
 @routes.route('/users', methods=['POST'])
+@jwt_required()
 def create_user():
+    user_id = int(get_jwt_identity())
     data = request.json
     try:
         if 'age' in data:
@@ -34,8 +94,9 @@ def create_user():
             
         dob = parse_date(data['dob'])
         new_user = User(
+            id=user_id,  # Use JWT identity as user ID
             name=data['name'],
-            age=calculate_age(dob),  # Auto-calculate age
+            age=calculate_age(dob),
             dob=dob,
             place=data['place']
         )
@@ -50,36 +111,57 @@ def create_user():
         }), 201
     except ValueError:
         return jsonify({"error": "Invalid date format. Use 'YYYY-MM-DD'."}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
 
 
 @routes.route('/users', methods=['GET'])
+@jwt_required()
 def get_users():
-    users = User.query.all()
+    
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
     return jsonify([{
         'id': user.id,
         'name': user.name,
         'age': user.age,
         'dob': user.dob.strftime("%Y-%m-%d"),
         'place': user.place
-    } for user in users])
+    }])
 
 @routes.route('/users/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_user(id):
-    data = request.json
+    user_id = int(get_jwt_identity())
+    if id != user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
     user = User.query.get(id)
     if not user:
         return jsonify({'message': 'User not found'}), 404
-    
+
+    data = request.json
+
     try:
         if 'age' in data:
             return jsonify({"error": "Age should not be provided manually. It will be calculated from date of birth."}), 400
-            
+
         dob = parse_date(data['dob'])
         user.name = data['name']
-        user.age = calculate_age(dob)  # Auto-calculate age
         user.dob = dob
+        user.age = calculate_age(dob)
         user.place = data['place']
+
+        # ✅ Handle optional password update
+        if 'password' in data and data['password'].strip():
+            user.set_password(data['password'])
+
         db.session.commit()
+
         return jsonify({
             'id': user.id,
             'name': user.name,
@@ -87,11 +169,18 @@ def update_user(id):
             'dob': user.dob.strftime("%Y-%m-%d"),
             'place': user.place
         }), 200
+
     except ValueError:
         return jsonify({"error": "Invalid date format. Use 'YYYY-MM-DD'."}), 400
 
+
 @routes.route('/users/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_user(id):
+    user_id = int(get_jwt_identity())
+    if id != user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+        
     user = User.query.get(id)
     if not user:
         return jsonify({'message': 'User not found'}), 404
@@ -100,8 +189,14 @@ def delete_user(id):
     db.session.commit()
     return jsonify({'message': 'User deleted successfully'}), 200
 
+
 @routes.route('/users/<int:id>/can_delete', methods=['GET'])
+@jwt_required()
 def can_delete_user(id):
+    user_id = int(get_jwt_identity())
+    if id != user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+        
     user = User.query.get(id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -125,19 +220,17 @@ def can_delete_user(id):
 
 # ========== CREDIT CARD ROUTES ==========
 @routes.route('/credit_cards', methods=['POST'])
+@jwt_required()
 def create_credit_card():
+    user_id = int(get_jwt_identity())
     data = request.json
     
     # Validate required fields
-    required_fields = ['name', 'user_id', 'limit']
+    required_fields = ['name', 'limit']
     for field in required_fields:
         if field not in data:
             return jsonify({"error": f"Missing required field: {field}"}), 400
     
-    # Validate user exists
-    if not User.query.get(data['user_id']):
-        return jsonify({"error": "User not found"}), 404
-        
     # Prevent manual setting of calculated fields
     forbidden_fields = ['used', 'available_limit', 'billed_unpaid', 'unbilled_spends']
     for field in forbidden_fields:
@@ -160,10 +253,10 @@ def create_credit_card():
     try:
         card = CreditCard(
             name=data['name'],
-            user_id=data['user_id'],
+            user_id=user_id,  # Use JWT identity
             limit=limit,
             billing_cycle_start=billing_cycle_start,
-            used=0,  # Initialize as 0
+            used=0,
             billed_unpaid=0,
             unbilled_spends=0
         )
@@ -194,8 +287,10 @@ def create_credit_card():
 
 
 @routes.route('/credit_cards', methods=['GET'])
+@jwt_required()
 def get_credit_cards():
-    cards = CreditCard.query.all()
+    user_id = int(get_jwt_identity())
+    cards = CreditCard.query.filter_by(user_id=user_id).all()
     return jsonify([{
         "id": card.id,
         "name": card.name,
@@ -212,8 +307,10 @@ def get_credit_cards():
     } for card in cards])
 
 @routes.route('/credit_cards/<int:card_id>', methods=['GET'])
+@jwt_required()
 def get_credit_card(card_id):
-    card = CreditCard.query.get(card_id)
+    user_id = int(get_jwt_identity())
+    card = CreditCard.query.filter_by(id=card_id, user_id=user_id).first()
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
         
@@ -233,9 +330,11 @@ def get_credit_card(card_id):
     })
 
 @routes.route('/users/<int:user_id>/credit_cards', methods=['GET'])
+@jwt_required()
 def get_user_credit_cards(user_id):
-    if not User.query.get(user_id):
-        return jsonify({"error": "User not found"}), 404
+    current_user_id = int(get_jwt_identity())
+    if current_user_id != user_id:
+        return jsonify({"error": "Unauthorized access"}), 403
         
     cards = CreditCard.query.filter_by(user_id=user_id).all()
     return jsonify([{
@@ -251,16 +350,17 @@ def get_user_credit_cards(user_id):
     } for card in cards])
 
 @routes.route('/credit_cards/<int:card_id>', methods=['PUT'])
+@jwt_required()
 def update_credit_card(card_id):
-    # Lock the card row immediately
-    card = CreditCard.query.with_for_update().get(card_id)
+    user_id = int(get_jwt_identity())
+    card = CreditCard.query.filter_by(id=card_id, user_id=user_id).with_for_update().first()
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
         
     data = request.json
     
     # List of allowed fields to update
-    allowed_fields = {'name', 'user_id', 'limit', 'billing_cycle_start'}
+    allowed_fields = {'name', 'limit','user_id', 'billing_cycle_start'}
     
     # Check for disallowed fields
     disallowed_fields = set(data.keys()) - allowed_fields
@@ -273,13 +373,6 @@ def update_credit_card(card_id):
         
         if 'name' in data and data['name'] != card.name:
             card.name = data['name']
-            changes_made = True
-            
-        if 'user_id' in data and data['user_id'] != card.user_id:
-            # Validate new user exists
-            if not User.query.get(data['user_id']):
-                return jsonify({"error": "User not found"}), 404
-            card.user_id = data['user_id']
             changes_made = True
             
         if 'limit' in data:
@@ -394,9 +487,10 @@ def calculate_current_cycle_start(billing_cycle_start):
             return last_day
     
 @routes.route('/credit_cards/<int:card_id>', methods=['DELETE'])
+@jwt_required()
 def delete_credit_card(card_id):
-    # Use with_for_update to lock the card
-    card = CreditCard.query.with_for_update().get(card_id)
+    user_id = int(get_jwt_identity())
+    card = CreditCard.query.filter_by(id=card_id, user_id=user_id).with_for_update().first()
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
         
@@ -425,8 +519,10 @@ def delete_credit_card(card_id):
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @routes.route('/credit_cards/<int:card_id>/transactions', methods=['GET'])
+@jwt_required()
 def get_credit_card_transactions(card_id):
-    card = CreditCard.query.get(card_id)
+    user_id = int(get_jwt_identity())
+    card = CreditCard.query.filter_by(id=card_id, user_id=user_id).first()
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
         
@@ -440,13 +536,14 @@ def get_credit_card_transactions(card_id):
         "category": t.category,
         "type": t.transaction_type,
         "is_payment": t.is_payment,
-        "is_billed": t.is_billed  # Add this line
+        "is_billed": t.is_billed
     } for t in transactions])
 
 @routes.route('/credit_cards/<int:card_id>/transactions', methods=['POST'])
+@jwt_required()
 def add_credit_card_transaction(card_id):
-    # Lock the card row to prevent concurrent modifications
-    card = CreditCard.query.with_for_update().get(card_id)
+    user_id = int(get_jwt_identity())
+    card = CreditCard.query.filter_by(id=card_id, user_id=user_id).with_for_update().first()
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
 
@@ -479,26 +576,24 @@ def add_credit_card_transaction(card_id):
         if amount == 0:
             return jsonify({"error": "Amount cannot be zero"}), 400
 
-        # ✅ Enforce chronological transaction order
+        # Enforce chronological transaction order
         latest_txn = CreditCardTransaction.query.filter_by(
             credit_card_id=card.id
         ).order_by(CreditCardTransaction.date.desc()).first()
 
         if latest_txn:
             latest_txn_date = latest_txn.date
-
             if latest_txn_date.tzinfo is None:
                 latest_txn_date = pytz.utc.localize(latest_txn_date)
             else:
                 latest_txn_date = latest_txn_date.astimezone(pytz.utc)
 
-            # Compare using IST-aware transaction_date
             if transaction_date < latest_txn_date:
                 return jsonify({
                     "error": "Transaction date must be on or after the last transaction's date."
                 }), 400
 
-        # ✅ Reject early payments if no expenses exist yet
+        # Reject early payments if no expenses exist yet
         if amount > 0 and (card.used == 0 or card.available_limit == card.limit):
             return jsonify({
                 "error": "Cannot add payment without any prior expenses."
@@ -519,14 +614,14 @@ def add_credit_card_transaction(card_id):
         # Create transaction with correct is_billed
         transaction = CreditCardTransaction(
             credit_card_id=card_id,
-            user_id=card.user_id,
+            user_id=user_id,
             amount=amount,
             date=transaction_date,
             description=data.get('description'),
             category=data.get('category'),
             transaction_type='expense' if amount < 0 else 'payment',
             is_payment=data.get('is_payment', amount > 0),
-            is_billed=(already_billed if amount < 0 else True)  # Payments are always marked billed
+            is_billed=(already_billed if amount < 0 else True)
         )
 
         # Update card balances
@@ -598,8 +693,10 @@ def add_credit_card_transaction(card_id):
 #When a user views their statement (trigger it first)
 #When a payment is made (optional - to ensure correct payable amount)
 @routes.route('/credit_cards/<int:card_id>/process_billing', methods=['POST'])
+@jwt_required()
 def process_billing(card_id):
-    card = CreditCard.query.with_for_update().get(card_id)
+    user_id = int(get_jwt_identity())
+    card = CreditCard.query.filter_by(id=card_id, user_id=user_id).with_for_update().first()
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
 
@@ -739,18 +836,14 @@ def get_billing_cycle_range(reference_date, billing_day):
 
 # ========== BANK ROUTES ==========
 @routes.route('/banks', methods=['POST'])
+@jwt_required()
 def create_bank():
+    user_id = int(get_jwt_identity())
     data = request.json
     try:
-        if not data.get('user_id'):
-            return jsonify({"error": "User ID is required"}), 400
-            
-        if not User.query.get(data['user_id']):
-            return jsonify({"error": "User not found"}), 404
-            
         bank = Bank(
             name=data['name'],
-            user_id=data['user_id'],
+            user_id=user_id,
             balance=data.get('balance', 0)
         )
         db.session.add(bank)
@@ -763,12 +856,13 @@ def create_bank():
         }), 201
     except Exception as e:
         db.session.rollback()
-        print(f"Error creating bank: {str(e)}")  # This will show in your Flask logs
         return jsonify({"error": str(e)}), 500
 
 @routes.route('/banks', methods=['GET'])
+@jwt_required()
 def get_banks():
-    banks = Bank.query.all()
+    user_id = int(get_jwt_identity())
+    banks = Bank.query.filter_by(user_id=user_id).all()
     return jsonify([{
         "id": bank.id,
         "name": bank.name,
@@ -777,14 +871,15 @@ def get_banks():
     } for bank in banks])
 
 @routes.route('/banks/<int:bank_id>', methods=['PUT'])
+@jwt_required()
 def update_bank(bank_id):
-    bank = Bank.query.get(bank_id)
+    user_id = int(get_jwt_identity())
+    bank = Bank.query.filter_by(id=bank_id, user_id=user_id).first()
     if not bank:
         return jsonify({"error": "Bank not found"}), 404
     
     data = request.json
     bank.name = data.get('name', bank.name)
-    bank.user_id = data.get('user_id', bank.user_id)
     
     db.session.commit()
     return jsonify({
@@ -794,9 +889,12 @@ def update_bank(bank_id):
         "balance": bank.balance
     })
 
+
 @routes.route('/banks/<int:bank_id>', methods=['DELETE'])
+@jwt_required()
 def delete_bank(bank_id):
-    bank = Bank.query.get(bank_id)
+    user_id = int(get_jwt_identity())
+    bank = Bank.query.filter_by(id=bank_id, user_id=user_id).first()
     if not bank:
         return jsonify({"error": "Bank not found"}), 404
     
@@ -807,28 +905,28 @@ def delete_bank(bank_id):
     db.session.commit()
     return jsonify({"message": "Bank deleted successfully"}), 200
 
+
 @routes.route('/banks/<int:bank_id>/transactions', methods=['POST'])
+@jwt_required()
 def add_bank_transaction(bank_id):
-    bank = Bank.query.get(bank_id)
+    user_id = int(get_jwt_identity())
+    bank = Bank.query.filter_by(id=bank_id, user_id=user_id).first()
     if not bank:
         return jsonify({"error": "Bank not found"}), 404
     
     data = request.json
     try:
         amount = float(data['amount'])
-        transaction_type = data.get('type', 'income')  # Default to income if not specified
+        transaction_type = data.get('type', 'income')
         description = data.get('description', '')
         category = data.get('category', '')
         
-        # Validate transaction type
         if transaction_type not in ('income', 'expense'):
             return jsonify({"error": "Invalid transaction type"}), 400
             
-        # For expense transactions, check balance if amount is positive
         if transaction_type == 'expense' and bank.balance < amount:
             return jsonify({"error": "Insufficient balance"}), 400
             
-        # Calculate new balance based on transaction type
         if transaction_type == 'income':
             new_balance = bank.balance + amount
         else:
@@ -836,7 +934,7 @@ def add_bank_transaction(bank_id):
         
         transaction = BankTransaction(
             bank_id=bank_id,
-            user_id=bank.user_id,
+            user_id=user_id,
             amount=amount,
             description=description,
             category=category,
@@ -866,8 +964,10 @@ def add_bank_transaction(bank_id):
         return jsonify({"error": "Invalid amount"}), 400
 
 @routes.route('/banks/<int:bank_id>/transactions', methods=['GET'])
+@jwt_required()
 def get_bank_transactions(bank_id):
-    bank = Bank.query.get(bank_id)
+    user_id = int(get_jwt_identity())
+    bank = Bank.query.filter_by(id=bank_id, user_id=user_id).first()
     if not bank:
         return jsonify({"error": "Bank not found"}), 404
 
@@ -884,16 +984,16 @@ def get_bank_transactions(bank_id):
 
 # ========== ASSET ROUTES ==========
 @routes.route('/assets', methods=['POST'])
+@jwt_required()
 def create_asset():
+    user_id = int(get_jwt_identity())
     data = request.json
-    if not User.query.get(data['user_id']):
-        return jsonify({"error": "User not found"}), 404
         
     asset = Asset(
         name=data['name'],
-        user_id=data['user_id'],
-        platform=data.get('platform'),  # New field
-        category=data.get('category'),  # New field
+        user_id=user_id,
+        platform=data.get('platform'),
+        category=data.get('category'),
         balance=data.get('balance', 0)
     )
     db.session.add(asset)
@@ -901,33 +1001,31 @@ def create_asset():
     return jsonify({"message": "Asset created!"}), 201
 
 @routes.route('/assets', methods=['GET'])
+@jwt_required()
 def get_assets():
-    assets = Asset.query.all()
+    user_id = int(get_jwt_identity())
+    assets = Asset.query.filter_by(user_id=user_id).all()
     return jsonify([
         {
             "id": asset.id,
             "name": asset.name,
             "user_id": asset.user_id,
-            "platform": asset.platform,  # New field
-            "category": asset.category,  # New field
+            "platform": asset.platform,
+            "category": asset.category,
             "balance": asset.balance
         } 
         for asset in assets
     ])
 
 @routes.route('/assets/<int:asset_id>', methods=['PUT'])
+@jwt_required()
 def update_asset(asset_id):
-    asset = Asset.query.get(asset_id)
+    user_id = int(get_jwt_identity())
+    asset = Asset.query.filter_by(id=asset_id, user_id=user_id).first()
     if not asset:
         return jsonify({"error": "Asset not found"}), 404
     
     data = request.json
-    
-    # Validate user_id if provided
-    if 'user_id' in data:
-        if not User.query.get(data['user_id']):
-            return jsonify({"error": "New user not found"}), 404
-        asset.user_id = data['user_id']
     
     # Update allowed fields
     if 'name' in data:
@@ -952,13 +1050,16 @@ def update_asset(asset_id):
             "user_id": asset.user_id,
             "platform": asset.platform,
             "category": asset.category,
-            "balance": asset.balance  # Showing but not allowing direct updates
+            "balance": asset.balance
         }
     }), 200
 
+
 @routes.route('/assets/<int:asset_id>/transactions', methods=['POST'])
+@jwt_required()
 def add_asset_transaction(asset_id):
-    asset = Asset.query.get(asset_id)
+    user_id = int(get_jwt_identity())
+    asset = Asset.query.filter_by(id=asset_id, user_id=user_id).first()
     if not asset:
         return jsonify({"error": "Asset not found"}), 404
     
@@ -973,7 +1074,7 @@ def add_asset_transaction(asset_id):
     
     transaction = AssetTransaction(
         asset_id=asset_id,
-        user_id=asset.user_id,
+        user_id=user_id,
         amount=amount,
         description=data.get('description'),
         category=data.get('category'),
@@ -988,8 +1089,10 @@ def add_asset_transaction(asset_id):
     return jsonify({"message": "Transaction added", "balance": new_balance}), 201
 
 @routes.route('/assets/<int:asset_id>/transactions', methods=['GET'])
+@jwt_required()
 def get_asset_transactions(asset_id):
-    asset = Asset.query.get(asset_id)
+    user_id = int(get_jwt_identity())
+    asset = Asset.query.filter_by(id=asset_id, user_id=user_id).first()
     if not asset:
         return jsonify({"error": "Asset not found"}), 404
 
@@ -1008,12 +1111,12 @@ def get_asset_transactions(asset_id):
     ])
 
 @routes.route('/assets/<int:asset_id>', methods=['DELETE'])
+@jwt_required()
 def delete_asset(asset_id):
-    asset = Asset.query.get(asset_id)
+    user_id = int(get_jwt_identity())
+    asset = Asset.query.filter_by(id=asset_id, user_id=user_id).first()
     if not asset:
         return jsonify({'error': 'Asset not found'}), 404
-
-    print(f"Attempting to delete asset {asset_id} with balance: {asset.balance}")  # Debugging line
 
     if asset.balance != 0:
         return jsonify({'error': 'Asset cannot be deleted because its balance is not zero.'}), 400
@@ -1025,19 +1128,20 @@ def delete_asset(asset_id):
 
 # ========== SAVING ROUTES ==========
 @routes.route('/savings', methods=['POST'])
+@jwt_required()
 def create_saving():
+    user_id = int(get_jwt_identity())
     data = request.json
-    if not User.query.get(data['user_id']):
-        return jsonify({"error": "User not found"}), 404
     
     # Validate bank if provided
     if 'bank_id' in data and data['bank_id']:
-        if not Bank.query.get(data['bank_id']):
+        bank = Bank.query.filter_by(id=data['bank_id'], user_id=user_id).first()
+        if not bank:
             return jsonify({"error": "Bank not found"}), 404
     
     saving = Saving(
         name=data['name'],
-        user_id=data['user_id'],
+        user_id=user_id,
         bank_id=data.get('bank_id'),
         balance=data.get('balance', 0)
     )
@@ -1055,8 +1159,10 @@ def create_saving():
     }), 201
 
 @routes.route('/savings', methods=['GET'])
+@jwt_required()
 def get_savings():
-    savings = Saving.query.all()
+    user_id = int(get_jwt_identity())
+    savings = Saving.query.filter_by(user_id=user_id).all()
     return jsonify([
         {
             "id": saving.id,
@@ -1070,37 +1176,33 @@ def get_savings():
     ])
 
 @routes.route('/savings/<int:saving_id>', methods=['PUT'])
+@jwt_required()
 def update_saving(saving_id):
-    saving = Saving.query.get(saving_id)
+    user_id = int(get_jwt_identity())
+    saving = Saving.query.filter_by(id=saving_id, user_id=user_id).first()
     if not saving:
         return jsonify({"error": "Saving account not found"}), 404
     
     data = request.json
-    
-    # Validate user_id if provided
-    if 'user_id' in data:
-        if not User.query.get(data['user_id']):
-            return jsonify({"error": "New user not found"}), 404
-        saving.user_id = data['user_id']
     
     # Handle bank_id change carefully
     if 'bank_id' in data and data['bank_id'] != saving.bank_id:
         new_bank_id = data['bank_id']
         
         # Validate new bank if provided
-        if new_bank_id and not Bank.query.get(new_bank_id):
-            return jsonify({"error": "New bank not found"}), 404
-        
-        # If there's a balance, we need to handle the bank transfer
-        if saving.balance > 0:
-            # If currently linked to a bank, return funds to it
-            if saving.bank_id:
-                old_bank = Bank.query.get(saving.bank_id)
-                old_bank.balance += saving.balance
+        if new_bank_id:
+            new_bank = Bank.query.filter_by(id=new_bank_id, user_id=user_id).first()
+            if not new_bank:
+                return jsonify({"error": "New bank not found"}), 404
             
-            # If linking to a new bank, withdraw funds from it
-            if new_bank_id:
-                new_bank = Bank.query.get(new_bank_id)
+            # If there's a balance, we need to handle the bank transfer
+            if saving.balance > 0:
+                # If currently linked to a bank, return funds to it
+                if saving.bank_id:
+                    old_bank = Bank.query.get(saving.bank_id)
+                    old_bank.balance += saving.balance
+                
+                # Withdraw funds from new bank
                 if new_bank.balance < saving.balance:
                     return jsonify({
                         "error": "New bank has insufficient funds for this transfer"
@@ -1132,9 +1234,12 @@ def update_saving(saving_id):
         }
     }), 200
 
+
 @routes.route('/savings/<int:saving_id>/transactions', methods=['POST'])
+@jwt_required()
 def add_saving_transaction(saving_id):
-    saving = Saving.query.get(saving_id)
+    user_id = int(get_jwt_identity())
+    saving = Saving.query.filter_by(id=saving_id, user_id=user_id).first()
     if not saving:
         return jsonify({"error": "Saving account not found"}), 404
     
@@ -1151,7 +1256,7 @@ def add_saving_transaction(saving_id):
     # If linked to a bank, update bank balance as well
     bank_balance_update = None
     if saving.bank_id:
-        bank = Bank.query.get(saving.bank_id)
+        bank = Bank.query.filter_by(id=saving.bank_id, user_id=user_id).first()
         if not bank:
             return jsonify({"error": "Linked bank account not found"}), 404
         
@@ -1168,7 +1273,7 @@ def add_saving_transaction(saving_id):
     # Create saving transaction
     transaction = SavingTransaction(
         saving_id=saving_id,
-        user_id=saving.user_id,
+        user_id=user_id,
         amount=amount,
         description=data.get('description'),
         category=data.get('category'),
@@ -1192,8 +1297,10 @@ def add_saving_transaction(saving_id):
     return jsonify(response), 201
 
 @routes.route('/savings/<int:saving_id>/transactions', methods=['GET'])
+@jwt_required()
 def get_saving_transactions(saving_id):
-    saving = Saving.query.get(saving_id)
+    user_id = int(get_jwt_identity())
+    saving = Saving.query.filter_by(id=saving_id, user_id=user_id).first()
     if not saving:
         return jsonify({"error": "Saving account not found"}), 404
 
@@ -1212,8 +1319,10 @@ def get_saving_transactions(saving_id):
     ])
 
 @routes.route('/savings/<int:saving_id>', methods=['DELETE'])
+@jwt_required()
 def delete_saving(saving_id):
-    saving = Saving.query.get(saving_id)
+    user_id = int(get_jwt_identity())
+    saving = Saving.query.filter_by(id=saving_id, user_id=user_id).first()
     if not saving:
         return jsonify({'error': 'Saving account not found'}), 404
 
@@ -1276,22 +1385,25 @@ def get_account(account_type, account_id):
     return None
 
 # ========== UTILITY ROUTES ==========
-@routes.route('/users_dropdown', methods=['GET'])
+@routes.route('/users/dropdown', methods=['GET'])
+@jwt_required()
 def get_users_dropdown():
-    try:
-        users = User.query.all()
-        return jsonify([{
-            "id": user.id,
-            "name": user.name
-        } for user in users])
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify([])
 
-@routes.route('/banks_dropdown', methods=['GET'])
+    return jsonify([{
+        'id': user.id,
+        'name': user.name
+    }])
+
+@routes.route('/banks/dropdown', methods=['GET'])
+@jwt_required()
 def get_banks_dropdown():
-    user_id = request.args.get('user_id')
+    user_id = int(get_jwt_identity())
     banks = Bank.query.filter_by(user_id=user_id).all()
-    return jsonify([{"id": bank.id, "name": bank.name} for bank in banks])
+    return jsonify([{'id': bank.id, 'name': bank.name} for bank in banks])
 
 @routes.route('/bank_balance', methods=['GET'])
 def get_bank_balance():

@@ -8,8 +8,7 @@ import {
   deleteCreditCard,
   getCreditCardTransactions,
   addCreditCardTransaction,
-  processBilling,
-  getUsers
+  processBilling
 } from '../services/api';
 import './creditcard.css';
 import { format, parse } from 'date-fns';
@@ -20,10 +19,8 @@ export default function CreditCard() {
   const [transactions, setTransactions] = useState([]);
   const [billingDetails, setBillingDetails] = useState(null);
   const [showBillingDetails, setShowBillingDetails] = useState(false);
-  const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
-    userId: '',
     limit: '',
     billing_cycle_start: '1' // Default to 1st of the month
   });
@@ -46,13 +43,8 @@ export default function CreditCard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [cardsResponse, usersResponse] = await Promise.all([
-          getCreditCards(),
-          getUsers()
-        ]);
-        
+        const cardsResponse = await getCreditCards();
         setCards(cardsResponse || []);
-        setUsers(usersResponse || []);
         setError(null);
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -119,7 +111,6 @@ export default function CreditCard() {
     // Prepare the data exactly as backend expects it
     const cardData = {
       name: formData.name,
-      user_id: parseInt(formData.userId),  // Note: using user_id not userId
       limit: parseFloat(formData.limit),
       billing_cycle_start: parseInt(formData.billing_cycle_start)
     };
@@ -261,7 +252,6 @@ export default function CreditCard() {
 const handleEditCard = (card) => {
   setFormData({
     name: card.name,
-    userId: card.user_id,
     limit: card.limit.toString(),
     billing_cycle_start: card.billing_cycle_start.toString()
   });
@@ -275,7 +265,6 @@ const handleEditCard = (card) => {
   const resetForm = () => {
     setFormData({
       name: '',
-      userId: '',
       limit: '',
       billing_cycle_start: '1'
     });
@@ -345,20 +334,6 @@ const handleEditCard = (card) => {
                 />
               </div>
               
-              <div className="form-group">
-                <label>User</label>
-                <select
-                  name="userId"
-                  value={formData.userId}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="">Select User</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>{user.name}</option>
-                  ))}
-                </select>
-              </div>
               
               <div className="form-group">
                 <label>Credit Limit</label>
@@ -497,7 +472,6 @@ const handleEditCard = (card) => {
               <th>Available</th>
               <th>Billed Unpaid</th>
               <th>Unbilled Spends</th>
-              <th>User</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -511,9 +485,6 @@ const handleEditCard = (card) => {
                   <td>{card.available_limit?.toFixed(2)}</td>
                   <td>{card.billed_unpaid?.toFixed(2)}</td>
                   <td>{card.unbilled_spends?.toFixed(2)}</td>
-                  <td>
-                    {users.find(u => u.id === card.user_id)?.name || 'N/A'}
-                  </td>
                   <td className="actions-cell">
                     <button 
                       onClick={() => fetchCardDetails(card.id)}
@@ -549,10 +520,6 @@ const handleEditCard = (card) => {
             </div>
             
             <div className="card-details">
-              <div className="detail-row">
-                <span className="detail-label">User:</span>
-                <span>{users.find(u => u.id === selectedCard.user_id)?.name || 'N/A'}</span>
-              </div>
               <div className="detail-row">
                 <span className="detail-label">Limit:</span>
                 <span>${selectedCard.limit?.toFixed(2)}</span>

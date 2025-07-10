@@ -2,6 +2,7 @@ from . import db
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import event, Column, Integer, String, Float, Date, DateTime, Boolean, ForeignKey, Text
 from sqlalchemy.orm import validates, declared_attr
+from werkzeug.security import generate_password_hash, check_password_hash
 
 class User(db.Model):
     id = Column(Integer, primary_key=True)
@@ -14,6 +15,18 @@ class User(db.Model):
     assets = db.relationship('Asset', backref='user', lazy=True, cascade="all, delete-orphan")
     savings = db.relationship('Saving', backref='user', lazy=True, cascade="all, delete-orphan")
     transactions = db.relationship('Transaction', backref='user', lazy=True)
+    password_hash = Column(String(128), nullable=False)
+
+    def set_password(self, password):
+        # Using pbkdf2:sha256 with reduced salt length
+        self.password_hash = generate_password_hash(
+            password,
+            method='pbkdf2:sha256',  # More compact than scrypt
+            salt_length=8            # Reduced from default 16
+        )
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
     def __repr__(self):
         return f'<User {self.name}>'
