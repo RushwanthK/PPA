@@ -1,8 +1,8 @@
-"""Re-Initialize DB schema freshly with unique constraints on name columns
+"""Initial migration with all tables after reset
 
-Revision ID: 6aeceddfff51
+Revision ID: 8489c496e290
 Revises: 
-Create Date: 2025-07-05 13:16:07.992758
+Create Date: 2025-07-12 17:52:14.250548
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '6aeceddfff51'
+revision = '8489c496e290'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -24,6 +24,7 @@ def upgrade():
     sa.Column('age', sa.Integer(), nullable=False),
     sa.Column('dob', sa.Date(), nullable=False),
     sa.Column('place', sa.String(length=100), nullable=False),
+    sa.Column('password_hash', sa.String(length=128), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
