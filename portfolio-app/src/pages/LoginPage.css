@@ -1,0 +1,89 @@
+/* LoginPage.css */
+.login-container {
+  max-width: 400px;
+  margin: 80px auto;
+  padding: 30px;
+  background-color: #1f1f1f; /* bg-color */
+  border-radius: 12px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+  color: var(--text-color);
+}
+
+.login-container h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 24px;
+  color: var(--text-color);
+}
+
+.login-container form {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-container input {
+  padding: 12px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background-color: #2a2a2a; /* slightly lighter than bg */
+  color: white;
+  font-size: 15px;
+}
+
+.login-container input:focus {
+  outline: none;
+  border-color: var(--action-color);
+}
+
+.login-container button {
+  margin-top: 10px;
+  font-size: 16px;
+}
+
+.login-container p.error {
+  color: var(--error-color);
+  font-weight: 500;
+  margin-top: 12px;
+  text-align: center;
+}
+
+/* Toggle Register/Login */
+.login-container .toggle-auth {
+  cursor: pointer;
+  color: var(--action-color);
+  text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+/* Optional: mimic placeholder for empty date */
+input[type="date"].empty-date::-webkit-datetime-edit {
+  color: transparent;
+}
+input[type="date"].empty-date:before {
+  content: "DOB";
+  color: #888;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .login-container {
+    width: 90%;
+    padding: 20px;
+    margin: 60px auto;
+  }
+
+  .login-container h2 {
+    font-size: 20px;
+  }
+
+  .login-container input {
+    font-size: 16px;
+  }
+
+  .login-container button {
+    font-size: 16px;
+  }
+}

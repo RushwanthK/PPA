@@ -77,55 +77,60 @@ const Users = () => {
     } catch (err) {
       console.error('Failed to update user:', err);
       const errorMessage = err.response?.data?.error || 'Failed to update user. Please try again.';
-      showNotification(errorMessage, 'error');
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteUser = async (id) => {
-    if (isDeleting) return;
+  if (isDeleting) return;
+  
+  try {
+    setIsDeleting(true);
+    const checkResponse = await canDeleteUser(id);
     
-    try {
-      setIsDeleting(true);
-      const checkResponse = await canDeleteUser(id);
+    if (!checkResponse.data.can_delete) {
+      // Updated error message handling based on backend response
+      const errorDetails = checkResponse.data.details || {};
+      const reasons = [];
       
-      if (!checkResponse.data.can_delete) {
-        const warnings = [];
-        if (checkResponse.data.has_bank_balances) warnings.push("bank accounts with balance");
-        if (checkResponse.data.has_asset_balances) warnings.push("assets with balance");
-        if (checkResponse.data.has_saving_balances) warnings.push("savings accounts with balance");
-        if (checkResponse.data.has_credit_balances) warnings.push("credit cards with balance");
-        
-        const confirmMessage = `This user has ${warnings.join(', ')}.\n\n` +
-          `Deleting will permanently remove all associated data.\n\n` +
-          `Are you sure you want to proceed?`;
-        
-        if (!window.confirm(confirmMessage)) {
-          setIsDeleting(false);
-          return;
-        }
-      } else {
-        if (!window.confirm("Are you sure you want to delete this user?")) {
-          setIsDeleting(false);
-          return;
-        }
-      }
+      if (errorDetails.has_bank_balances) reasons.push("bank accounts");
+      if (errorDetails.has_asset_balances) reasons.push("assets");
+      if (errorDetails.has_saving_balances) reasons.push("savings");
+      if (errorDetails.has_credit_balances) reasons.push("credit cards");
       
-      await deleteUser(id);
-      setUsers(prevUsers => prevUsers.filter(user => user.id !== id));
-      showNotification('User deleted successfully!');
+      const errorMessage = checkResponse.data.message || 
+        `Cannot delete user account. Please clear balances from ${reasons.join(', ')} and try again.`;
       
-      // Log out after deletion
-      localStorage.removeItem('token');
-      window.location.href = '/';
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-      showNotification('Failed to delete user. Please try again.', 'error');
-    } finally {
+      setError(errorMessage);
       setIsDeleting(false);
+      return;
     }
-  };
+
+    // Proceed with deletion if no balances
+    if (!window.confirm("Are you sure you want to delete this user?")) {
+      setIsDeleting(false);
+      return;
+    }
+    
+    await deleteUser(id);
+    setUsers(prevUsers => prevUsers.filter(user => user.id !== id));
+    showNotification('User deleted successfully!');
+    
+    // Log out after deletion
+    localStorage.removeItem('token');
+    window.location.href = '/';
+  } catch (err) {
+    console.error('Failed to delete user:', err);
+    const errorMessage = err.response?.data?.error || 
+      err.response?.data?.message || 
+      'Failed to delete user. Please try again.';
+    setError(errorMessage);
+  } finally {
+    setIsDeleting(false);
+  }
+};
 
   const handleEditClick = (user) => {
     // Format the date for the date input field (YYYY-MM-DD)
@@ -149,10 +154,7 @@ const Users = () => {
     );
   }
 
-  if (error) {
-    return <div className="error">{error}</div>;
-  }
-
+  
   return (
     <div className="users-container">
       {notification.show && (
@@ -162,6 +164,15 @@ const Users = () => {
       )}
 
       <h2>Edit Profile</h2>
+      
+      {error && (
+        <div className="error">
+          <span>{error}</span>
+          <button className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">
+            &times;
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="loading">Loading users...</div>

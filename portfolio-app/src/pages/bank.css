@@ -1,8 +1,8 @@
-/* src/styles/bank.css */
+/* bank.css - Aligned with savings.css */
 
 .bank-container {
-  background-color: #1a1a1a;
-  color: #f0f0f0;
+  background-color: #121212;
+  color: #ffffff;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   padding: 20px;
   padding-top: 80px;
@@ -10,117 +10,50 @@
   margin: 0 auto;
 }
 
-h1 {
+.bank-container h1 {
   font-size: 1.8rem;
-  color: #ffffff;
-  margin-bottom: 20px;
   font-weight: 600;
-}
-
-/* Messages */
-.error-message, .success-message {
-  padding: 12px;
-  border-radius: 6px;
   margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.error-message {
-  background-color: #ff4444;
-  color: white;
-}
-
-.success-message {
-  background-color: #28a745;
-  color: white;
-}
-
-.close-error, .close-success {
-  background: transparent;
-  border: none;
-  color: white;
-  font-size: 1.2rem;
-  cursor: pointer;
-  padding: 0;
-  margin-left: 10px;
+  color: #ffffff;
 }
 
 /* Buttons */
-.add-button, .save-button, .cancel-button, 
-.edit-button, .transaction-button, .view-button, .delete-button {
+.add-button,
+.edit-button,
+.transaction-button,
+.view-button,
+.delete-button,
+.save-button,
+.cancel-button {
   padding: 8px 16px;
   border-radius: 4px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
   border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
   margin: 2px;
-}
-
-.add-button {
-  background-color: #ff6f61;
-  color: white;
-  margin-bottom: 20px;
-}
-
-.add-button:hover {
-  background-color: #e55d50;
-}
-
-.save-button {
-  background-color: #28a745;
   color: white;
 }
 
-.save-button:hover {
-  background-color: #218838;
-}
-
-.cancel-button {
-  background-color: #6c757d;
-  color: white;
-}
-
-.cancel-button:hover {
-  background-color: #5a6268;
-}
-
+.save-button,
+.add-button,
 .edit-button {
-  background-color: #17a2b8;
-  color: white;
+  background-color: #4caf50;
 }
 
-.edit-button:hover {
-  background-color: #138496;
-}
-
-.transaction-button {
-  background-color: #6f42c1;
-  color: white;
-}
-
-.transaction-button:hover {
-  background-color: #5e3aa8;
-}
-
+.transaction-button,
 .view-button {
-  background-color: #fd7e14;
-  color: white;
+  background-color: #2196f3;
 }
 
-.view-button:hover {
-  background-color: #e66a00;
-}
-
+.cancel-button,
 .delete-button {
   background-color: #dc3545;
-  color: white;
 }
 
-.delete-button:hover {
-  background-color: #c82333;
+button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 button:disabled {
@@ -128,12 +61,12 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* Tables */
+/* Table */
 .table-container {
   overflow-x: auto;
-  background-color: #383838;
+  background-color: #1e1e1e;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  margin-top: 20px;
 }
 
 .banks-table {
@@ -142,31 +75,25 @@ button:disabled {
   font-size: 0.9rem;
 }
 
-.banks-table th, .banks-table td {
+.banks-table th,
+.banks-table td {
   padding: 12px 15px;
   text-align: left;
-}
-
-.banks-table th {
-  background-color: #333;
-  color: #fff;
-  font-weight: 600;
-}
-
-.banks-table tr {
   border-bottom: 1px solid #444;
 }
 
-.banks-table tr:last-child {
-  border-bottom: none;
-}
-
-.banks-table tr:hover td {
-  background-color: #3d3d3d;
+.banks-table th {
+  background-color: #2d2d2d;
+  color: white;
+  font-weight: 600;
 }
 
 .banks-table td {
-  background-color: #444;
+  background-color: #1e1e1e;
+}
+
+.banks-table tr:hover td {
+  background-color: #2d2d2d;
 }
 
 .no-data {
@@ -176,7 +103,7 @@ button:disabled {
 }
 
 .income {
-  color: #28a745;
+  color: #4caf50;
   font-weight: 500;
 }
 
@@ -200,7 +127,7 @@ button:disabled {
 }
 
 .modal-content {
-  background-color: #383838;
+  background-color: #1e1e1e;
   padding: 25px;
   border-radius: 8px;
   width: 90%;
@@ -209,6 +136,12 @@ button:disabled {
   overflow-y: auto;
   position: relative;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h2 {
+  font-size: 1.3rem;
+  color: #ffffff;
+  margin-top: 0;
 }
 
 .close-button {
@@ -236,21 +169,22 @@ button:disabled {
   color: #ddd;
 }
 
-.form-group input, 
+.form-group input,
 .form-group select {
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-radius: 4px;
-  border: 1px solid #555;
-  background-color: #444;
-  color: #fff;
   font-size: 0.9rem;
+  border: 1px solid #444;
+  background-color: #2d2d2d;
+  color: #ffffff;
 }
 
-.form-group input:focus, 
+.form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #007bff;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
 .form-actions {
@@ -258,6 +192,38 @@ button:disabled {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 20px;
+}
+
+/* Error Styling */
+.bank-error-with-close {
+  background-color: rgba(220, 53, 69, 0.15);
+  border: 1px solid #ff4c4c;
+  color: #ff4c4c;
+  padding: 14px 44px 14px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin: 20px 0;
+  position: relative;
+  text-align: left;
+}
+
+.bank-error-with-close button.error-dismiss {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #ff4c4c;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.bank-error-with-close button.error-dismiss:hover {
+  color: #e74c3c;
 }
 
 /* Actions cell */
@@ -274,23 +240,31 @@ button:disabled {
   color: #aaa;
 }
 
-/* Responsive adjustments */
+/* Responsive */
 @media (max-width: 768px) {
-  .banks-table {
-    font-size: 0.8rem;
-  }
-  
-  .banks-table th, 
+  .banks-table th,
   .banks-table td {
     padding: 8px 10px;
+    font-size: 0.8rem;
   }
-  
-  .actions-cell {
-    flex-direction: column;
-  }
-  
+
   .modal-content {
     width: 95%;
     padding: 15px;
+  }
+
+  .actions-cell {
+    flex-direction: column;
+  }
+
+  .add-button,
+  .edit-button,
+  .transaction-button,
+  .view-button,
+  .delete-button,
+  .save-button,
+  .cancel-button {
+    width: 100%;
+    margin-top: 5px;
   }
 }

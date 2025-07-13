@@ -1,7 +1,6 @@
 /* src/pages/creditcard.css */
 
 :root {
-  /* Using the same color variables as savings.css for consistency */
   --bg-primary: #1a1a1a;
   --bg-secondary: #2d2d2d;
   --bg-tertiary: #3d3d3d;
@@ -11,30 +10,28 @@
   --accent-secondary: #2196F3;
   --accent-danger: #dc3545;
   --accent-warning: #ff9800;
-  --accent-info: #9c27b0;
+  --accent-info: #2196F3;
   --border-color: #444;
   --hover-color: #3d3d3d;
 }
 
 .credit-card-container {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: #121212;
+  color: #ffffff;
   padding: 20px;
   padding-top: 80px;
   max-width: 1200px;
   margin: 0 auto;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  min-height: 100vh;
 }
 
 .credit-card-container h1 {
   font-size: 1.8rem;
   font-weight: 600;
   margin-bottom: 20px;
-  color: var(--text-primary);
+  color: #ffffff;
 }
 
-/* Buttons - fixed to match JSX classes */
 .actions {
   margin-bottom: 20px;
 }
@@ -79,7 +76,6 @@ button:hover {
   transform: translateY(-1px);
 }
 
-/* Tables */
 .cards-table {
   width: 100%;
   border-collapse: collapse;
@@ -87,7 +83,7 @@ button:hover {
   margin-top: 20px;
 }
 
-.cards-table th, 
+.cards-table th,
 .cards-table td {
   padding: 12px 15px;
   border-bottom: 1px solid var(--border-color);
@@ -296,20 +292,36 @@ button:hover {
   color: var(--text-primary);
 }
 
-.error {
-  padding: 20px;
-  text-align: center;
-  margin: 20px 0;
-  border-radius: 6px;
+/* Updated Error Box (uniform with savings) */
+.creditcard-error-with-close {
   background-color: rgba(220, 53, 69, 0.15);
-  color: var(--accent-danger);
   border: 1px solid var(--accent-danger);
+  color: var(--accent-danger);
+  padding: 14px 44px 14px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin: 20px 0;
+  position: relative;
+  text-align: left;
 }
 
-.error button {
-  margin-top: 10px;
-  background-color: var(--accent-danger);
-  color: white;
+.creditcard-error-with-close button.error-dismiss {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--accent-danger);
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.creditcard-error-with-close button.error-dismiss:hover {
+  color: #e74c3c;
 }
 
 /* Billing Details */
@@ -352,7 +364,7 @@ button:hover {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .cards-table th, 
+  .cards-table th,
   .cards-table td {
     padding: 8px 10px;
     font-size: 0.8rem;
@@ -376,7 +388,7 @@ button:hover {
   button {
     width: 100%;
     margin: 5px 0;
-  padding: 10px;
+    padding: 10px;
   }
 
   .detail-row {
@@ -388,7 +400,7 @@ button:hover {
     margin-bottom: 5px;
     min-width: unset;
   }
-  
+
   .billing-details p {
     flex-direction: column;
   }

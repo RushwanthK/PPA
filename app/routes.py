@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import check_password_hash
 from . import db
@@ -133,6 +134,22 @@ def get_users():
         'place': user.place
     }])
 
+@routes.route('/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({
+        'id': user.id,
+        'name': user.name,
+        'dob': user.dob.strftime("%Y-%m-%d"),
+        'place': user.place,
+        'age': user.age
+    }), 200
+
 @routes.route('/users/<int:id>', methods=['PUT'])
 @jwt_required()
 def update_user(id):
@@ -156,7 +173,6 @@ def update_user(id):
         user.age = calculate_age(dob)
         user.place = data['place']
 
-        # ✅ Handle optional password update
         if 'password' in data and data['password'].strip():
             user.set_password(data['password'])
 
@@ -171,7 +187,18 @@ def update_user(id):
         }), 200
 
     except ValueError:
+        db.session.rollback()
         return jsonify({"error": "Invalid date format. Use 'YYYY-MM-DD'."}), 400
+
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'user_name_key' in str(e.orig):
+            return jsonify({"error": "Username already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 @routes.route('/users/<int:id>', methods=['DELETE'])
@@ -184,6 +211,23 @@ def delete_user(id):
     user = User.query.get(id)
     if not user:
         return jsonify({'message': 'User not found'}), 404
+    
+    # Check balances before deletion
+    has_bank_balances = any(bank.balance != 0 for bank in user.banks)
+    has_asset_balances = any(asset.balance != 0 for asset in user.assets)
+    has_saving_balances = any(saving.balance != 0 for saving in user.savings)
+    has_credit_balances = any(card.used != 0 for card in user.credit_cards)
+    
+    if has_bank_balances or has_asset_balances or has_saving_balances or has_credit_balances:
+        return jsonify({
+            'error': 'Cannot delete user with existing balances',
+            'details': {
+                'has_bank_balances': has_bank_balances,
+                'has_asset_balances': has_asset_balances,
+                'has_saving_balances': has_saving_balances,
+                'has_credit_balances': has_credit_balances
+            }
+        }), 400
     
     db.session.delete(user)
     db.session.commit()
@@ -210,12 +254,31 @@ def can_delete_user(id):
     can_delete = not (has_bank_balances or has_asset_balances or 
                      has_saving_balances or has_credit_balances)
     
+    if not can_delete:
+        message = "Cannot delete user account. Please clear all balances from: "
+        reasons = []
+        if has_bank_balances:
+            reasons.append("bank accounts")
+        if has_asset_balances:
+            reasons.append("assets")
+        if has_saving_balances:
+            reasons.append("savings")
+        if has_credit_balances:
+            reasons.append("credit cards")
+        message += ", ".join(reasons) + " and try again."
+    else:
+        message = "User account can be deleted as there are no balances."
+        
     return jsonify({
         "can_delete": can_delete,
-        "has_bank_balances": has_bank_balances,
-        "has_asset_balances": has_asset_balances,
-        "has_saving_balances": has_saving_balances,
-        "has_credit_balances": has_credit_balances
+        "message": message,
+        "details": {
+            "has_bank_balances": has_bank_balances,
+            "has_asset_balances": has_asset_balances,
+            "has_saving_balances": has_saving_balances,
+            "has_credit_balances": has_credit_balances
+        }
+
     })
 
 # ========== CREDIT CARD ROUTES ==========
@@ -280,6 +343,11 @@ def create_credit_card():
             }
         }), 201
         
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'credit_card_name_key' in str(e.orig):
+            return jsonify({"error": "Credit card name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
@@ -358,31 +426,29 @@ def update_credit_card(card_id):
         return jsonify({"error": "Credit card not found"}), 404
         
     data = request.json
-    
-    # List of allowed fields to update
-    allowed_fields = {'name', 'limit','user_id', 'billing_cycle_start'}
-    
-    # Check for disallowed fields
+    allowed_fields = {'name', 'limit', 'user_id', 'billing_cycle_start'}
     disallowed_fields = set(data.keys()) - allowed_fields
     if disallowed_fields:
         return jsonify({"error": f"Cannot update calculated fields: {', '.join(disallowed_fields)}"}), 400
-    
+
     try:
         changes_made = False
         billing_cycle_changed = False
-        
+
         if 'name' in data and data['name'] != card.name:
             card.name = data['name']
             changes_made = True
-            
+
         if 'limit' in data:
             new_limit = float(data['limit'])
             if new_limit <= 0:
                 return jsonify({"error": "Limit must be positive"}), 400
+            if new_limit < card.used:
+                return jsonify({"error": f"New limit cannot be less than currently used amount ({card.used})"}), 400
             if new_limit != card.limit:
                 card.limit = new_limit
                 changes_made = True
-            
+
         if 'billing_cycle_start' in data:
             new_billing_cycle = int(data['billing_cycle_start'])
             if not 1 <= new_billing_cycle <= 31:
@@ -391,7 +457,7 @@ def update_credit_card(card_id):
                 billing_cycle_changed = True
                 card.billing_cycle_start = new_billing_cycle
                 changes_made = True
-        
+
         if not changes_made:
             return jsonify({"message": "No changes detected", "card": {
                 "id": card.id,
@@ -405,12 +471,10 @@ def update_credit_card(card_id):
                 "billing_cycle_start": card.billing_cycle_start,
                 "total_payable": card.total_payable
             }}), 200
-        
-        # If billing cycle changed, recalculate unbilled spends
+
         if billing_cycle_changed:
             current_cycle_start = calculate_current_cycle_start(card.billing_cycle_start)
-            
-            # Calculate new unbilled_spends
+
             card.unbilled_spends = db.session.query(
                 func.sum(func.abs(CreditCardTransaction.amount))
             ).filter(
@@ -418,8 +482,7 @@ def update_credit_card(card_id):
                 CreditCardTransaction.amount < 0,
                 CreditCardTransaction.date >= current_cycle_start
             ).scalar() or 0
-            
-            # Subtract any payments against these expenses
+
             payments_applied = db.session.query(
                 func.sum(CreditCardTransaction.amount)
             ).filter(
@@ -427,11 +490,10 @@ def update_credit_card(card_id):
                 CreditCardTransaction.amount > 0,
                 CreditCardTransaction.date >= current_cycle_start
             ).scalar() or 0
-            
+
             card.unbilled_spends = max(0, card.unbilled_spends - payments_applied)
-        
+
         db.session.commit()
-        
         return jsonify({
             "message": "Credit card updated successfully",
             "card": {
@@ -447,13 +509,19 @@ def update_credit_card(card_id):
                 "total_payable": card.total_payable
             }
         })
-        
+
     except ValueError as e:
         db.session.rollback()
         return jsonify({"error": f"Invalid numeric value: {str(e)}"}), 400
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'credit_card_name_key' in str(e.orig):
+            return jsonify({"error": "Credit card name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
+
 
 
 def calculate_current_cycle_start(billing_cycle_start):
@@ -854,9 +922,14 @@ def create_bank():
             "user_id": bank.user_id,
             "balance": bank.balance
         }), 201
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'bank_name_key' in str(e.orig):
+            return jsonify({"error": "Bank name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @routes.route('/banks', methods=['GET'])
 @jwt_required()
@@ -881,13 +954,22 @@ def update_bank(bank_id):
     data = request.json
     bank.name = data.get('name', bank.name)
     
-    db.session.commit()
-    return jsonify({
-        "id": bank.id,
-        "name": bank.name,
-        "user_id": bank.user_id,
-        "balance": bank.balance
-    })
+    try:
+        db.session.commit()
+        return jsonify({
+            "id": bank.id,
+            "name": bank.name,
+            "user_id": bank.user_id,
+            "balance": bank.balance
+        })
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'bank_name_key' in str(e.orig):
+            return jsonify({"error": "Bank name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 @routes.route('/banks/<int:bank_id>', methods=['DELETE'])
@@ -900,6 +982,14 @@ def delete_bank(bank_id):
     
     if bank.balance != 0:
         return jsonify({"error": "Cannot delete bank with non-zero balance"}), 400
+    
+    # Check if any savings accounts are linked to this bank
+    linked_savings = Saving.query.filter_by(bank_id=bank_id, user_id=user_id).count()
+    if linked_savings > 0:
+        return jsonify({
+            "error": "Cannot delete bank because it has linked savings accounts",
+            "linked_savings_count": linked_savings
+        }), 400
     
     db.session.delete(bank)
     db.session.commit()
@@ -996,9 +1086,18 @@ def create_asset():
         category=data.get('category'),
         balance=data.get('balance', 0)
     )
-    db.session.add(asset)
-    db.session.commit()
-    return jsonify({"message": "Asset created!"}), 201
+    try:
+        db.session.add(asset)
+        db.session.commit()
+        return jsonify({"message": "Asset created!"}), 201
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'asset_name_key' in str(e.orig):
+            return jsonify({"error": "Asset name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @routes.route('/assets', methods=['GET'])
 @jwt_required()
@@ -1041,18 +1140,27 @@ def update_asset(asset_id):
             "error": "Balance cannot be updated directly. Use transactions instead."
         }), 400
     
-    db.session.commit()
-    return jsonify({
-        "message": "Asset updated successfully",
-        "asset": {
-            "id": asset.id,
-            "name": asset.name,
-            "user_id": asset.user_id,
-            "platform": asset.platform,
-            "category": asset.category,
-            "balance": asset.balance
-        }
-    }), 200
+    try:
+        db.session.commit()
+        return jsonify({
+            "message": "Asset updated successfully",
+            "asset": {
+                "id": asset.id,
+                "name": asset.name,
+                "user_id": asset.user_id,
+                "platform": asset.platform,
+                "category": asset.category,
+                "balance": asset.balance
+            }
+        }), 200
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'asset_name_key' in str(e.orig):
+            return jsonify({"error": "Asset name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 
 @routes.route('/assets/<int:asset_id>/transactions', methods=['POST'])
@@ -1145,18 +1253,27 @@ def create_saving():
         bank_id=data.get('bank_id'),
         balance=data.get('balance', 0)
     )
-    db.session.add(saving)
-    db.session.commit()
-    return jsonify({
-        "message": "Saving account created!",
-        "saving": {
-            "id": saving.id,
-            "name": saving.name,
-            "user_id": saving.user_id,
-            "bank_id": saving.bank_id,
-            "balance": saving.balance
-        }
-    }), 201
+    try:
+        db.session.add(saving)
+        db.session.commit()
+        return jsonify({
+            "message": "Saving account created!",
+            "saving": {
+                "id": saving.id,
+                "name": saving.name,
+                "user_id": saving.user_id,
+                "bank_id": saving.bank_id,
+                "balance": saving.balance
+            }
+        }), 201
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'saving_name_key' in str(e.orig):
+            return jsonify({"error": "Saving account name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @routes.route('/savings', methods=['GET'])
 @jwt_required()
@@ -1222,18 +1339,26 @@ def update_saving(saving_id):
             "error": "Balance cannot be updated directly. Use transactions instead."
         }), 400
     
-    db.session.commit()
-    return jsonify({
-        "message": "Saving account updated successfully",
-        "saving": {
-            "id": saving.id,
-            "name": saving.name,
-            "user_id": saving.user_id,
-            "bank_id": saving.bank_id,
-            "balance": saving.balance
-        }
-    }), 200
-
+    try:
+        db.session.commit()
+        return jsonify({
+            "message": "Saving account updated successfully",
+            "saving": {
+                "id": saving.id,
+                "name": saving.name,
+                "user_id": saving.user_id,
+                "bank_id": saving.bank_id,
+                "balance": saving.balance
+            }
+        }), 200
+    except IntegrityError as e:
+        db.session.rollback()
+        if 'saving_name_key' in str(e.orig):
+            return jsonify({"error": "Saving account name already exists"}), 400
+        return jsonify({"error": "Database integrity error"}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
 
 @routes.route('/savings/<int:saving_id>/transactions', methods=['POST'])
 @jwt_required()

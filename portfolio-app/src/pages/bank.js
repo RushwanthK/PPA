@@ -147,27 +147,31 @@ export default function Bank() {
   };
 
   const handleDeleteBank = async (bankId) => {
-    if (!window.confirm('Are you sure you want to delete this bank?')) return;
+  if (!window.confirm('Are you sure you want to delete this bank?')) return;
+  
+  try {
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
     
-    try {
-      setError(null);
-      setSuccess(null);
-      setLoading(true);
-      
-      await deleteBank(bankId);
-      
-      // Refresh banks list
-      const banksResponse = await getBanks();
-      setBanks(banksResponse.data || []);
-      setSuccess('Bank deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting bank:', error);
+    await deleteBank(bankId);
+    
+    // Refresh banks list
+    const banksResponse = await getBanks();
+    setBanks(banksResponse.data || []);
+    setSuccess('Bank deleted successfully!');
+  } catch (error) {
+    console.error('Error deleting bank:', error);
+    // Check for specific error message about linked savings
+    if (error.response?.data?.error?.includes('linked savings accounts')) {
+      setError('Cannot delete bank because it has linked savings accounts. Please remove all linked savings accounts first.');
+    } else {
       setError(error.message || 'Failed to delete bank');
-    } finally {
-      setLoading(false);
     }
-  };
-
+  } finally {
+    setLoading(false);
+  }
+};
   const handleEdit = (bank) => {
     setFormData({
       id: bank.id,
@@ -216,11 +220,9 @@ export default function Bank() {
       <h1>Banks</h1>
       
       {error && (
-        <div className="error-message">
-          <strong>Error:</strong> {error}
-          <button onClick={() => setError(null)} className="close-error">
-            ×
-          </button>
+        <div className="bank-error-with-close">
+          <span>{error}</span>
+          <button className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
         </div>
       )}
       

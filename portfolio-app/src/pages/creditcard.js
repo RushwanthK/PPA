@@ -119,6 +119,12 @@ export default function CreditCard() {
       // Update existing card - use the exact endpoint with card ID
       const response = await updateCreditCard(selectedCard.id, cardData);
       const updatedCard = response.card;
+
+      if (
+        parseInt(formData.billing_cycle_start) !== selectedCard.billing_cycle_start
+      ) {
+        alert("To apply changes, click ‘Process Billing’");
+      }
       
       // Update state with the exact response from backend
       const updatedCards = await getCreditCards();
@@ -127,8 +133,9 @@ export default function CreditCard() {
       setEditMode(false);
     } else {
       // Create new card
-      const newCard = await createCreditCard(cardData);
-      setCards([...cards, newCard]);
+      await createCreditCard(cardData);
+      const updatedCards = await getCreditCards();
+      setCards(updatedCards);
     }
     
     resetForm();
@@ -299,21 +306,19 @@ const handleEditCard = (card) => {
     return <div className="loading">Loading credit cards...</div>;
   }
 
-  if (error) {
-    return (
-      <div className="error">
-        {error}
-        <button onClick={() => setError(null)}>Dismiss</button>
-      </div>
-    );
-  }
+
 
   return (
     <div className="credit-card-container">
       <h1>Credit Cards</h1>
-      
+      {error && (
+        <div className="creditcard-error-with-close">
+          <span>{error}</span>
+          <button className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
+        </div>
+      )}
       <div className="actions">
-        <button onClick={() => setShowForm(true)}>Add Credit Card</button>
+        <button className="primary" onClick={() => setShowForm(true)}>Add Credit Card</button>
       </div>
 
       {/* Credit Card Form */}
@@ -366,7 +371,7 @@ const handleEditCard = (card) => {
                 <button type="submit" className="primary">
                   {editMode ? 'Update' : 'Save'}
                 </button>
-                <button type="button" onClick={resetForm}>Cancel</button>
+                <button className="danger" type="button" onClick={resetForm}>Cancel</button>
               </div>
             </form>
           </div>
@@ -454,7 +459,7 @@ const handleEditCard = (card) => {
               
               <div className="form-actions">
                 <button type="submit" className="primary">Submit</button>
-                <button type="button" onClick={resetTransactionForm}>Cancel</button>
+                <button className="danger" type="button" onClick={resetTransactionForm}>Cancel</button>
               </div>
             </form>
           </div>
@@ -522,23 +527,23 @@ const handleEditCard = (card) => {
             <div className="card-details">
               <div className="detail-row">
                 <span className="detail-label">Limit:</span>
-                <span>${selectedCard.limit?.toFixed(2)}</span>
+                <span>Rs.{selectedCard.limit?.toFixed(2)}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Used:</span>
-                <span>${selectedCard.used?.toFixed(2)}</span>
+                <span>Rs.{selectedCard.used?.toFixed(2)}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Available:</span>
-                <span>${selectedCard.available_limit?.toFixed(2)}</span>
+                <span>Rs.{selectedCard.available_limit?.toFixed(2)}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Billed Unpaid:</span>
-                <span>${selectedCard.billed_unpaid?.toFixed(2)}</span>
+                <span>Rs.{selectedCard.billed_unpaid?.toFixed(2)}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Unbilled Spends:</span>
-                <span>${selectedCard.unbilled_spends?.toFixed(2)}</span>
+                <span>Rs.{selectedCard.unbilled_spends?.toFixed(2)}</span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Billing Cycle Start:</span>
@@ -546,13 +551,13 @@ const handleEditCard = (card) => {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Total Payable:</span>
-                <span>${selectedCard.total_payable?.toFixed(2)}</span>
+                <span>Rs.{selectedCard.total_payable?.toFixed(2)}</span>
               </div>
               {selectedCard.last_payment_date && (
                 <div className="detail-row">
                   <span className="detail-label">Last Payment:</span>
                   <span>
-                    ${selectedCard.last_payment_amount?.toFixed(2)} on{' '}
+                    Rs.{selectedCard.last_payment_amount?.toFixed(2)} on{' '}
                     {format(
                       parse(selectedCard.last_payment_date, 'ddMMyyyy', new Date()),
                       'MMM dd, yyyy'
@@ -565,7 +570,7 @@ const handleEditCard = (card) => {
             <div className="modal-actions">
               <button 
                 onClick={() => fetchTransactions(selectedCard.id)}
-                className="primary"
+                className="info"
               >
                 View Transactions
               </button>
@@ -577,7 +582,7 @@ const handleEditCard = (card) => {
               </button>
               <button 
                 onClick={() => handleEditCard(selectedCard)}
-                className="info"
+                className="primary"
               >
                 Edit Card
               </button>
@@ -660,9 +665,9 @@ const handleEditCard = (card) => {
             
             <div className="billing-details">
               <p><strong>Transactions Billed:</strong> {billingDetails.transactionsBilled}</p>
-              <p><strong>Total Amount Billed:</strong> ${billingDetails.totalAmountBilled?.toFixed(2)}</p>
-              <p><strong>New Billed Unpaid:</strong> ${billingDetails.card.billed_unpaid?.toFixed(2)}</p>
-              <p><strong>New Unbilled Spends:</strong> ${billingDetails.card.unbilled_spends?.toFixed(2)}</p>
+              <p><strong>Total Amount Billed:</strong> Rs.{billingDetails.totalAmountBilled?.toFixed(2)}</p>
+              <p><strong>New Billed Unpaid:</strong> Rs.{billingDetails.card.billed_unpaid?.toFixed(2)}</p>
+              <p><strong>New Unbilled Spends:</strong> Rs.{billingDetails.card.unbilled_spends?.toFixed(2)}</p>
             </div>
             
             <div className="modal-actions">
@@ -671,7 +676,7 @@ const handleEditCard = (card) => {
                   setShowBillingDetails(false);
                   fetchTransactions(billingDetails.card.id);
                 }}
-                className="primary"
+                className="info"
               >
                 View Updated Transactions
               </button>

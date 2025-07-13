@@ -1,22 +1,8 @@
-/* src/pages/savings.css */
-
-:root {
-  --bg-primary: #1a1a1a;
-  --bg-secondary: #2d2d2d;
-  --bg-tertiary: #3d3d3d;
-  --text-primary: #f0f0f0;
-  --text-secondary: #cccccc;
-  --accent-primary: #4CAF50;
-  --accent-secondary: #2196F3;
-  --accent-danger: #dc3545;
-  --accent-warning: #ff9800;
-  --border-color: #444;
-  --hover-color: #3d3d3d;
-}
+/* savings.css - Consistent with assets.css */
 
 .savings-container {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: #121212;
+  color: #ffffff;
   padding: 20px;
   padding-top: 80px;
   max-width: 1200px;
@@ -24,11 +10,11 @@
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-.savings-header {
+.savings-container h1 {
   font-size: 1.8rem;
   font-weight: 600;
   margin-bottom: 20px;
-  color: var(--text-primary);
+  color: #ffffff;
 }
 
 /* Buttons */
@@ -46,159 +32,116 @@
   color: white;
 }
 
-.savings-add-btn {
-  background-color: var(--accent-primary);
-  margin-bottom: 20px;
+.savings-add-btn,
+.savings-submit-btn {
+  background-color: #4caf50;
 }
 
 .savings-edit-btn {
-  background-color: var(--accent-warning);
+  background-color: #4caf50;
 }
 
 .savings-transaction-btn {
-  background-color: var(--accent-secondary);
+  background-color: #2196f3;
 }
 
 .savings-view-btn {
-  background-color: #9c27b0;
+  background-color: #2196f3;
 }
 
-.savings-delete-btn {
-  background-color: var(--accent-danger);
-}
-
-.savings-submit-btn {
-  background-color: var(--accent-primary);
-}
-
+.savings-delete-btn,
 .savings-cancel-btn {
-  background-color: #6c757d;
+  background-color: #dc3545;
 }
 
-.savings-action-btn:hover,
-.savings-add-btn:hover,
-.savings-submit-btn:hover,
-.savings-cancel-btn:hover {
+button:hover {
   opacity: 0.9;
   transform: translateY(-1px);
 }
 
-/* Table */
-.savings-table-container {
-  overflow-x: auto;
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.savings-table {
+/* Table */
+table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
   margin-top: 10px;
 }
 
-.savings-table th, 
-.savings-table td {
+th, td {
   padding: 12px 15px;
-  border-bottom: 1px solid var(--border-color);
-  text-align: left;
+  border-bottom: 1px solid #444;
 }
 
-.savings-table th {
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
+th {
+  background-color: #2d2d2d;
+  color: white;
   font-weight: 600;
 }
 
-.savings-table td {
-  background-color: var(--bg-secondary);
+td {
+  background-color: #1e1e1e;
 }
 
-.savings-table tr:hover td {
-  background-color: var(--hover-color);
+tr:hover td {
+  background-color: #2d2d2d;
 }
 
-.savings-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-/* Transactions Section */
-.transactions-row {
-  background-color: var(--bg-tertiary);
-}
-
-.transactions-container {
+.transactions {
+  background-color: #2d2d2d;
   padding: 15px;
-  background-color: var(--bg-tertiary);
-}
-
-.transactions-container h3 {
-  margin-top: 0;
-  font-size: 1.1rem;
-  color: var(--text-primary);
-}
-
-.transactions-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
+  border-radius: 6px;
   margin-top: 10px;
 }
 
-.transactions-table th,
-.transactions-table td {
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
+.transactions h3 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: #ffffff;
 }
 
-.transactions-table th {
-  background-color: var(--bg-secondary);
+.transactions table {
+  font-size: 0.85rem;
 }
 
-.no-transactions {
-  color: var(--text-secondary);
-  font-style: italic;
-  text-align: center;
-  padding: 10px;
+/* Form */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
 }
 
-/* Form Styles */
-.savings-form-group {
-  margin-bottom: 15px;
-}
-
-.savings-form-group label {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--text-primary);
-}
-
-.savings-form-group input,
-.savings-form-group select {
+input, select {
   padding: 10px 12px;
   border-radius: 4px;
   font-size: 0.9rem;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
+  border: 1px solid #444;
+  background-color: #2d2d2d;
+  color: #ffffff;
   width: 100%;
 }
 
-.savings-form-group input:focus,
-.savings-form-group select:focus {
+input:focus, select:focus {
   outline: none;
-  border-color: var(--accent-primary);
+  border-color: #4caf50;
   box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
-/* Modal Styles */
+input::placeholder {
+  color: #cccccc;
+  opacity: 0.7;
+}
+
+/* Modal */
 .savings-modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.7);
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.7);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -206,20 +149,20 @@
 }
 
 .savings-modal-content {
-  background-color: var(--bg-secondary);
+  background-color: #1e1e1e;
   padding: 25px;
   border-radius: 8px;
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
   overflow-y: auto;
+  position: relative;
 }
 
 .savings-modal-content h2 {
   margin-top: 0;
   font-size: 1.3rem;
-  color: var(--text-primary);
-  margin-bottom: 20px;
+  color: #ffffff;
 }
 
 .savings-modal-actions {
@@ -231,60 +174,75 @@
 
 /* Balance coloring */
 .positive-balance {
-  color: var(--accent-primary);
+  color: #4caf50;
   font-weight: 500;
 }
 
 .negative-balance {
-  color: var(--accent-danger);
+  color: #dc3545;
   font-weight: 500;
 }
 
 .tx-type-deposit {
-  color: var(--accent-primary);
+  color: #4caf50;
   font-weight: 500;
 }
 
 .tx-type-withdrawal {
-  color: var(--accent-danger);
+  color: #dc3545;
   font-weight: 500;
 }
 
-/* Loading & Error States */
-.savings-loading {
+/* Error + Loading */
+.loading, .error {
   padding: 20px;
   text-align: center;
   margin: 20px 0;
   border-radius: 6px;
-  background-color: var(--bg-tertiary);
-  color: var(--text-primary);
+  font-size: 14px;
 }
 
-.savings-error {
-  padding: 20px;
-  text-align: center;
-  margin: 20px 0;
-  border-radius: 6px;
+.loading {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+.savings-error-with-close {
   background-color: rgba(220, 53, 69, 0.15);
-  color: var(--accent-danger);
-  border: 1px solid var(--accent-danger);
+  border: 1px solid #ff4c4c;
+  color: #ff4c4c;
+  padding: 14px 44px 14px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin: 20px 0;
+  position: relative;
+  text-align: left;
 }
 
-/* Responsive Design */
+.savings-error-with-close button.error-dismiss {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #ff4c4c;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.savings-error-with-close button.error-dismiss:hover {
+  color: #e74c3c;
+}
+
+/* Responsive */
 @media (max-width: 768px) {
-  .savings-table th, 
-  .savings-table td {
+  th, td {
     padding: 8px 10px;
     font-size: 0.8rem;
-  }
-
-  .savings-actions {
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .savings-action-btn {
-    width: 100%;
   }
 
   .savings-modal-content {
@@ -292,88 +250,51 @@
     padding: 15px;
   }
 
-  .savings-modal-actions {
-    flex-direction: column;
+  .btn, .savings-submit-btn, .savings-cancel-btn {
+    width: 100%;
   }
 
-  .savings-submit-btn,
-  .savings-cancel-btn {
+  .savings-action-btn {
     width: 100%;
+    margin-top: 5px;
   }
 }
 
-/* Bank Balance Display Styles */
+/* Bank Balance Display */
 .bank-balance-display {
-  background-color: var(--bg-tertiary);
+  background-color: #2d2d2d;
   padding: 12px 15px;
   border-radius: 4px;
   margin-bottom: 20px;
-  border-left: 4px solid var(--accent-secondary);
+  border-left: 4px solid #2196f3;
 }
 
 .bank-balance-display p {
   margin: 5px 0;
-  color: var(--text-primary);
+  color: #ffffff;
 }
 
 .balance-amount {
   font-weight: 600;
   margin-left: 5px;
-  color: var(--accent-primary);
+  color: #4caf50;
 }
 
 .balance-error {
   font-weight: 500;
   margin-left: 5px;
-  color: var(--accent-danger);
+  color: #dc3545;
 }
 
 .balance-warning {
-  color: var(--accent-warning);
+  color: #ff9800;
   font-size: 0.85rem;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed var(--border-color);
+  border-top: 1px dashed #444;
 }
 
-/* Transaction Form Adjustments */
-.savings-modal-content .savings-form-group:first-child {
-  margin-top: 0;
-}
-
-/* Enhanced Modal Scroll for Transaction Form */
-.savings-modal-content {
-  scrollbar-width: thin;
-  scrollbar-color: var(--accent-primary) var(--bg-tertiary);
-}
-
-.savings-modal-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.savings-modal-content::-webkit-scrollbar-track {
-  background: var(--bg-tertiary);
-  border-radius: 4px;
-}
-
-.savings-modal-content::-webkit-scrollbar-thumb {
-  background-color: var(--accent-primary);
-  border-radius: 4px;
-}
-
-/* Responsive Adjustments for New Elements */
-@media (max-width: 768px) {
-  .bank-balance-display {
-    padding: 10px 12px;
-    font-size: 0.9rem;
-  }
-  
-  .balance-warning {
-    font-size: 0.8rem;
-  }
-}
-
-/* Bank change warnings */
+/* Update warning */
 .bank-change-warning {
   background-color: #fff3cd;
   border-left: 4px solid #ffc107;

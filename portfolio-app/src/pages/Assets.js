@@ -32,6 +32,10 @@ export default function Assets() {
   const [expandedAssetId, setExpandedAssetId] = useState(null);
   const [transactions, setTransactions] = useState({});
 
+const clearError = () => {
+  setError(null);
+};
+
   // Fetch data on component mount
   useEffect(() => {
     const fetchData = async () => {
@@ -59,13 +63,16 @@ export default function Assets() {
         amount: parseFloat(transactionData.amount),
       });
 
-      // Refresh transactions for this asset
-      const response = await getAssetTransactions(assetId);
-      const updatedTransactions = response.data || response;
-      
+      // Refresh both transactions and assets list
+      const [updatedAssets, updatedTransactions] = await Promise.all([
+        getAssets(),
+        getAssetTransactions(assetId)
+      ]);
+
+      setAssets(updatedAssets.data || updatedAssets);
       setTransactions(prev => ({
         ...prev,
-        [assetId]: updatedTransactions
+        [assetId]: updatedTransactions.data || updatedTransactions
       }));
 
       // Reset form
@@ -79,7 +86,7 @@ export default function Assets() {
       setTransactionVisible(false);
     } catch (error) {
       console.error('Transaction failed:', error);
-      alert(`Transaction failed: ${error.response?.data?.error || error.message}`);
+      setError(error.response?.data?.error || error.message || 'Transaction failed');
     }
   };
 
@@ -102,7 +109,7 @@ export default function Assets() {
       setShowAddAssetForm(false);
     } catch (error) {
       console.error('Failed to add asset:', error);
-      alert(`Failed to add asset: ${error.response?.data?.error || error.message}`);
+      setError(error.response?.data?.error || error.message || 'Failed to add asset');
     }
   };
 
@@ -135,20 +142,18 @@ export default function Assets() {
     }
   };
 
-  
-
   // Handle asset deletion
   const handleDeleteAsset = async (assetId) => {
     const asset = assets.find(a => a.id === assetId);
     if (!asset) {
-      alert("Asset not found in state.");
+      setError("Asset not found in state.");
       return;
     }
   
     console.log(`Attempting to delete asset ID: ${assetId}, balance: ${asset.balance}`);
   
     if (asset.balance !== 0) {
-      alert("Asset cannot be deleted because its balance is not zero.");
+      setError("Asset cannot be deleted because its balance is not zero.");
       return;
     }
   
@@ -156,10 +161,10 @@ export default function Assets() {
   
     try {
       await deleteAsset(assetId);
-      setRefreshFlag(prev => !prev); // ✅ triggers useEffect to refresh
+      setRefreshFlag(prev => !prev);
     } catch (error) {
       console.error("Failed to delete asset:", error);
-      alert(`Failed to delete asset: ${error.response?.data?.error || "Unknown error occurred"}`);
+      setError(error.response?.data?.error || "Failed to delete asset");
     }
   };
 
@@ -180,16 +185,22 @@ export default function Assets() {
       setEditingAsset(null);
     } catch (error) {
       console.error('Failed to update asset:', error);
-      alert(`Failed to update asset: ${error.response?.data?.error || error.message}`);
+      setError(error.response?.data?.error || error.message || 'Failed to update asset');
     }
   };
 
   if (loading) return <div className="loading">Loading...</div>;
-  if (error) return <div className="error">{error}</div>;
+ 
 
   return (
     <div className="assets-container">
       <h1>Assets</h1>
+      {error && (
+        <div className="error-with-close">
+          <span>{error}</span>
+          <button className="error-dismiss" onClick={clearError} aria-label="Dismiss error">&times;</button>
+        </div>
+      )}
       <button className="add-asset-btn" onClick={() => setShowAddAssetForm(true)}>Add Asset</button>
 
       {/* Add Asset Form */}
@@ -205,7 +216,6 @@ export default function Assets() {
                 onChange={(e) => setNewAsset({...newAsset, name: e.target.value})}
                 required
               />
-              
               
               <input
                 type="text"
@@ -228,7 +238,7 @@ export default function Assets() {
         </div>
       )}
 
-      {/* Add Update Asset Form */}
+      {/* Update Asset Form */}
       {editingAsset && (
         <div className="modal">
           <div className="modal-content">
@@ -241,8 +251,6 @@ export default function Assets() {
                 onChange={(e) => setEditingAsset({...editingAsset, name: e.target.value})}
                 required
               />
-              
-              
               
               <input
                 type="text"
@@ -286,7 +294,7 @@ export default function Assets() {
                 <td>{asset.category || 'N/A'}</td>
                 <td>
                   <button 
-                    className="update-asset-btn"  // Add this new button
+                    className="update-asset-btn"
                     onClick={() => setEditingAsset({
                       id: asset.id,
                       name: asset.name,

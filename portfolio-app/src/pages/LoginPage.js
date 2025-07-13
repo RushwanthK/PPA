@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import './LoginPage.css';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -48,17 +49,26 @@ function LoginPage({ setUser }) {
 
         {isRegistering && (
           <>
-            <input name="dob" type="date" value={form.dob} onChange={handleChange} required />
+            <input 
+              name="dob" 
+              type="date" 
+              value={form.dob} 
+              onChange={handleChange} 
+              required
+              className={!form.dob ? "empty-date" : ""}  // Add this line
+            />
             <input name="place" value={form.place} onChange={handleChange} placeholder="Place" required />
           </>
         )}
 
-        <button type="submit">{isRegistering ? 'Create Account' : 'Login'}</button>
+        <button type="submit" className={isRegistering ? 'green' : 'blue'}>
+          {isRegistering ? 'Create Account' : 'Login'}
+        </button>
       </form>
 
       {error && <p className="error">{error}</p>}
 
-      <p onClick={() => setIsRegistering(!isRegistering)} style={{ cursor: 'pointer', color: 'blue' }}>
+      <p onClick={() => setIsRegistering(!isRegistering)} className="toggle-auth">
         {isRegistering ? 'Already have an account? Login' : 'New user? Register'}
       </p>
     </div>

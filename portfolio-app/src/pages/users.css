@@ -29,18 +29,20 @@ body {
   padding: 8px 15px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .add-user-btn:hover {
   background-color: #0056b3;
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 /* Heading Styles */
 h2 {
   text-align: center;
   font-size: 24px;
-  color: #f00e0e;
+  color: #f7f5f5;
   margin-bottom: 20px;
   padding-right: 100px; /* Space for add button */
 }
@@ -82,7 +84,7 @@ h3 {
 .user-name {
   font-weight: bold;
   font-size: 18px;
-  color: #f0f0f0;
+  color: #06aa1c;
 }
 
 .user-additional-info {
@@ -114,12 +116,13 @@ h3 {
   padding: 6px 12px;
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   min-width: 70px;
 }
 
 .user-actions button:hover {
   transform: translateY(-1px);
+  opacity: 0.9;
 }
 
 .user-actions button:active {
@@ -135,12 +138,12 @@ h3 {
 }
 
 .edit-btn {
-  background-color: #ffc107;
+  background-color: #4907ff;
   color: #212529;
 }
 
 .edit-btn:hover {
-  background-color: #e0a800;
+  background-color: #2b07f8;
 }
 
 /* Forms */
@@ -190,20 +193,22 @@ form input:focus {
   padding: 8px 20px;
   cursor: pointer;
   font-size: 14px;
-  transition: background-color 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .create-btn:hover {
   background-color: #218838;
+  opacity: 0.9;
 }
 
 .cancel-btn {
-  background-color: #6c757d;
-  color: white;
+  background-color: #dc3545;
+  color: rgb(255, 255, 255);
 }
 
 .cancel-btn:hover {
-  background-color: #5a6268;
+  background-color: #b52a34;
+  opacity: 0.9;
 }
 
 /* Notifications */
@@ -224,7 +229,7 @@ form input:focus {
 }
 
 .notification.error {
-  background-color: #f44336;
+  background-color: #860e05;
 }
 
 @keyframes slideIn {
@@ -272,14 +277,36 @@ form input:focus {
   100% { transform: rotate(360deg); }
 }
 
-/* Error message */
+/* Error message (styled like savings) */
 .error {
-  color: #ff6b6b;
-  text-align: center;
-  padding: 20px;
-  background-color: #2a0a0a;
+  background-color: rgba(220, 53, 69, 0.15);
+  border: 1px solid #ff4c4c;
+  color: #ff4c4c;
+  padding: 14px 44px 14px 16px;
   border-radius: 6px;
+  font-size: 14px;
   margin: 20px 0;
+  position: relative;
+  text-align: left;
+}
+
+.error button.error-dismiss {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #ff4c4c;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.error button.error-dismiss:hover {
+  color: #e74c3c;
 }
 
 /* Responsive Design */

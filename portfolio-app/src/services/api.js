@@ -28,6 +28,11 @@ export const createUser = async (userData) => {
 };
 */
 
+export const getCurrentUser = async () => {
+  const res = await api.get('/me');
+  return res.data;
+};
+
 export const getUsers = async () => {
   const response = await api.get('/users');  // now returns only the logged-in user
   return response.data; // already an array with one user

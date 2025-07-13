@@ -14,10 +14,27 @@ function App() {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Optional: implement token validation with backend later
     const storedToken = localStorage.getItem('token');
     if (!storedToken) return;
-    // You can add a `/me` route later to validate
+
+    fetch(`${process.env.REACT_APP_API_URL}/me`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${storedToken}`
+      }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Invalid token');
+        return res.json();
+      })
+      .then(data => {
+        setUser(data); // ✅ Restore user on refresh
+      })
+      .catch(err => {
+        console.error('Session expired:', err);
+        localStorage.removeItem('token');
+        setUser(null);
+      });
   }, []);
 
   const logout = () => {
@@ -28,6 +45,10 @@ function App() {
   const PrivateRoute = ({ element }) => {
     return user ? element : <Navigate to="/" />;
   };
+
+  if (localStorage.getItem('token') && user === null) {
+    return <div className="loading">Restoring session...</div>;
+  }
 
   return (
     <AuthContext.Provider value={{ user, setUser }}>
@@ -42,7 +63,7 @@ function App() {
               <Link to="/creditcard" className="nav-link">Credit Cards</Link>
               <Link to="/bank" className="nav-link">Banks</Link>
               <Link to="/users" className="nav-link">Profile</Link>
-              <button onClick={logout} className="nav-link">Logout</button>
+              <button onClick={logout} className="button logout-button">Logout</button>
             </nav>
           )}
         </header>
