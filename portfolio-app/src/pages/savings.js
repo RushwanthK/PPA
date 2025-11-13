@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+// src/pages/savings.js
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   getSavings, 
   createSaving, 
@@ -39,24 +40,36 @@ export default function Savings() {
   const [expandedSavingId, setExpandedSavingId] = useState(null);
   const [transactions, setTransactions] = useState({});
 
+  // UI for search & sort
+  const [searchText, setSearchText] = useState('');
+  const [sortBy, setSortBy] = useState('name'); // 'name' | 'balance' | 'bank'
+  const [sortDir, setSortDir] = useState('asc'); // 'asc' | 'desc'
+
   // Clear error message
   const clearError = () => setError(null);
+
+  // Safe numeric parser
+  const safeNumber = (v) => {
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  };
 
   // Fetch data on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const [savingsResponse, banksDropdownResponse] = await Promise.all([
           getSavings(),
           getBanksByUser()
         ]);
 
-        setSavings(savingsResponse.data || savingsResponse);
-        setFilteredBanks(banksDropdownResponse.data || banksDropdownResponse);
-        setLoading(false);
+        setSavings(savingsResponse.data || savingsResponse || []);
+        setFilteredBanks(banksDropdownResponse.data || banksDropdownResponse || []);
       } catch (error) {
         console.error('Error fetching data:', error);
         setError('Failed to fetch data. Please try again later.');
+      } finally {
         setLoading(false);
       }
     };
@@ -64,85 +77,13 @@ export default function Savings() {
     fetchData();
   }, []);
 
-  // Handle transaction submission
-  const handleTransactionSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const { savingId, ...transactionData } = transaction;
-      await addSavingTransaction(savingId, {
-        ...transactionData,
-        amount: parseFloat(transactionData.amount),
-      });
-
-      // Refresh transactions for this saving
-      const response = await getSavingTransactions(savingId);
-      const updatedTransactions = response.data || response;
-      
-      setTransactions(prev => ({
-        ...prev,
-        [savingId]: updatedTransactions
-      }));
-
-      // Refresh savings to update balances
-      const savingsResponse = await getSavings();
-      setSavings(savingsResponse.data || savingsResponse);
-
-      // Reset form
-      setTransaction({ 
-        savingId: '', 
-        type: 'deposit', 
-        amount: '', 
-        description: '', 
-        category: '' 
-      });
-      setTransactionVisible(false);
-    } catch (error) {
-      console.error('Transaction failed:', error);
-      setError(error.response?.data?.error || error.message || 'Transaction failed');
-    }
-  };
-
-  // Handle add saving submission
-  const handleAddSavingSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await createSaving({
-        name: newSaving.name,
-        bank_id: newSaving.bankId || null
-      });
-
-      const response = await getSavings();
-      setSavings(response.data || response);
-      setNewSaving({ name: '', bankId: '', balance: 0 });
-      setShowAddSavingForm(false);
-    } catch (error) {
-      console.error('Failed to add saving:', error);
-      setError(error.response?.data?.error || error.message || 'Failed to add saving');
-    }
-  };
-
-  const handleUserChange = async (userId) => {
-    try {
-      if (userId) {
-        const banksResponse = await getBanksByUser(userId);
-        setFilteredBanks(banksResponse);
-      } else {
-        setFilteredBanks([]);
-      }
-    } catch (error) {
-      console.error('Error fetching banks:', error);
-      setFilteredBanks([]);
-      setError('Failed to load banks');
-    }
-  };
-
-  // Fetch transactions for a saving
+  // ---------- transactions ----------
   const fetchTransactions = async (savingId) => {
     try {
       const response = await getSavingTransactions(savingId);
       setTransactions(prev => ({
         ...prev,
-        [savingId]: response.data || response
+        [savingId]: response.data || response || []
       }));
     } catch (error) {
       console.error('Error fetching transactions:', error);
@@ -154,7 +95,6 @@ export default function Savings() {
     }
   };
 
-  // Toggle transactions visibility
   const toggleTransactions = async (savingId) => {
     if (expandedSavingId === savingId) {
       setExpandedSavingId(null);
@@ -166,28 +106,23 @@ export default function Savings() {
     }
   };
 
-  // Handle saving deletion
-  const handleDeleteSaving = async (savingId) => {
-    const saving = savings.find(s => s.id === savingId);
-    if (!saving) {
-      setError("Saving account not found in state.");
-      return;
-    }
-  
-    if (saving.balance !== 0) {
-      setError("Saving account cannot be deleted because its balance is not zero.");
-      return;
-    }
-  
-    if (!window.confirm("Are you sure you want to delete this saving account?")) return;
-  
+  // ---------- add / update / delete savings ----------
+  const handleAddSavingSubmit = async (e) => {
+    e.preventDefault();
     try {
-      await deleteSaving(savingId);
-      const updatedSavings = await getSavings();
-      setSavings(updatedSavings.data || updatedSavings);
+      await createSaving({
+        name: newSaving.name,
+        bank_id: newSaving.bankId || null
+      });
+
+      const response = await getSavings();
+      setSavings(response.data || response || []);
+      setNewSaving({ name: '', bankId: '', balance: 0 });
+      setShowAddSavingForm(false);
+      setError(null);
     } catch (error) {
-      console.error("Failed to delete saving:", error);
-      setError(error.response?.data?.error || "Failed to delete saving");
+      console.error('Failed to add saving:', error);
+      setError(error.response?.data?.error || error.message || 'Failed to add saving');
     }
   };
 
@@ -196,15 +131,11 @@ export default function Savings() {
     try {
       const { id, ...updateData } = editingSaving;
       
-      // Check if bank is being changed and show confirmation
+      // Check bank change
       const originalSaving = savings.find(s => s.id === id);
-      if (updateData.bankId !== originalSaving.bank_id && originalSaving.balance > 0) {
-        const confirmMessage = `This saving account has a balance of Rs.${originalSaving.balance.toFixed(2)}. ` +
-          `Changing the linked bank will transfer this amount between banks. Continue?`;
-        
-        if (!window.confirm(confirmMessage)) {
-          return;
-        }
+      if (updateData.bankId !== originalSaving?.bank_id && originalSaving && safeNumber(originalSaving.balance) > 0) {
+        const confirmMessage = `This saving account has a balance of Rs.${safeNumber(originalSaving.balance).toFixed(2)}. Changing the linked bank will transfer this amount between banks. Continue?`;
+        if (!window.confirm(confirmMessage)) return;
       }
 
       const response = await updateSaving(id, {
@@ -212,48 +143,193 @@ export default function Savings() {
         bank_id: updateData.bankId || null
       });
 
-      // Show success message with balance info if available
-      const successMessage = response.message || 'Saving account updated successfully';
-      if (response.bank_balance !== undefined) {
-        setError(`${successMessage}\nNew bank balance: Rs.${response.bank_balance.toFixed(2)}`);
-      } else {
-        setError(successMessage);
-      }
-      
-      // Refresh all data (banks might have changed)
-      const [savingsResponse, banksResponse] = await Promise.all([
-        getSavings(),
-        getBanks()
-      ]);
-      
-      setSavings(savingsResponse.data || savingsResponse);
-      setBanks(banksResponse.data || banksResponse);
-      
-      // Reset form
-      setEditingSaving(null);
+      // Refresh data
+      const [savingsResponse, banksResponse] = await Promise.all([getSavings(), getBanks()]);
+      setSavings(savingsResponse.data || savingsResponse || []);
+      setBanks(banksResponse.data || banksResponse || []);
+
+      // Show any message returned
+      if (response?.message) setError(response.message);
+      editingSaving && setEditingSaving(null);
     } catch (error) {
       console.error('Failed to update saving:', error);
       setError(error.response?.data?.error || error.message || 'Failed to update saving');
     }
   };
 
+  const handleDeleteSaving = async (savingId) => {
+    const saving = savings.find(s => s.id === savingId);
+    if (!saving) {
+      setError("Saving account not found in state.");
+      return;
+    }
+
+    if (safeNumber(saving.balance) !== 0) {
+      setError("Saving account cannot be deleted because its balance is not zero.");
+      return;
+    }
+
+    if (!window.confirm("Are you sure you want to delete this saving account?")) return;
+
+    try {
+      await deleteSaving(savingId);
+      const updatedSavings = await getSavings();
+      setSavings(updatedSavings.data || updatedSavings || []);
+      setError(null);
+    } catch (error) {
+      console.error("Failed to delete saving:", error);
+      setError(error.response?.data?.error || "Failed to delete saving");
+    }
+  };
+
+  // ---------- transactions (submit) ----------
+  const handleTransactionSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { savingId, ...transactionData } = transaction;
+      await addSavingTransaction(savingId, {
+        ...transactionData,
+        amount: parseFloat(transactionData.amount),
+      });
+
+      // Refresh transactions & savings
+      const response = await getSavingTransactions(savingId);
+      const updatedTransactions = response.data || response || [];
+      setTransactions(prev => ({ ...prev, [savingId]: updatedTransactions }));
+
+      const savingsResponse = await getSavings();
+      setSavings(savingsResponse.data || savingsResponse || []);
+
+      // Reset
+      setTransaction({ savingId: '', type: 'deposit', amount: '', description: '', category: '' });
+      setTransactionVisible(false);
+      setError(null);
+    } catch (error) {
+      console.error('Transaction failed:', error);
+      setError(error.response?.data?.error || error.message || 'Transaction failed');
+    }
+  };
+
+  // ---------- bank helpers ----------
+  const handleUserChange = async (userId) => {
+    try {
+      if (userId) {
+        const banksResponse = await getBanksByUser(userId);
+        setFilteredBanks(banksResponse.data || banksResponse || []);
+      } else {
+        setFilteredBanks([]);
+      }
+    } catch (error) {
+      console.error('Error fetching banks:', error);
+      setFilteredBanks([]);
+      setError('Failed to load banks');
+    }
+  };
+
+  const handleAddTransactionClick = async (saving) => {
+    setTransaction(prev => ({ ...prev, savingId: saving.id }));
+    setTransactionVisible(true);
+
+    if (saving.bank_id) {
+      try {
+        const balanceData = await getBankBalance(saving.bank_id);
+        setBankBalanceInfo({
+          bankName: (filteredBanks.find(b => b.id === saving.bank_id) || banks.find(b => b.id === saving.bank_id) || {}).name || 'Linked Bank',
+          balance: balanceData.balance
+        });
+      } catch (error) {
+        console.error('Error fetching bank balance:', error);
+        setBankBalanceInfo({
+          bankName: (filteredBanks.find(b => b.id === saving.bank_id) || banks.find(b => b.id === saving.bank_id) || {}).name || 'Linked Bank',
+          balance: null,
+          error: 'Could not fetch balance'
+        });
+      }
+    } else {
+      setBankBalanceInfo(null);
+    }
+  };
+
+  // ---------- Sorting & Filtering ----------
+  const handleSortClick = (column) => {
+    if (sortBy === column) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(column);
+      setSortDir('asc');
+    }
+  };
+
+  const visibleSavings = useMemo(() => {
+    const text = (searchText || '').trim().toLowerCase();
+    const filtered = (savings || []).filter(s => {
+      if (!text) return true;
+      return (s.name || '').toLowerCase().includes(text);
+    });
+
+    const sorted = filtered.sort((a, b) => {
+      let va, vb;
+      if (sortBy === 'balance') {
+        va = safeNumber(a.balance);
+        vb = safeNumber(b.balance);
+      } else if (sortBy === 'bank') {
+        va = (filteredBanks.find(x => x.id === a.bank_id)?.name || '').toLowerCase();
+        vb = (filteredBanks.find(x => x.id === b.bank_id)?.name || '').toLowerCase();
+      } else {
+        // default name
+        va = (a.name || '').toLowerCase();
+        vb = (b.name || '').toLowerCase();
+      }
+
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [savings, searchText, sortBy, sortDir, filteredBanks]);
+
+  // Totals reflect visibleSavings (Option A)
+  const totals = useMemo(() => {
+    return visibleSavings.reduce((acc, s) => {
+      acc.balance += safeNumber(s.balance);
+      return acc;
+    }, { balance: 0 });
+  }, [visibleSavings]);
+
   if (loading) return <div className="savings-loading">Loading...</div>;
 
   return (
     <div className="savings-container">
       <h1 className="savings-header">Savings Accounts</h1>
+
       {error && (
         <div className="savings-error-with-close">
           <span>{error}</span>
-          <button className="error-dismiss" onClick={clearError} aria-label="Dismiss error">&times;</button>
+          <button type="button" className="error-dismiss" onClick={clearError} aria-label="Dismiss error">&times;</button>
         </div>
       )}
-      <button 
-        className="savings-add-btn"
-        onClick={() => setShowAddSavingForm(true)}
-      >
-        Add Savings
-      </button>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <button
+          type="button"
+          className="savings-add-btn"
+          onClick={() => setShowAddSavingForm(true)}
+        >
+          Add Savings
+        </button>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search by account name..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ padding: '8px 10px', borderRadius: 4, border: '1px solid #444', background: '#2d2d2d', color: '#fff' }}
+            aria-label="Search savings by name"
+          />
+        </div>
+      </div>
 
       {/* Add Saving Form Modal */}
       {showAddSavingForm && (
@@ -298,7 +374,7 @@ export default function Savings() {
         <div className="savings-modal">
           <div className="savings-modal-content">
             <h2>Update Savings Account</h2>
-            {/* Add balance warning if changing bank */}
+
             {editingSaving.bankId !== savings.find(s => s.id === editingSaving.id)?.bank_id && 
             savings.find(s => s.id === editingSaving.id)?.balance > 0 && (
               <div className="bank-change-warning">
@@ -309,6 +385,7 @@ export default function Savings() {
                 </p>
               </div>
             )}
+
             <form onSubmit={handleUpdateSaving}>
               <div className="savings-form-group">
                 <label>Account Name</label>
@@ -351,23 +428,30 @@ export default function Savings() {
         <table className="savings-table">
           <thead>
             <tr>
-              <th>Account Name</th>
-              <th>Balance</th>
-              <th>Bank</th>
+              <th className="sortable" onClick={() => handleSortClick('name')}>
+                Account Name {sortBy === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('balance')}>
+                Balance {sortBy === 'balance' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('bank')}>
+                Bank {sortBy === 'bank' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {savings.map(saving => (
+            {visibleSavings.map(saving => (
               <React.Fragment key={saving.id}>
                 <tr>
                   <td>{saving.name}</td>
-                  <td className={saving.balance >= 0 ? 'positive-balance' : 'negative-balance'}>
-                    Rs.{saving.balance?.toFixed(2) || '0.00'}
+                  <td className={safeNumber(saving.balance) >= 0 ? 'positive-balance' : 'negative-balance'}>
+                    Rs.{safeNumber(saving.balance).toFixed(2)}
                   </td>
                   <td>{filteredBanks.find(b => b.id === saving.bank_id)?.name || 'N/A'}</td>
                   <td className="savings-actions">
-                    <button 
+                    <button
+                      type="button"
                       className="savings-action-btn savings-edit-btn"
                       onClick={() => setEditingSaving({
                         id: saving.id,
@@ -377,42 +461,22 @@ export default function Savings() {
                     >
                       Update
                     </button>
-                    <button 
+                    <button
+                      type="button"
                       className="savings-action-btn savings-transaction-btn"
-                      onClick={async () => {
-                      setTransaction({...transaction, savingId: saving.id});
-                      setTransactionVisible(true);
-    
-                      // Fetch bank balance if saving has a linked bank
-                      if (saving.bank_id) {
-                        try {
-                              const balanceData = await getBankBalance(saving.bank_id);
-                              setBankBalanceInfo({
-                                bankName: banks.find(b => b.id === saving.bank_id)?.name || 'Linked Bank',
-                                balance: balanceData.balance
-                              });
-                            } catch (error) {
-                        console.error('Error fetching bank balance:', error);
-                        setBankBalanceInfo({
-                          bankName: banks.find(b => b.id === saving.bank_id)?.name || 'Linked Bank',
-                          balance: null,
-                          error: 'Could not fetch balance'
-                        });
-                        }
-                      } else {
-                              setBankBalanceInfo(null);
-                              }
-                      }}
+                      onClick={() => handleAddTransactionClick(saving)}
                     >
-                    Add Transaction
+                      Add Transaction
                     </button>
-                    <button 
+                    <button
+                      type="button"
                       className="savings-action-btn savings-view-btn"
                       onClick={() => toggleTransactions(saving.id)}
                     >
                       {expandedSavingId === saving.id ? 'Hide Transactions' : 'View Transactions'}
                     </button>
-                    <button 
+                    <button
+                      type="button"
                       className="savings-action-btn savings-delete-btn"
                       onClick={() => handleDeleteSaving(saving.id)}
                     >
@@ -420,7 +484,7 @@ export default function Savings() {
                     </button>
                   </td>
                 </tr>
-                
+
                 {expandedSavingId === saving.id && (
                   <tr className="transactions-row">
                     <td colSpan="5">
@@ -444,9 +508,9 @@ export default function Savings() {
                                   <td className={`tx-type-${tx.transaction_type}`}>
                                     {tx.transaction_type || 'N/A'}
                                   </td>
-                                  <td>Rs.{tx.amount?.toFixed(2) || '0.00'}</td>
+                                  <td>Rs.{safeNumber(tx.amount).toFixed(2)}</td>
                                   <td>{tx.description || '—'}</td>
-                                  <td>Rs.{tx.saving_balance_after?.toFixed(2) || '0.00'}</td>
+                                  <td>Rs.{safeNumber(tx.saving_balance_after).toFixed(2)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -461,6 +525,15 @@ export default function Savings() {
               </React.Fragment>
             ))}
           </tbody>
+
+          <tfoot>
+            <tr className="totals-row">
+              <td style={{ fontWeight: 600 }}>Totals</td>
+              <td style={{ fontWeight: 600 }}>Rs.{totals.balance.toFixed(2)}</td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -469,28 +542,22 @@ export default function Savings() {
         <div className="savings-modal">
           <div className="savings-modal-content">
             <h2>Add Transaction</h2>
-            {/* Add bank balance display */}
             {bankBalanceInfo && (
               <div className="bank-balance-display">
                 <p>
                   <strong>{bankBalanceInfo.bankName}</strong> Balance: 
                   {bankBalanceInfo.balance !== null ? (
-                    <span className="balance-amount">
-                      Rs.{bankBalanceInfo.balance.toFixed(2)}
-                    </span>
+                    <span className="balance-amount">Rs.{bankBalanceInfo.balance.toFixed(2)}</span>
                   ) : (
-                    <span className="balance-error">
-                      {bankBalanceInfo.error || 'N/A'}
-                    </span>
+                    <span className="balance-error">{bankBalanceInfo.error || 'N/A'}</span>
                   )}
                 </p>
                 {transaction.type === 'withdrawal' && bankBalanceInfo.balance !== null && (
-                  <p className="balance-warning">
-                    Note: Withdrawals will deduct from this bank account
-                  </p>
+                  <p className="balance-warning">Note: Withdrawals will deduct from this bank account</p>
                 )}
               </div>
             )}
+
             <form onSubmit={handleTransactionSubmit}>
               <div className="savings-form-group">
                 <label>Transaction Type</label>
@@ -535,12 +602,8 @@ export default function Savings() {
               </div>
               
               <div className="savings-modal-actions">
-                <button type="button" className="savings-cancel-btn" onClick={() => setTransactionVisible(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="savings-submit-btn">
-                  Submit Transaction
-                </button>
+                <button type="button" className="savings-cancel-btn" onClick={() => setTransactionVisible(false)}>Cancel</button>
+                <button type="submit" className="savings-submit-btn">Submit Transaction</button>
               </div>
             </form>
           </div>

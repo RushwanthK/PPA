@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/creditcard.js
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   getCreditCards, 
   createCreditCard, 
@@ -22,12 +23,12 @@ export default function CreditCard() {
   const [formData, setFormData] = useState({
     name: '',
     limit: '',
-    billing_cycle_start: '1' // Default to 1st of the month
+    billing_cycle_start: '1'
   });
   const [transactionData, setTransactionData] = useState({
     cardId: '',
     amount: '',
-    date: format(new Date(), 'yyyy-MM-dd'), // User-friendly format
+    date: format(new Date(), 'yyyy-MM-dd'),
     description: '',
     category: '',
     isPayment: ''
@@ -39,6 +40,11 @@ export default function CreditCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editMode, setEditMode] = useState(false);
+
+  // Sorting / filtering state
+  const [searchText, setSearchText] = useState('');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,7 +64,7 @@ export default function CreditCard() {
     fetchData();
   }, []);
 
-  // Fetch detailed card information when selected
+  // API + UI handlers (kept behavior from your original code)
   const fetchCardDetails = async (cardId) => {
     try {
       setLoading(true);
@@ -74,12 +80,11 @@ export default function CreditCard() {
     }
   };
 
-  // Fetch transactions for a card
   const fetchTransactions = async (cardId) => {
     try {
       setLoading(true);
-      const transactions = await getCreditCardTransactions(cardId);
-      setTransactions(transactions);
+      const txs = await getCreditCardTransactions(cardId);
+      setTransactions(txs);
       setShowTransactions(true);
       setError(null);
     } catch (err) {
@@ -104,48 +109,35 @@ export default function CreditCard() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    setLoading(true);
-    
-    // Prepare the data exactly as backend expects it
-    const cardData = {
-      name: formData.name,
-      limit: parseFloat(formData.limit),
-      billing_cycle_start: parseInt(formData.billing_cycle_start)
-    };
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const cardData = {
+        name: formData.name,
+        limit: parseFloat(formData.limit),
+        billing_cycle_start: parseInt(formData.billing_cycle_start)
+      };
 
-    if (editMode && selectedCard) {
-      // Update existing card - use the exact endpoint with card ID
-      const response = await updateCreditCard(selectedCard.id, cardData);
-      const updatedCard = response.card;
-
-      if (
-        parseInt(formData.billing_cycle_start) !== selectedCard.billing_cycle_start
-      ) {
-        alert("To apply changes, click ‘Process Billing’");
+      if (editMode && selectedCard) {
+        const response = await updateCreditCard(selectedCard.id, cardData);
+        const updatedCards = await getCreditCards();
+        setCards(updatedCards);
+        setSelectedCard(response.card || selectedCard);
+        setEditMode(false);
+      } else {
+        await createCreditCard(cardData);
+        const updatedCards = await getCreditCards();
+        setCards(updatedCards);
       }
-      
-      // Update state with the exact response from backend
-      const updatedCards = await getCreditCards();
-      setCards(updatedCards);
-      setSelectedCard(updatedCard);
-      setEditMode(false);
-    } else {
-      // Create new card
-      await createCreditCard(cardData);
-      const updatedCards = await getCreditCards();
-      setCards(updatedCards);
+
+      resetForm();
+    } catch (error) {
+      console.error('Error saving card:', error);
+      setError(error.message || 'Failed to save credit card');
+    } finally {
+      setLoading(false);
     }
-    
-    resetForm();
-  } catch (error) {
-    console.error('Error saving card:', error);
-    setError(error.message || 'Failed to save credit card');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleTransactionSubmit = async (e) => {
     e.preventDefault();
@@ -157,12 +149,6 @@ export default function CreditCard() {
 
     try {
       setLoading(true);
-      
-      // Convert date to DDMMYYYY format for backend
-      //const formattedDate = format(
-      //  parse(transactionData.date, 'yyyy-MM-dd', new Date()),
-      //  'ddMMyyyy'
-      //);
 
       await addCreditCardTransaction(transactionData.cardId, {
         amount: parseFloat(transactionData.isPayment ? 
@@ -173,18 +159,16 @@ export default function CreditCard() {
         category: transactionData.category,
         is_payment: transactionData.isPayment
       });
-      
-      // Refresh card details and transactions
-      // Refresh the full card list to reflect latest balances
+
+      // Refresh
       const updatedCards = await getCreditCards();
       setCards(updatedCards);
 
-      // Update selected card if it was visible before
       if (selectedCard) {
         const refreshedCard = updatedCards.find(c => c.id === selectedCard.id);
         setSelectedCard(refreshedCard || null);
       }
-      
+
       resetTransactionForm();
     } catch (error) {
       console.error('Error adding transaction:', error);
@@ -195,34 +179,33 @@ export default function CreditCard() {
   };
 
   const handleProcessBilling = async (cardId) => {
-  try {
-    setLoading(true);
-    const response = await processBilling(cardId);
-    const updatedCard = await getCreditCard(cardId);
-    
-    // Update the cards list with the updated card
-    setCards(prevCards => 
-      prevCards.map(card => 
-        card.id === cardId ? updatedCard : card
-      )
-    );
+    try {
+      setLoading(true);
+      const response = await processBilling(cardId);
+      const updatedCard = await getCreditCard(cardId);
 
-    setBillingDetails({
-      transactionsBilled: response.transactions_billed,
-      totalAmountBilled: response.total_amount_billed,
-      card: updatedCard
-    });
-    
-    setSelectedCard(updatedCard);
-    setShowBillingDetails(true);
-    setError(null);
-  } catch (err) {
-    console.error('Error processing billing:', err);
-    setError('Failed to process billing');
-  } finally {
-    setLoading(false);
-  }
-};
+      setCards(prevCards =>
+        prevCards.map(card =>
+          card.id === cardId ? updatedCard : card
+        )
+      );
+
+      setBillingDetails({
+        transactionsBilled: response.transactions_billed,
+        totalAmountBilled: response.total_amount_billed,
+        card: updatedCard
+      });
+
+      setSelectedCard(updatedCard);
+      setShowBillingDetails(true);
+      setError(null);
+    } catch (err) {
+      console.error('Error processing billing:', err);
+      setError('Failed to process billing');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDeleteCard = async (cardId) => {
     if (window.confirm('Are you sure you want to delete this credit card?')) {
@@ -247,27 +230,25 @@ export default function CreditCard() {
     setTransactionData(prev => ({ 
       ...prev, 
       cardId,
-      date: format(new Date(), 'yyyy-MM-dd') // Reset to current date
+      date: format(new Date(), 'yyyy-MM-dd')
     }));
     setShowCardDetails(false);
     setShowTransactions(false);
     setShowTransactionForm(true);
-    
   };
 
-  // Trigger edit mode and open the form while closing the details modal
-const handleEditCard = (card) => {
-  setFormData({
-    name: card.name,
-    limit: card.limit.toString(),
-    billing_cycle_start: card.billing_cycle_start.toString()
-  });
+  const handleEditCard = (card) => {
+    setFormData({
+      name: card.name,
+      limit: card.limit.toString(),
+      billing_cycle_start: card.billing_cycle_start.toString()
+    });
 
-  setSelectedCard(card);
-  setEditMode(true);
-  setShowForm(true);
-  setShowCardDetails(false); // Close details modal to prevent overlap
-};
+    setSelectedCard(card);
+    setEditMode(true);
+    setShowForm(true);
+    setShowCardDetails(false);
+  };
 
   const resetForm = () => {
     setFormData({
@@ -302,11 +283,62 @@ const handleEditCard = (card) => {
     setTransactions([]);
   };
 
+  // Sorting/filter helpers
+  const handleSortClick = (columnKey) => {
+    if (sortBy === columnKey) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(columnKey);
+      setSortDir('asc');
+    }
+  };
+
+  const safeNumber = (val) => {
+    const n = Number(val);
+    return Number.isNaN(n) ? 0 : n;
+  };
+
+  const visibleCards = useMemo(() => {
+    const text = (searchText || '').trim().toLowerCase();
+    const filtered = (cards || []).filter(c => {
+      if (!text) return true;
+      return (c.name || '').toLowerCase().includes(text);
+    });
+
+    const numericKeys = ['limit', 'used', 'available_limit', 'billed_unpaid', 'unbilled_spends'];
+    const sorted = filtered.sort((a, b) => {
+      let va = a[sortBy];
+      let vb = b[sortBy];
+
+      if (numericKeys.includes(sortBy)) {
+        va = safeNumber(va);
+        vb = safeNumber(vb);
+      } else {
+        va = (va || '').toString().toLowerCase();
+        vb = (vb || '').toString().toLowerCase();
+      }
+
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [cards, searchText, sortBy, sortDir]);
+
+  const totals = useMemo(() => {
+    const t = visibleCards.reduce((acc, c) => {
+      acc.used += safeNumber(c.used);
+      acc.billed_unpaid += safeNumber(c.billed_unpaid);
+      acc.unbilled_spends += safeNumber(c.unbilled_spends);
+      return acc;
+    }, { used: 0, billed_unpaid: 0, unbilled_spends: 0 });
+    return t;
+  }, [visibleCards]);
+
   if (loading) {
     return <div className="loading">Loading credit cards...</div>;
   }
-
-
 
   return (
     <div className="credit-card-container">
@@ -314,14 +346,25 @@ const handleEditCard = (card) => {
       {error && (
         <div className="creditcard-error-with-close">
           <span>{error}</span>
-          <button className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
+          <button type="button" className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
         </div>
       )}
-      <div className="actions">
-        <button className="primary" onClick={() => setShowForm(true)}>Add Credit Card</button>
+
+      <div className="actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <button type="button" className="primary" onClick={() => setShowForm(true)}>Add Credit Card</button>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search by name..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ padding: '8px 10px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+          />
+        </div>
       </div>
 
-      {/* Credit Card Form */}
+      {/* ADD / EDIT CREDIT CARD FORM (restored) */}
       {showForm && (
         <div className="modal">
           <div className="modal-content">
@@ -338,8 +381,7 @@ const handleEditCard = (card) => {
                   required
                 />
               </div>
-              
-              
+
               <div className="form-group">
                 <label>Credit Limit</label>
                 <input
@@ -353,7 +395,7 @@ const handleEditCard = (card) => {
                   required
                 />
               </div>
-              
+
               <div className="form-group">
                 <label>Billing Cycle Start Day (1-31)</label>
                 <input
@@ -366,19 +408,19 @@ const handleEditCard = (card) => {
                   required
                 />
               </div>
-              
+
               <div className="form-actions">
                 <button type="submit" className="primary">
                   {editMode ? 'Update' : 'Save'}
                 </button>
-                <button className="danger" type="button" onClick={resetForm}>Cancel</button>
+                <button type="button" className="danger" onClick={resetForm}>Cancel</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Transaction Form */}
+      {/* TRANSACTION FORM (restored) */}
       {showTransactionForm && (
         <div className="modal">
           <div className="modal-content">
@@ -396,7 +438,7 @@ const handleEditCard = (card) => {
                   required
                 />
               </div>
-              
+
               <div className="form-group">
                 <label>Date</label>
                 <input
@@ -407,7 +449,7 @@ const handleEditCard = (card) => {
                   required
                 />
               </div>
-              
+
               <div className="form-group">
                 <label>Description</label>
                 <input
@@ -418,7 +460,7 @@ const handleEditCard = (card) => {
                   onChange={handleTransactionChange}
                 />
               </div>
-              
+
               <div className="form-group">
                 <label>Category</label>
                 <input
@@ -429,37 +471,36 @@ const handleEditCard = (card) => {
                   onChange={handleTransactionChange}
                 />
               </div>
-              
-              <div className="form-group radio-group">
-              <label>Transaction Type</label>
-              <div className="radio-options">
-                <label>
-                  <input
-                    type="radio"
-                    name="isPayment"
-                    value="true"
-                    checked={transactionData.isPayment === true}
-                    onChange={() => setTransactionData(prev => ({ ...prev, isPayment: true }))}
-                  />
-                  Payment
-                </label>
-                <label style={{ marginLeft: '20px' }}>
-                  <input
-                    type="radio"
-                    name="isPayment"
-                    value="false"
-                    checked={transactionData.isPayment === false && transactionData.isPayment !== ''}
-                    onChange={() => setTransactionData(prev => ({ ...prev, isPayment: false }))}
-                  />
-                  Expense
-                </label>
-              </div>
-            </div>
 
-              
+              <div className="form-group radio-group">
+                <label>Transaction Type</label>
+                <div className="radio-options">
+                  <label>
+                    <input
+                      type="radio"
+                      name="isPayment"
+                      value="true"
+                      checked={transactionData.isPayment === true}
+                      onChange={() => setTransactionData(prev => ({ ...prev, isPayment: true }))}
+                    />
+                    Payment
+                  </label>
+                  <label style={{ marginLeft: '20px' }}>
+                    <input
+                      type="radio"
+                      name="isPayment"
+                      value="false"
+                      checked={transactionData.isPayment === false && transactionData.isPayment !== ''}
+                      onChange={() => setTransactionData(prev => ({ ...prev, isPayment: false }))}
+                    />
+                    Expense
+                  </label>
+                </div>
+              </div>
+
               <div className="form-actions">
                 <button type="submit" className="primary">Submit</button>
-                <button className="danger" type="button" onClick={resetTransactionForm}>Cancel</button>
+                <button type="button" className="danger" onClick={resetTransactionForm}>Cancel</button>
               </div>
             </form>
           </div>
@@ -471,33 +512,45 @@ const handleEditCard = (card) => {
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Limit</th>
-              <th>Used</th>
-              <th>Available</th>
-              <th>Billed Unpaid</th>
-              <th>Unbilled Spends</th>
+              <th className="sortable" onClick={() => handleSortClick('name')}>
+                Name {sortBy === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('limit')}>
+                Limit {sortBy === 'limit' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('used')}>
+                Used {sortBy === 'used' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('available_limit')}>
+                Available {sortBy === 'available_limit' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('billed_unpaid')}>
+                Billed Unpaid {sortBy === 'billed_unpaid' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('unbilled_spends')}>
+                Unbilled Spends {sortBy === 'unbilled_spends' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {cards && cards.length > 0 ? (
-              cards.map(card => (
+            {visibleCards && visibleCards.length > 0 ? (
+              visibleCards.map(card => (
                 <tr key={card.id}>
                   <td>{card.name}</td>
-                  <td>{card.limit?.toFixed(2)}</td>
-                  <td>{card.used?.toFixed(2)}</td>
-                  <td>{card.available_limit?.toFixed(2)}</td>
-                  <td>{card.billed_unpaid?.toFixed(2)}</td>
-                  <td>{card.unbilled_spends?.toFixed(2)}</td>
+                  <td>{safeNumber(card.limit).toFixed(2)}</td>
+                  <td>{safeNumber(card.used).toFixed(2)}</td>
+                  <td>{safeNumber(card.available_limit).toFixed(2)}</td>
+                  <td>{safeNumber(card.billed_unpaid).toFixed(2)}</td>
+                  <td>{safeNumber(card.unbilled_spends).toFixed(2)}</td>
                   <td className="actions-cell">
-                    <button 
+                    <button type="button"
                       onClick={() => fetchCardDetails(card.id)}
                       className="info"
                     >
                       Details
                     </button>
-                    <button 
+                    <button type="button"
                       onClick={() => handleAddTransaction(card.id)}
                       className="primary"
                     >
@@ -508,10 +561,22 @@ const handleEditCard = (card) => {
               ))
             ) : (
               <tr>
-                <td colSpan="8">No credit cards found</td>
+                <td colSpan="7">No credit cards found</td>
               </tr>
             )}
           </tbody>
+
+          <tfoot>
+            <tr className="totals-row">
+              <td style={{ fontWeight: 600 }}>Totals</td>
+              <td></td>
+              <td style={{ fontWeight: 600 }}>{totals.used.toFixed(2)}</td>
+              <td></td>
+              <td style={{ fontWeight: 600 }}>{totals.billed_unpaid.toFixed(2)}</td>
+              <td style={{ fontWeight: 600 }}>{totals.unbilled_spends.toFixed(2)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -521,9 +586,9 @@ const handleEditCard = (card) => {
           <div className="modal-content large">
             <div className="modal-header">
               <h2>Card Details: {selectedCard.name}</h2>
-              <button onClick={closeCardDetails} className="close-button">&times;</button>
+              <button type="button" onClick={closeCardDetails} className="close-button">&times;</button>
             </div>
-            
+
             <div className="card-details">
               <div className="detail-row">
                 <span className="detail-label">Limit:</span>
@@ -566,27 +631,27 @@ const handleEditCard = (card) => {
                 </div>
               )}
             </div>
-            
+
             <div className="modal-actions">
-              <button 
+              <button type="button"
                 onClick={() => fetchTransactions(selectedCard.id)}
                 className="info"
               >
                 View Transactions
               </button>
-              <button 
+              <button type="button"
                 onClick={() => handleProcessBilling(selectedCard.id)}
                 className="secondary"
               >
                 Process Billing
               </button>
-              <button 
+              <button type="button"
                 onClick={() => handleEditCard(selectedCard)}
                 className="primary"
               >
                 Edit Card
               </button>
-              <button 
+              <button type="button"
                 onClick={() => handleDeleteCard(selectedCard.id)}
                 className="danger"
               >
@@ -603,9 +668,9 @@ const handleEditCard = (card) => {
           <div className="modal-content x-large">
             <div className="modal-header">
               <h2>Transactions for {selectedCard?.name || 'Card'}</h2>
-              <button onClick={closeTransactions} className="close-button">&times;</button>
+              <button type="button" onClick={closeTransactions} className="close-button">&times;</button>
             </div>
-            
+
             <div className="transactions-table">
               <table>
                 <thead>
@@ -622,12 +687,8 @@ const handleEditCard = (card) => {
                   {transactions && transactions.length > 0 ? (
                     transactions.map(tx => (
                       <tr key={tx.id} className={tx.is_payment ? 'payment' : 'expense'}>
-                        <td>
-                          {tx.date}
-                        </td>
-                        <td>
-                          {tx.amount > 0 ? '+' : ''}{tx.amount?.toFixed(2)}
-                        </td>
+                        <td>{tx.date}</td>
+                        <td>{tx.amount > 0 ? '+' : ''}{tx.amount?.toFixed(2)}</td>
                         <td>{tx.description}</td>
                         <td>{tx.category}</td>
                         <td>{tx.transaction_type}</td>
@@ -642,9 +703,9 @@ const handleEditCard = (card) => {
                 </tbody>
               </table>
             </div>
-            
+
             <div className="modal-actions">
-              <button 
+              <button type="button"
                 onClick={() => handleAddTransaction(selectedCard.id)}
                 className="primary"
               >
@@ -654,24 +715,25 @@ const handleEditCard = (card) => {
           </div>
         </div>
       )}
-      {/* Add the NEW Billing Details Modal right here */}
+
+      {/* Billing modal */}
       {showBillingDetails && billingDetails && (
         <div className="modal">
           <div className="modal-content">
             <div className="modal-header">
               <h2>Billing Processed Successfully</h2>
-              <button onClick={() => setShowBillingDetails(false)} className="close-button">&times;</button>
+              <button type="button" onClick={() => setShowBillingDetails(false)} className="close-button">&times;</button>
             </div>
-            
+
             <div className="billing-details">
               <p><strong>Transactions Billed:</strong> {billingDetails.transactionsBilled}</p>
               <p><strong>Total Amount Billed:</strong> Rs.{billingDetails.totalAmountBilled?.toFixed(2)}</p>
               <p><strong>New Billed Unpaid:</strong> Rs.{billingDetails.card.billed_unpaid?.toFixed(2)}</p>
               <p><strong>New Unbilled Spends:</strong> Rs.{billingDetails.card.unbilled_spends?.toFixed(2)}</p>
             </div>
-            
+
             <div className="modal-actions">
-              <button 
+              <button type="button"
                 onClick={() => {
                   setShowBillingDetails(false);
                   fetchTransactions(billingDetails.card.id);

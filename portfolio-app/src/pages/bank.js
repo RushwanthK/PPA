@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { 
+// src/pages/bank.js
+import React, { useState, useEffect, useMemo } from 'react';
+import {
   getBanks,
-  createBank, 
-  updateBank, 
+  createBank,
+  updateBank,
   deleteBank,
   addBankTransaction,
   getBankTransactions
@@ -11,12 +12,8 @@ import './bank.css';
 
 export default function Bank() {
   const [banks, setBanks] = useState([]);
-  
   const [transactions, setTransactions] = useState([]);
-  const [formData, setFormData] = useState({
-    id: '',
-    name: ''
-  });
+  const [formData, setFormData] = useState({ id: '', name: '' });
   const [transactionData, setTransactionData] = useState({
     bankId: '',
     amount: '',
@@ -32,18 +29,23 @@ export default function Bank() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Fetch data on component mount
+  // UI state for search & sorting
+  const [searchText, setSearchText] = useState('');
+  const [sortBy, setSortBy] = useState('name'); // default sort
+  const [sortDir, setSortDir] = useState('asc');
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
-        
         const banksResponse = await getBanks();
-        setBanks(Array.isArray(banksResponse?.data) ? banksResponse.data : []);
+        const arr = Array.isArray(banksResponse?.data) ? banksResponse.data : (Array.isArray(banksResponse) ? banksResponse : []);
+        setBanks(arr);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Failed to fetch data');
+        setBanks([]);
       } finally {
         setLoading(false);
       }
@@ -52,7 +54,11 @@ export default function Bank() {
     fetchData();
   }, []);
 
-  // Helper function to get user name
+  // ---------- helpers ----------
+  const safeNumber = (v) => {
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -64,39 +70,33 @@ export default function Bank() {
     setTransactionData(prev => ({ ...prev, [name]: value }));
   };
 
+  // ---------- API actions ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       setError(null);
       setSuccess(null);
       setLoading(true);
-      
-      if (!formData.name) {
-        throw new Error("Please enter a bank name");
-      }
-      
+
+      if (!formData.name) throw new Error('Please enter a bank name');
+
       if (formData.id) {
-        const updatedBank = await updateBank(formData.id, {
-          name: formData.name
-        });
-        
-        setBanks(banks.map(bank => 
-          bank.id === formData.id ? { ...bank, ...updatedBank } : bank
-        ));
+        const updatedBank = await updateBank(formData.id, { name: formData.name });
+        // refresh list (safer to re-fetch)
+        const banksResponse = await getBanks();
+        setBanks(banksResponse.data || banksResponse || []);
         setSuccess('Bank updated successfully!');
       } else {
-        const newBank = await createBank({
-          name: formData.name
-        });
-        
-        setBanks([...banks, newBank]);
+        await createBank({ name: formData.name });
+        const banksResponse = await getBanks();
+        setBanks(banksResponse.data || banksResponse || []);
         setSuccess('Bank created successfully!');
       }
-      
+
       resetForm();
-    } catch (error) {
-      console.error('Error saving bank:', error);
-      setError(error.message || 'Failed to save bank');
+    } catch (err) {
+      console.error('Error saving bank:', err);
+      setError(err.message || 'Failed to save bank');
     } finally {
       setLoading(false);
     }
@@ -108,28 +108,23 @@ export default function Bank() {
       setError(null);
       setSuccess(null);
       setLoading(true);
-      
-      if (!transactionData.amount || isNaN(transactionData.amount)) {
-        throw new Error("Please enter a valid amount");
-      }
-      
-      if (parseFloat(transactionData.amount) <= 0) {
-        throw new Error("Amount must be greater than 0");
-      }
-      
+
+      if (!transactionData.amount || isNaN(transactionData.amount)) throw new Error('Please enter a valid amount');
+      if (parseFloat(transactionData.amount) <= 0) throw new Error('Amount must be greater than 0');
+
       await addBankTransaction(transactionData.bankId, {
         amount: parseFloat(transactionData.amount),
         type: transactionData.type,
         description: transactionData.description,
         category: transactionData.category
       });
-      
-      // Refresh banks to get updated balance
+
+      // Refresh banks to reflect updated balance
       const banksResponse = await getBanks();
-      setBanks(banksResponse.data || []);
+      setBanks(banksResponse.data || banksResponse || []);
       setSuccess('Transaction added successfully!');
-      
-      // Reset form
+
+      // Reset and close transaction form
       setTransactionData({
         bankId: '',
         amount: '',
@@ -138,53 +133,44 @@ export default function Bank() {
         category: ''
       });
       setShowTransactionForm(false);
-    } catch (error) {
-      console.error('Error adding transaction:', error);
-      setError(error.message || 'Failed to add transaction');
+    } catch (err) {
+      console.error('Error adding transaction:', err);
+      setError(err.message || 'Failed to add transaction');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteBank = async (bankId) => {
-  if (!window.confirm('Are you sure you want to delete this bank?')) return;
-  
-  try {
-    setError(null);
-    setSuccess(null);
-    setLoading(true);
-    
-    await deleteBank(bankId);
-    
-    // Refresh banks list
-    const banksResponse = await getBanks();
-    setBanks(banksResponse.data || []);
-    setSuccess('Bank deleted successfully!');
-  } catch (error) {
-    console.error('Error deleting bank:', error);
-    // Check for specific error message about linked savings
-    if (error.response?.data?.error?.includes('linked savings accounts')) {
-      setError('Cannot delete bank because it has linked savings accounts. Please remove all linked savings accounts first.');
-    } else {
-      setError(error.message || 'Failed to delete bank');
+    if (!window.confirm('Are you sure you want to delete this bank?')) return;
+    try {
+      setError(null);
+      setSuccess(null);
+      setLoading(true);
+      await deleteBank(bankId);
+      const banksResponse = await getBanks();
+      setBanks(banksResponse.data || banksResponse || []);
+      setSuccess('Bank deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting bank:', err);
+      // customized error message (as you had)
+      if (err.response?.data?.error?.includes('linked savings accounts')) {
+        setError('Cannot delete bank because it has linked savings accounts. Please remove all linked savings accounts first.');
+      } else {
+        setError(err.message || 'Failed to delete bank');
+      }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   const handleEdit = (bank) => {
-    setFormData({
-      id: bank.id,
-      name: bank.name
-    });
+    setFormData({ id: bank.id, name: bank.name });
     setShowForm(true);
   };
 
   const handleAddTransaction = (bankId) => {
-    setTransactionData(prev => ({ 
-      ...prev, 
-      bankId: bankId.toString()
-    }));
+    setTransactionData(prev => ({ ...prev, bankId: bankId.toString() }));
     setShowTransactionForm(true);
   };
 
@@ -193,55 +179,111 @@ export default function Bank() {
       setError(null);
       setLoading(true);
       const response = await getBankTransactions(bankId);
-      setTransactions(response.data || []);
+      const txs = response?.data || response || [];
+      setTransactions(txs);
       setSelectedBankId(bankId);
       setShowTransactions(true);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      setError(error.message || 'Failed to fetch transactions');
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+      setError(err.message || 'Failed to fetch transactions');
     } finally {
       setLoading(false);
     }
   };
 
   const resetForm = () => {
-    setFormData({
-      id: '',
-      name: '',
-      userId: ''
-    });
+    setFormData({ id: '', name: '' });
     setShowForm(false);
   };
 
+  // ---------- Sorting & Filtering ----------
+  const handleSortClick = (column) => {
+    if (sortBy === column) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(column);
+      setSortDir('asc');
+    }
+  };
+
+  const visibleBanks = useMemo(() => {
+    const text = (searchText || '').trim().toLowerCase();
+    const filtered = (banks || []).filter(b => {
+      if (!text) return true;
+      return (b.name || '').toLowerCase().includes(text);
+    });
+
+    const sorted = filtered.sort((a, b) => {
+      let va = a[sortBy];
+      let vb = b[sortBy];
+
+      // numeric column handling
+      if (sortBy === 'balance') {
+        va = safeNumber(va);
+        vb = safeNumber(vb);
+      } else {
+        va = (va || '').toString().toLowerCase();
+        vb = (vb || '').toString().toLowerCase();
+      }
+
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [banks, searchText, sortBy, sortDir]);
+
+  // Totals (sum of balance for the currently visible list)
+  const totals = useMemo(() => {
+    return visibleBanks.reduce((acc, b) => {
+      acc.balance += safeNumber(b.balance);
+      return acc;
+    }, { balance: 0 });
+  }, [visibleBanks]);
+
+  // ---------- Render ----------
   if (loading && banks.length === 0) return <div className="loading">Loading banks...</div>;
-  
+
   return (
     <div className="bank-container">
       <h1>Banks</h1>
-      
+
       {error && (
         <div className="bank-error-with-close">
           <span>{error}</span>
-          <button className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
+          <button type="button" className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
         </div>
       )}
-      
+
       {success && (
         <div className="success-message">
           <strong>Success:</strong> {success}
-          <button onClick={() => setSuccess(null)} className="close-success">
-            ×
-          </button>
+          <button type="button" onClick={() => setSuccess(null)} className="close-success">×</button>
         </div>
       )}
-      
-      <button 
-        onClick={() => setShowForm(true)}
-        className="add-button"
-        disabled={loading}
-      >
-        {loading ? 'Processing...' : 'Add Bank'}
-      </button>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={() => setShowForm(true)}
+          className="add-button"
+          disabled={loading}
+        >
+          {loading ? 'Processing...' : 'Add Bank'}
+        </button>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Search by name..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ padding: '8px 10px', borderRadius: 4, border: '1px solid #444', background: '#2d2d2d', color: '#fff' }}
+            aria-label="Search banks by name"
+          />
+        </div>
+      </div>
 
       {/* Bank Form Modal */}
       {showForm && (
@@ -262,25 +304,12 @@ export default function Bank() {
                   disabled={loading}
                 />
               </div>
-              
-              
-              
+
               <div className="form-actions">
-                <button 
-                  type="submit" 
-                  className="save-button"
-                  disabled={loading}
-                >
+                <button type="submit" className="save-button" disabled={loading}>
                   {loading ? 'Saving...' : 'Save'}
                 </button>
-                <button 
-                  type="button" 
-                  onClick={resetForm}
-                  className="cancel-button"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
+                <button type="button" onClick={resetForm} className="cancel-button" disabled={loading}>Cancel</button>
               </div>
             </form>
           </div>
@@ -295,14 +324,7 @@ export default function Bank() {
             <form onSubmit={handleTransactionSubmit}>
               <div className="form-group">
                 <label htmlFor="type">Transaction Type:</label>
-                <select
-                  id="type"
-                  name="type"
-                  value={transactionData.type}
-                  onChange={handleTransactionChange}
-                  required
-                  disabled={loading}
-                >
+                <select id="type" name="type" value={transactionData.type} onChange={handleTransactionChange} required disabled={loading}>
                   <option value="income">Income</option>
                   <option value="expense">Expense</option>
                 </select>
@@ -323,49 +345,20 @@ export default function Bank() {
                   disabled={loading}
                 />
               </div>
-              
+
               <div className="form-group">
                 <label htmlFor="description">Description:</label>
-                <input
-                  type="text"
-                  id="description"
-                  name="description"
-                  placeholder="Description"
-                  value={transactionData.description}
-                  onChange={handleTransactionChange}
-                  disabled={loading}
-                />
+                <input type="text" id="description" name="description" placeholder="Description" value={transactionData.description} onChange={handleTransactionChange} disabled={loading} />
               </div>
-              
+
               <div className="form-group">
                 <label htmlFor="category">Category:</label>
-                <input
-                  type="text"
-                  id="category"
-                  name="category"
-                  placeholder="Category"
-                  value={transactionData.category}
-                  onChange={handleTransactionChange}
-                  disabled={loading}
-                />
+                <input type="text" id="category" name="category" placeholder="Category" value={transactionData.category} onChange={handleTransactionChange} disabled={loading} />
               </div>
-              
+
               <div className="form-actions">
-                <button 
-                  type="submit" 
-                  className="save-button"
-                  disabled={loading}
-                >
-                  {loading ? 'Processing...' : 'Submit'}
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setShowTransactionForm(false)}
-                  className="cancel-button"
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
+                <button type="submit" className="save-button" disabled={loading}>{loading ? 'Processing...' : 'Submit'}</button>
+                <button type="button" className="cancel-button" onClick={() => setShowTransactionForm(false)} disabled={loading}>Cancel</button>
               </div>
             </form>
           </div>
@@ -373,114 +366,91 @@ export default function Bank() {
       )}
 
       {/* Transactions Modal */}
-{showTransactions && (
-  <div className="modal">
-    <div className="modal-content">
-      <h2>Transactions for {banks.find(b => b.id === selectedBankId)?.name || 'Bank'}</h2>
-      <button 
-        onClick={() => setShowTransactions(false)}
-        className="close-button"
-        style={{ position: 'absolute', top: '10px', right: '10px' }}
-      >
-        ×
-      </button>
-      
-      <div className="table-container" style={{ marginTop: '20px' }}>
-        <table className="banks-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Type</th>
-              <th>Amount</th>
-              <th>Description</th>
-              <th>Category</th>
-              <th>Balance After</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.length > 0 ? (
-              transactions.map(tx => (
-                <tr key={tx.id}>
-                  <td>{tx.date}</td>
-                  <td className={tx.transaction_type === 'income' ? 'income' : 'expense'}>
-                    {tx.transaction_type}
-                  </td>
-                  <td>Rs. {parseFloat(tx.amount).toFixed(2)}</td>
-                  <td>{tx.description || '-'}</td>
-                  <td>{tx.category || '-'}</td>
-                  <td>Rs. {parseFloat(tx.bank_balance_after).toFixed(2)}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" className="no-data">
-                  No transactions found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-)}
+      {showTransactions && (
+        <div className="modal">
+          <div className="modal-content">
+            <h2>Transactions for {banks.find(b => b.id === selectedBankId)?.name || 'Bank'}</h2>
+            <button type="button" onClick={() => setShowTransactions(false)} className="close-button" style={{ position: 'absolute', top: 10, right: 10 }}>×</button>
+
+            <div className="table-container" style={{ marginTop: 20 }}>
+              <table className="banks-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Balance After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.length > 0 ? (
+                    transactions.map(tx => (
+                      <tr key={tx.id}>
+                        <td>{tx.date}</td>
+                        <td className={tx.transaction_type === 'income' ? 'income' : 'expense'}>{tx.transaction_type}</td>
+                        <td>Rs. {parseFloat(tx.amount).toFixed(2)}</td>
+                        <td>{tx.description || '-'}</td>
+                        <td>{tx.category || '-'}</td>
+                        <td>Rs. {parseFloat(tx.bank_balance_after).toFixed(2)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="no-data">No transactions found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Banks Table */}
-      <div className="table-container">
+      <div className="table-container" style={{ marginTop: 20 }}>
         <table className="banks-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Balance</th>
+              <th className="sortable" onClick={() => handleSortClick('name')}>
+                Name {sortBy === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
+              <th className="sortable" onClick={() => handleSortClick('balance')}>
+                Balance {sortBy === 'balance' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
+              </th>
               <th>Actions</th>
             </tr>
           </thead>
+
           <tbody>
-            {banks.length > 0 ? (
-              banks.map(bank => (
+            {visibleBanks.length > 0 ? (
+              visibleBanks.map(bank => (
                 <tr key={bank.id}>
                   <td>{bank.name}</td>
-                  <td>Rs. {bank.balance?.toFixed(2) || '0.00'}</td>
+                  <td>Rs. {safeNumber(bank.balance).toFixed(2)}</td>
                   <td className="actions-cell">
-                    <button 
-                      onClick={() => handleEdit(bank)}
-                      className="edit-button"
-                      disabled={loading}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => handleAddTransaction(bank.id)}
-                      className="transaction-button"
-                      disabled={loading}
-                    >
-                      Add Transaction
-                    </button>
-                    <button 
-                      onClick={() => handleViewTransactions(bank.id)}
-                      className="view-button"
-                      disabled={loading}
-                    >
-                      View Transactions
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteBank(bank.id)}
-                      className="delete-button"
-                      disabled={loading}
-                    >
-                      Delete
-                    </button>
+                    <button type="button" onClick={() => handleEdit(bank)} className="edit-button" disabled={loading}>Edit</button>
+                    <button type="button" onClick={() => handleAddTransaction(bank.id)} className="transaction-button" disabled={loading}>Add Transaction</button>
+                    <button type="button" onClick={() => handleViewTransactions(bank.id)} className="view-button" disabled={loading}>View Transactions</button>
+                    <button type="button" onClick={() => handleDeleteBank(bank.id)} className="delete-button" disabled={loading}>Delete</button>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="4" className="no-data">
-                  No banks found
-                </td>
+                <td colSpan="3" className="no-data">No banks found</td>
               </tr>
             )}
           </tbody>
+
+          <tfoot>
+            <tr className="totals-row">
+              <td style={{ fontWeight: 600 }}>Totals</td>
+              <td style={{ fontWeight: 600 }}>Rs. {totals.balance.toFixed(2)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
