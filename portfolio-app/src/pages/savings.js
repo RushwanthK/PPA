@@ -7,7 +7,6 @@ import {
   deleteSaving, 
   addSavingTransaction, 
   getSavingTransactions,
-  getUsers,
   getBanks,
   getBanksByUser,
   getBankBalance
@@ -16,7 +15,7 @@ import './savings.css';
 
 export default function Savings() {
   const [savings, setSavings] = useState([]);
-  const [users, setUsers] = useState([]);
+  //const [users, setUsers] = useState([]);
   const [banks, setBanks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filteredBanks, setFilteredBanks] = useState([]);
@@ -211,7 +210,7 @@ export default function Savings() {
   };
 
   // ---------- bank helpers ----------
-  const handleUserChange = async (userId) => {
+  /*const handleUserChange = async (userId) => {
     try {
       if (userId) {
         const banksResponse = await getBanksByUser(userId);
@@ -224,7 +223,7 @@ export default function Savings() {
       setFilteredBanks([]);
       setError('Failed to load banks');
     }
-  };
+  };*/
 
   const handleAddTransactionClick = async (saving) => {
     setTransaction(prev => ({ ...prev, savingId: saving.id }));

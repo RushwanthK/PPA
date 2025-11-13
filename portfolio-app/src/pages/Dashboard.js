@@ -14,7 +14,7 @@ import {
   BarChart, Bar, PieChart, Pie, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell
 } from 'recharts';
-import { format, subDays, subMonths, startOfMonth } from 'date-fns';
+import { format, subDays, subMonths } from 'date-fns';
 
 export default function Dashboard() {
   const [assets, setAssets] = useState([]);

@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   getBanks,
   createBank,
-  updateBank,
   deleteBank,
   addBankTransaction,
   getBankTransactions
@@ -81,7 +80,7 @@ export default function Bank() {
       if (!formData.name) throw new Error('Please enter a bank name');
 
       if (formData.id) {
-        const updatedBank = await updateBank(formData.id, { name: formData.name });
+        //const updatedBank = await updateBank(formData.id, { name: formData.name });
         // refresh list (safer to re-fetch)
         const banksResponse = await getBanks();
         setBanks(banksResponse.data || banksResponse || []);

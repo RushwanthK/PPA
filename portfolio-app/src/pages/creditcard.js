@@ -4,7 +4,6 @@ import {
   getCreditCards, 
   createCreditCard, 
   getCreditCard,
-  getUserCreditCards,
   updateCreditCard,
   deleteCreditCard,
   getCreditCardTransactions,
