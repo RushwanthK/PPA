@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import './Dashboard.css';
 import {
   getAssets,
@@ -53,53 +53,64 @@ export default function Dashboard() {
       maximumFractionDigits: 0
     }).format(amount);
 
-  // Fetch all data
-  useEffect(() => {
-    fetchData();
-  }, []); // run once on initial load
-
-  useEffect(() => {
-    if (filterApplied) {
-      fetchData();
-      setFilterApplied(false);
-    }
-  }, [filterApplied, timeRange]); 
-
-  const fetchData = async () => {
+    // Fetch all data (made stable with useCallback; accepts explicit range param)
+  const fetchData = useCallback(async (range) => {
     try {
       setLoading(true);
-      
+
       const [assetData, bankData, savingData, creditCardData] = await Promise.all([
         getAssets(),
         getBanks(),
         getSavings(),
         getCreditCards()
       ]);
-      
-      setAssets(assetData);
-      setBanks(bankData.data || []);
-      setSavings(savingData);
-      setCreditCards(creditCardData);
 
-      // Fetch transactions in parallel
+      // normalize shapes (support .data or direct)
+      const assetsArr = assetData?.data ?? assetData ?? [];
+      const banksArr = bankData?.data ?? bankData ?? [];
+      const savingsArr = savingData?.data ?? savingData ?? [];
+      const creditCardsArr = creditCardData?.data ?? creditCardData ?? [];
+
+      setAssets(assetsArr);
+      setBanks(banksArr);
+      setSavings(savingsArr);
+      setCreditCards(creditCardsArr);
+
+      // Fetch transactions in parallel (this function still uses your fetchTransactions helper)
       const allTransactions = await fetchTransactions(
-        assetData, 
-        bankData.data || [], 
-        savingData, 
-        creditCardData
+        assetsArr,
+        banksArr,
+        savingsArr,
+        creditCardsArr
       );
-      
-      const filteredTxns = filterTransactionsByRange(allTransactions, timeRange);
-      
+
+      // Use the explicit range argument (not closed-over timeRange)
+      const filteredTxns = filterTransactionsByRange(allTransactions, range);
+
       setSpendingByCategory(calculateCategoryTotals(filteredTxns));
-      setNetWorthHistory(calculateNetWorthHistory(filteredTxns, timeRange));
-      setSavingsProgress(calculateSavingsProgress(savingData));
+      setNetWorthHistory(calculateNetWorthHistory(filteredTxns, range));
+      setSavingsProgress(calculateSavingsProgress(savingsArr));
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // empty deps so fetchData is stable
+
+  // Fetch all data
+  useEffect(() => {
+    fetchData(timeRange);
+  }, [fetchData, timeRange]); // fetch once at mount with the initial range
+
+  useEffect(() => {
+    if (filterApplied) {
+      fetchData(timeRange);
+      setFilterApplied(false);
+    }
+  }, [filterApplied, timeRange, fetchData]);
+
+
+
 
   // Fetch all transactions
   const fetchTransactions = async (assets, banks, savings, creditCards) => {
@@ -203,39 +214,42 @@ export default function Dashboard() {
   };
 
   // Calculate net worth history
-  const calculateNetWorthHistory = (transactions, range) => {
+    const calculateNetWorthHistory = (transactions, range) => {
     const history = [];
-    const now = new Date();
-    let startDate;
-    
+    //const now = new Date();
+    // startDate removed because it's unused
+
+    // choose dateFormat based on range
+    let dateFormat;
     switch(range) {
-      case '7d': startDate = subDays(now, 7); break;
-      case '30d': startDate = subDays(now, 30); break;
-      case '90d': startDate = subDays(now, 90); break;
-      case '6m': startDate = subMonths(now, 6); break;
-      case '1y': startDate = subMonths(now, 12); break;
-      default: startDate = subDays(now, 30);
+      case '7d':
+      case '30d':
+      case '90d':
+        dateFormat = 'dd MMM';
+        break;
+      case '6m':
+      case '1y':
+        dateFormat = 'MMM yy';
+        break;
+      default:
+        dateFormat = 'dd MMM';
     }
-    
-    // Group by day
+
+    // Group by day/month using dateFormat...
     const dailyData = {};
-    const dateFormat = range === '1y' || range === '6m' ? 'MMM yy' : 'dd MMM';
-    
     transactions.forEach(tx => {
       const dateStr = format(new Date(tx.date), dateFormat);
-      if (!dailyData[dateStr]) {
-        dailyData[dateStr] = 0;
-      }
+      if (!dailyData[dateStr]) dailyData[dateStr] = 0;
       dailyData[dateStr] += tx.amount;
     });
-    
-    // Convert to array
+
     for (const [date, netChange] of Object.entries(dailyData)) {
       history.push({ date, netWorth: netChange });
     }
-    
+
     return history.sort((a, b) => new Date(a.date) - new Date(b.date));
   };
+
 
   // Calculate savings progress
   const calculateSavingsProgress = (savings) => {
