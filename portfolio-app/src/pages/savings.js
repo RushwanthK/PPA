@@ -347,12 +347,13 @@ export default function Savings() {
               </div>
 
               <div className="savings-form-group">
-                <label>Bank (Optional)</label>
+                <label>Bank</label>
                 <select
                   value={newSaving.bankId}
                   onChange={(e) => setNewSaving({ ...newSaving, bankId: e.target.value })}
+                  required
                 >
-                  <option value="">Select Bank</option>
+                  <option value="" disabled>Select Bank</option>
                   {filteredBanks.map(bank => (
                     <option key={bank.id} value={bank.id}>{bank.name}</option>
                   ))}
@@ -397,12 +398,13 @@ export default function Savings() {
               </div>
               
               <div className="savings-form-group">
-                <label>Bank (Optional)</label>
+                <label>Bank</label>
                 <select
                   value={editingSaving.bankId}
                   onChange={(e) => setEditingSaving({ ...editingSaving, bankId: e.target.value })}
+                  required
                 >
-                  <option value="">Select Bank</option>
+                  <option value="" disabled>Select Bank</option>
                   {filteredBanks.map(bank => (
                     <option key={bank.id} value={bank.id}>{bank.name}</option>
                   ))}
@@ -540,7 +542,7 @@ export default function Savings() {
       {transactionVisible && (
         <div className="savings-modal">
           <div className="savings-modal-content">
-            <h2>Add Transaction</h2>
+            <h2>Add Transaction - <span style={{ color: '#007bff' }}>{savings.find(s => String(s.id) === String(transaction.savingId))?.name || 'Savings Account'}</span></h2>
             {bankBalanceInfo && (
               <div className="bank-balance-display">
                 <p>

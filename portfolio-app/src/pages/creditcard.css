@@ -295,6 +295,12 @@ button:hover {
   background-color: rgba(220, 53, 69, 0.1);
 }
 
+.transaction-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 /* Loading & Error States */
 .loading {
   padding: 20px;

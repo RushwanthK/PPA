@@ -64,6 +64,7 @@ button:disabled {
 /* Table */
 .table-container {
   overflow-x: auto;
+  overflow-y: auto;
   background-color: #1e1e1e;
   border-radius: 8px;
   margin-top: 20px;
@@ -142,6 +143,18 @@ button:disabled {
   font-size: 1.3rem;
   color: #ffffff;
   margin-top: 0;
+}
+
+.transaction-modal {
+  display: flex;
+  flex-direction: column;
+
+  max-height: 85vh;
+
+  width: fit-content;
+  max-width: 95vw;
+
+  overflow: hidden;
 }
 
 .close-button {
@@ -281,4 +294,41 @@ button:disabled {
   border-top: 2px solid #444;
   padding-top: 12px;
   font-size: 0.95rem;
+}
+
+/* Transaction Modal */
+.transaction-modal .table-container {
+  flex: 1;
+  overflow: auto;
+}
+
+.transaction-modal .banks-table {
+  width: max-content;
+}
+
+.transaction-modal .banks-table th,
+.transaction-modal .banks-table td {
+  white-space: nowrap;
+}
+
+.transaction-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  margin-left: auto;
+}
+
+.transaction-form-modal {
+  z-index: 1100;
+}
+
+.transaction-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.transaction-modal-title {
+  margin: 0;
 }

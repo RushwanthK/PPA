@@ -11,6 +11,14 @@ import {
 import './Assets.css';
 
 export default function Assets() {
+  const ASSET_CATEGORIES = [
+    'Provident Fund',
+    'Mutual Funds',
+    'Stocks',
+    'ETF',
+    'FD',
+    'Other'
+  ];
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -298,12 +306,27 @@ export default function Assets() {
                 onChange={(e) => setNewAsset({...newAsset, platform: e.target.value})}
               />
 
-              <input
-                type="text"
-                placeholder="Category (Optional)"
+              <select
                 value={newAsset.category}
-                onChange={(e) => setNewAsset({...newAsset, category: e.target.value})}
-              />
+                onChange={(e) =>
+                  setNewAsset({
+                    ...newAsset,
+                    category: e.target.value
+                  })
+                }
+                required
+              >
+                <option value="" disabled>Select Category</option>
+
+                {ASSET_CATEGORIES.map(category => (
+                  <option
+                    key={category}
+                    value={category}
+                  >
+                    {category}
+                  </option>
+                ))}
+              </select>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="submit" className="modal-submit-btn">Add</button>
@@ -335,12 +358,27 @@ export default function Assets() {
                 onChange={(e) => setEditingAsset({...editingAsset, platform: e.target.value})}
               />
 
-              <input
-                type="text"
-                placeholder="Category (Optional)"
-                value={editingAsset.category}
-                onChange={(e) => setEditingAsset({...editingAsset, category: e.target.value})}
-              />
+              <select
+                value={editingAsset.category || ''}
+                onChange={(e) =>
+                  setEditingAsset({
+                    ...editingAsset,
+                    category: e.target.value
+                  })
+                }
+                required
+              >
+                <option value="" disabled>Select Category</option>
+
+                {ASSET_CATEGORIES.map(category => (
+                  <option
+                    key={category}
+                    value={category}
+                  >
+                    {category}
+                  </option>
+                ))}
+              </select>
 
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="submit" className="modal-submit-btn">Update</button>
@@ -478,7 +516,7 @@ export default function Assets() {
       {transactionVisible && (
         <div className="modal">
           <div className="modal-content">
-            <h2>Add Transaction</h2>
+            <h2>Add Transaction - <span style={{ color: '#007bff' }}>{assets.find(a => String(a.id) === String(transaction.assetId))?.name || 'Asset'}</span></h2>
             <form onSubmit={handleTransactionSubmit}>
               <select
                 value={transaction.type}

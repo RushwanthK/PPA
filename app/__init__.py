@@ -31,7 +31,10 @@ def create_app():
 
     # ✅ REGISTER ROUTES
     from .routes import routes
+    from .dashboard_routes import dashboard_routes
+
     app.register_blueprint(routes)
+    app.register_blueprint(dashboard_routes)
 
     # ✅ ADD HEADERS FOR SECURITY & CACHING
     @app.after_request

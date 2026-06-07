@@ -434,3 +434,53 @@ export const getBanksByUser = async () => {
     throw error.response?.data || error.message;
   }
 };
+
+
+// Dashboard API calls
+export const getDashboardSummary = async () => {
+  try {
+    const response = await api.get('/dashboard/summary');
+    return response.data;
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.error ||
+      error.message;
+
+    throw new Error(
+      `Failed to fetch dashboard summary: ${errorMessage}`
+    );
+  }
+};
+
+export const getDashboardSpending = async (range = '30d') => {
+  try {
+    const response = await api.get(`/dashboard/spending?range=${range}`);
+    return response.data;
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.error ||
+      error.message;
+
+    throw new Error(
+      `Failed to fetch dashboard spending: ${errorMessage}`
+    );
+  }
+};
+
+export const getDashboardAssetAllocation = async () => {
+  try {
+    const response = await api.get(
+      '/dashboard/asset-allocation'
+    );
+
+    return response.data;
+  } catch (error) {
+    const errorMessage =
+      error.response?.data?.error ||
+      error.message;
+
+    throw new Error(
+      `Failed to fetch asset allocation: ${errorMessage}`
+    );
+  }
+};

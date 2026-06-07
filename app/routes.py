@@ -5,12 +5,33 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import check_password_hash
+from decimal import Decimal, ROUND_HALF_UP
 from . import db
 from .models import (User, CreditCard, Bank, Asset, Saving,
                     Transaction, BankTransaction, CreditCardTransaction,
                     AssetTransaction, SavingTransaction, TransferTransaction)
 import pytz
 IST = pytz.timezone('Asia/Kolkata')
+
+def money(value):
+    if value is None:
+        return 0.0
+
+    return float(
+        Decimal(str(value)).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP
+        )
+    )
+
+VALID_ASSET_CATEGORIES = {
+    "Provident Fund",
+    "Mutual Funds",
+    "Stocks",
+    "ETF",
+    "FD",
+    "Other"
+}
 
 routes = Blueprint('routes', __name__)
 
@@ -317,7 +338,7 @@ def create_credit_card():
         card = CreditCard(
             name=data['name'],
             user_id=user_id,  # Use JWT identity
-            limit=limit,
+            limit=money(limit),
             billing_cycle_start=billing_cycle_start,
             used=0,
             billed_unpaid=0,
@@ -446,7 +467,7 @@ def update_credit_card(card_id):
             if new_limit < card.used:
                 return jsonify({"error": f"New limit cannot be less than currently used amount ({card.used})"}), 400
             if new_limit != card.limit:
-                card.limit = new_limit
+                card.limit = money(new_limit)
                 changes_made = True
 
         if 'billing_cycle_start' in data:
@@ -491,7 +512,7 @@ def update_credit_card(card_id):
                 CreditCardTransaction.date >= current_cycle_start
             ).scalar() or 0
 
-            card.unbilled_spends = max(0, card.unbilled_spends - payments_applied)
+            card.unbilled_spends = money(max(0,card.unbilled_spends - payments_applied))
 
         db.session.commit()
         return jsonify({
@@ -656,6 +677,20 @@ def add_credit_card_transaction(card_id):
             else:
                 latest_txn_date = latest_txn_date.astimezone(pytz.utc)
 
+            # print("\n" + "=" * 80)
+            # print("NEW TRANSACTION")
+            # print("transaction_date:", transaction_date)
+            # print("transaction_date tzinfo:", transaction_date.tzinfo)
+
+            # print("\nLATEST TRANSACTION")
+            # print("latest_txn_date:", latest_txn_date)
+            # print("latest_txn_date tzinfo:", latest_txn_date.tzinfo)
+
+            # print("\nCOMPARISON")
+            # print("transaction_date < latest_txn_date:",
+            #     transaction_date < latest_txn_date)
+            # print("=" * 80 + "\n")
+
             if transaction_date < latest_txn_date:
                 return jsonify({
                     "error": "Transaction date must be on or after the last transaction's date."
@@ -694,14 +729,14 @@ def add_credit_card_transaction(card_id):
 
         # Update card balances
         if amount < 0:  # Expense
-            card.used += abs(amount)
+            card.used = money(card.used + abs(amount))
 
             current_cycle_start, current_cycle_end = get_billing_cycle_range(today, card.billing_cycle_start)
 
             if txn_date < current_cycle_start:
-                card.billed_unpaid += abs(amount)
+                card.billed_unpaid = money(card.billed_unpaid + abs(amount))
             else:
-                card.unbilled_spends += abs(amount)
+                card.unbilled_spends = money(card.unbilled_spends + abs(amount))
 
         else:  # Payment
             total_owed = card.billed_unpaid + card.unbilled_spends
@@ -712,20 +747,20 @@ def add_credit_card_transaction(card_id):
 
             if card.billed_unpaid > 0:
                 paid = min(payment_remaining, card.billed_unpaid)
-                card.billed_unpaid -= paid
+                card.billed_unpaid = money(card.billed_unpaid - paid)
                 payment_remaining -= paid
 
             if payment_remaining > 0 and card.unbilled_spends > 0:
                 paid = min(payment_remaining, card.unbilled_spends)
-                card.unbilled_spends -= paid
+                card.unbilled_spends = money(card.unbilled_spends - paid)
                 payment_remaining -= paid
 
             total_paid = amount - payment_remaining
-            card.used -= total_paid
+            card.used = money(card.used - total_paid)
 
             if total_paid > 0:
                 card.last_payment_date = transaction_date
-                card.last_payment_amount = amount
+                card.last_payment_amount = money(amount)
 
         db.session.add(transaction)
         db.session.commit()
@@ -793,9 +828,17 @@ def process_billing(card_id):
                     unbilled_expenses.append(txn)
 
         # Reset values
-        card.billed_unpaid = sum(abs(e.amount) for e in billed_expenses)
-        card.unbilled_spends = sum(abs(e.amount) for e in unbilled_expenses)
-        card.used = card.billed_unpaid + card.unbilled_spends
+        card.billed_unpaid = money(
+            sum(abs(e.amount) for e in billed_expenses)
+        )
+
+        card.unbilled_spends = money(
+            sum(abs(e.amount) for e in unbilled_expenses)
+        )
+
+        card.used = money(
+            card.billed_unpaid + card.unbilled_spends
+        )
 
         # Reapply payments
         payments_applied = 0
@@ -806,15 +849,15 @@ def process_billing(card_id):
 
             if card.billed_unpaid > 0:
                 paid = min(card.billed_unpaid, apply_amt)
-                card.billed_unpaid -= paid
-                card.used -= paid
+                card.billed_unpaid = money(card.billed_unpaid - paid)
+                card.used = money(card.used - paid)
                 apply_amt -= paid
                 payments_applied += paid
 
             if apply_amt > 0 and card.unbilled_spends > 0:
                 paid = min(card.unbilled_spends, apply_amt)
-                card.unbilled_spends -= paid
-                card.used -= paid
+                card.unbilled_spends = money(card.unbilled_spends - paid)
+                card.used = money(card.used - paid)
                 apply_amt -= paid
                 payments_applied += paid
 
@@ -875,7 +918,7 @@ def is_in_current_billing_cycle(transaction_date, cycle_start_day):
 def process_billing_date_transition(card):
     """Call this when a card's billing date arrives"""
     # Move unbilled spends to billed_unpaid
-    card.billed_unpaid += card.unbilled_spends
+    card.billed_unpaid = money(card.billed_unpaid + card.unbilled_spends)
     card.unbilled_spends = 0
     db.session.commit()
 
@@ -912,7 +955,7 @@ def create_bank():
         bank = Bank(
             name=data['name'],
             user_id=user_id,
-            balance=data.get('balance', 0)
+            balance=money(data.get('balance', 0))
         )
         db.session.add(bank)
         db.session.commit()
@@ -1018,9 +1061,9 @@ def add_bank_transaction(bank_id):
             return jsonify({"error": "Insufficient balance"}), 400
             
         if transaction_type == 'income':
-            new_balance = bank.balance + amount
+            new_balance = money(bank.balance + amount)
         else:
-            new_balance = bank.balance - amount
+            new_balance = money(bank.balance - amount)
         
         transaction = BankTransaction(
             bank_id=bank_id,
@@ -1033,7 +1076,7 @@ def add_bank_transaction(bank_id):
             date=datetime.now(timezone.utc)
         )
         
-        bank.balance = new_balance
+        bank.balance = money(new_balance)
         db.session.add(transaction)
         db.session.commit()
         
@@ -1078,13 +1121,29 @@ def get_bank_transactions(bank_id):
 def create_asset():
     user_id = int(get_jwt_identity())
     data = request.json
+
+    category = data.get('category')
+
+    if not category:
+        return jsonify({
+            "error": "Category is required"
+        }), 400
+
+    if category not in VALID_ASSET_CATEGORIES:
+        return jsonify({
+            "error": (
+                f"Invalid category. "
+                f"Allowed values: "
+                f"{', '.join(sorted(VALID_ASSET_CATEGORIES))}"
+            )
+        }), 400
         
     asset = Asset(
         name=data['name'],
         user_id=user_id,
         platform=data.get('platform'),
         category=data.get('category'),
-        balance=data.get('balance', 0)
+        balance=money(data.get('balance', 0))
     )
     try:
         db.session.add(asset)
@@ -1132,7 +1191,24 @@ def update_asset(asset_id):
     if 'platform' in data:
         asset.platform = data['platform']
     if 'category' in data:
-        asset.category = data['category']
+
+        category = data['category']
+
+        if not category:
+            return jsonify({
+                "error": "Category is required"
+            }), 400
+
+        if category not in VALID_ASSET_CATEGORIES:
+            return jsonify({
+                "error": (
+                    f"Invalid category. "
+                    f"Allowed values: "
+                    f"{', '.join(sorted(VALID_ASSET_CATEGORIES))}"
+                )
+            }), 400
+
+        asset.category = category
     
     # Explicitly prevent balance updates
     if 'balance' in data:
@@ -1178,7 +1254,7 @@ def add_asset_transaction(asset_id):
     if transaction_type == 'withdraw' and asset.balance < amount:
         return jsonify({"error": "Insufficient balance"}), 400
     
-    new_balance = asset.balance + amount if transaction_type == 'deposit' else asset.balance - amount
+    new_balance = money(asset.balance + amount if transaction_type == 'deposit' else asset.balance - amount)
     
     transaction = AssetTransaction(
         asset_id=asset_id,
@@ -1191,7 +1267,7 @@ def add_asset_transaction(asset_id):
         date=datetime.now(timezone.utc)
     )
     
-    asset.balance = new_balance
+    asset.balance = money(new_balance)
     db.session.add(transaction)
     db.session.commit()
     return jsonify({"message": "Transaction added", "balance": new_balance}), 201
@@ -1240,18 +1316,32 @@ def delete_asset(asset_id):
 def create_saving():
     user_id = int(get_jwt_identity())
     data = request.json
+
+    # Balance is system-controlled
+    if 'balance' in data:
+        return jsonify({
+            "error": "Balance cannot be set during savings creation. Use transactions instead."
+        }), 400
     
     # Validate bank if provided
-    if 'bank_id' in data and data['bank_id']:
-        bank = Bank.query.filter_by(id=data['bank_id'], user_id=user_id).first()
-        if not bank:
-            return jsonify({"error": "Bank not found"}), 404
+    if not data.get('bank_id'):
+        return jsonify({
+            "error": "Savings account must be linked to a bank"
+        }), 400
+
+    bank = Bank.query.filter_by(
+        id=data['bank_id'],
+        user_id=user_id
+    ).first()
+
+    if not bank:
+        return jsonify({"error": "Bank not found"}), 404
     
     saving = Saving(
         name=data['name'],
         user_id=user_id,
-        bank_id=data.get('bank_id'),
-        balance=data.get('balance', 0)
+        bank_id=data['bank_id'],
+        balance=0
     )
     try:
         db.session.add(saving)
@@ -1301,6 +1391,13 @@ def update_saving(saving_id):
         return jsonify({"error": "Saving account not found"}), 404
     
     data = request.json
+
+    # Savings must always remain linked to a bank
+    if 'bank_id' in data:
+        if not data['bank_id']:
+            return jsonify({
+                "error": "Savings account must remain linked to a bank"
+            }), 400
     
     # Handle bank_id change carefully
     if 'bank_id' in data and data['bank_id'] != saving.bank_id:
@@ -1316,15 +1413,15 @@ def update_saving(saving_id):
             if saving.balance > 0:
                 # If currently linked to a bank, return funds to it
                 if saving.bank_id:
-                    old_bank = Bank.query.get(saving.bank_id)
-                    old_bank.balance += saving.balance
+                    old_bank = Bank.query.filter_by(id=saving.bank_id,user_id=user_id).first()
+                    old_bank.balance = money(old_bank.balance + saving.balance)
                 
                 # Withdraw funds from new bank
                 if new_bank.balance < saving.balance:
                     return jsonify({
                         "error": "New bank has insufficient funds for this transfer"
                     }), 400
-                new_bank.balance -= saving.balance
+                new_bank.balance = money(new_bank.balance - saving.balance)
         
         # Update the bank link
         saving.bank_id = new_bank_id
@@ -1368,15 +1465,42 @@ def add_saving_transaction(saving_id):
     if not saving:
         return jsonify({"error": "Saving account not found"}), 404
     
+    # Safety check - savings must be linked to a bank
+    if not saving.bank_id:
+        return jsonify({
+            "error": "Savings account is not linked to a bank"
+        }), 400
+    
     data = request.json
-    amount = float(data['amount'])
+    if 'amount' not in data:
+        return jsonify({
+            "error": "Amount is required"
+        }), 400
+
+    try:
+        amount = float(data['amount'])
+    except ValueError:
+        return jsonify({
+            "error": "Invalid amount"
+        }), 400
+
+    if amount <= 0:
+        return jsonify({
+            "error": "Amount must be greater than zero"
+        }), 400
+
     transaction_type = data.get('type', 'deposit')
+
+    if transaction_type not in ['deposit', 'withdrawal']:
+        return jsonify({
+            "error": "Transaction type must be deposit or withdrawal"
+        }), 400
     
     if transaction_type == 'withdrawal' and saving.balance < amount:
         return jsonify({"error": "Insufficient balance"}), 400
     
     # Update saving balance
-    new_saving_balance = saving.balance + amount if transaction_type == 'deposit' else saving.balance - amount
+    new_saving_balance = money(saving.balance + amount if transaction_type == 'deposit' else saving.balance - amount)
     
     # If linked to a bank, update bank balance as well
     bank_balance_update = None
@@ -1387,12 +1511,12 @@ def add_saving_transaction(saving_id):
         
         # Reverse operation for bank (deposit to saving = withdrawal from bank)
         bank_amount = -amount if transaction_type == 'deposit' else amount
-        new_bank_balance = bank.balance + bank_amount
+        new_bank_balance = money(bank.balance + bank_amount)
         
         if transaction_type == 'deposit' and bank.balance < amount:
             return jsonify({"error": "Insufficient bank balance"}), 400
         
-        bank.balance = new_bank_balance
+        bank.balance = money(new_bank_balance)
         bank_balance_update = new_bank_balance
     
     # Create saving transaction
@@ -1407,7 +1531,7 @@ def add_saving_transaction(saving_id):
         date=datetime.now(timezone.utc)
     )
     
-    saving.balance = new_saving_balance
+    saving.balance = money(new_saving_balance)
     db.session.add(transaction)
     db.session.commit()
     
@@ -1479,8 +1603,13 @@ def create_transfer():
         return jsonify({"error": "Insufficient balance"}), 400
     
     # Perform transfer
-    from_account.balance -= (amount + fee)
-    to_account.balance += amount
+    from_account.balance = money(
+        from_account.balance - (amount + fee)
+    )
+
+    to_account.balance = money(
+        to_account.balance + amount
+    )
     
     transfer = TransferTransaction(
         user_id=user_id,

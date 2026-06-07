@@ -121,6 +121,13 @@ export default function Bank() {
       // Refresh banks to reflect updated balance
       const banksResponse = await getBanks();
       setBanks(banksResponse.data || banksResponse || []);
+
+      // Refresh transaction list if transaction modal is open
+      if (selectedBankId) {
+        const transactionResponse = await getBankTransactions(selectedBankId);
+        setTransactions(transactionResponse?.data || transactionResponse || []);
+      }
+
       setSuccess('Transaction added successfully!');
 
       // Reset and close transaction form
@@ -317,9 +324,9 @@ export default function Bank() {
 
       {/* Transaction Form Modal */}
       {showTransactionForm && (
-        <div className="modal">
+        <div className="modal transaction-form-modal">
           <div className="modal-content">
-            <h2>Add Transaction</h2>
+            <h2>Add Transaction - <span style={{ color: '#007bff' }}>{banks.find(b => String(b.id) === String(transactionData.bankId))?.name || 'Bank'}</span></h2>
             <form onSubmit={handleTransactionSubmit}>
               <div className="form-group">
                 <label htmlFor="type">Transaction Type:</label>
@@ -367,9 +374,30 @@ export default function Bank() {
       {/* Transactions Modal */}
       {showTransactions && (
         <div className="modal">
-          <div className="modal-content">
-            <h2>Transactions for {banks.find(b => b.id === selectedBankId)?.name || 'Bank'}</h2>
-            <button type="button" onClick={() => setShowTransactions(false)} className="close-button" style={{ position: 'absolute', top: 10, right: 10 }}>×</button>
+          <div className="modal-content transaction-modal">
+            <div className="transaction-modal-header">
+              <h2 className="transaction-modal-title">
+                Transactions for {banks.find(b => b.id === selectedBankId)?.name || 'Bank'}
+              </h2>
+
+              <div className="transaction-modal-actions">
+                <button
+                  type="button"
+                  className="transaction-button"
+                  onClick={() => handleAddTransaction(selectedBankId)}
+                >
+                  Add Transaction
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowTransactions(false)}
+                  className="close-button"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
 
             <div className="table-container" style={{ marginTop: 20 }}>
               <table className="banks-table">

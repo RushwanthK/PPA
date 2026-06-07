@@ -423,13 +423,14 @@ export default function CreditCard() {
       {showTransactionForm && (
         <div className="modal">
           <div className="modal-content">
-            <h2>Add Transaction</h2>
+            <h2>Add Transaction - <span style={{ color: '#007bff' }}>{cards.find(c => c.id === transactionData.cardId)?.name || 'Credit Card'}</span></h2>
             <form onSubmit={handleTransactionSubmit}>
               <div className="form-group">
                 <label>Amount</label>
                 <input
                   type="number"
                   step="0.01"
+                  min="0.01"
                   name="amount"
                   placeholder="Amount"
                   value={transactionData.amount}
@@ -667,7 +668,9 @@ export default function CreditCard() {
           <div className="modal-content x-large">
             <div className="modal-header">
               <h2>Transactions for {selectedCard?.name || 'Card'}</h2>
-              <button type="button" onClick={closeTransactions} className="close-button">&times;</button>
+              <div className="transaction-header-actions"><button type="button" onClick={() => handleAddTransaction(selectedCard.id)} className="primary">Add Transaction</button>
+                <button type="button" onClick={closeTransactions} className="close-button">&times;</button>
+              </div>
             </div>
 
             <div className="transactions-table">
@@ -703,14 +706,7 @@ export default function CreditCard() {
               </table>
             </div>
 
-            <div className="modal-actions">
-              <button type="button"
-                onClick={() => handleAddTransaction(selectedCard.id)}
-                className="primary"
-              >
-                Add Transaction
-              </button>
-            </div>
+            
           </div>
         </div>
       )}
