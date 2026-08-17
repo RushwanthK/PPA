@@ -1,0 +1,39 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# React
+node_modules/
+portfolio-app/
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.docker
+
+# VS Code
+.vscode/
+
+# Python cache
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Backup
+PPA_backup/
+
+# Documentation
+*.log
+
+# Docker
+Dockerfile.old
