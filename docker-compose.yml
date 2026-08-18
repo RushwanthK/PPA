@@ -1,0 +1,52 @@
+services:
+
+  postgres:
+    image: postgres:17
+    container_name: ppa-postgres-container
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - ppa-postgres-data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: ppa-backend-container
+
+    depends_on:
+      - postgres
+
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      FLASK_ENV: ${FLASK_ENV}
+
+    ports:
+      - "5000:5000"
+
+  frontend:
+    build:
+      context: ./portfolio-app
+
+    container_name: ppa-frontend-container
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      REACT_APP_API_URL: ${REACT_APP_API_URL}
+
+    depends_on:
+      - backend
+
+volumes:
+  ppa-postgres-data:
+    external: true
+
+    

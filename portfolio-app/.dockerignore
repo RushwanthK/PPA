@@ -1,0 +1,14 @@
+node_modules
+build
+
+.git
+.gitignore
+
+README.md
+
+venv
+
+npm-debug.log
+yarn-error.log
+
+coverage
