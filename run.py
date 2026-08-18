@@ -1,7 +1,7 @@
 from app import create_app
 import os
 
-app = create_app(
+app = create_app()
 
 if __name__ == "__main__":
     # Use PORT from environment (for Render) or default to 3000 for local dev
