@@ -26,6 +26,7 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       FLASK_ENV: ${FLASK_ENV}
+      CORS_ORIGINS: ${CORS_ORIGINS}
 
     ports:
       - "5000:5000"

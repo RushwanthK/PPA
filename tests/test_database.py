@@ -9,18 +9,20 @@ def test_database_connection(app):
 
         assert result.scalar() == 1
 
-def test_database_tables_created(app):
-    from sqlalchemy import inspect
 
-    with app.app_context():
-        inspector = inspect(db.engine)
+def test_database_tables_created(database_tables):
+    expected_tables = {
+        "user",
+        "bank",
+        "credit_card",
+        "asset",
+        "saving",
+        "transaction",
+        "transfer_transaction",
+    }
 
-        tables = set(inspector.get_table_names())
+    assert expected_tables.issubset(database_tables)
 
-        assert "user" in tables
-        assert "bank" in tables
-        assert "credit_card" in tables
-        assert "asset" in tables
-        assert "saving" in tables
-        assert "transaction" in tables
-        assert "transfer_transaction" in tables
+
+def test_testing_configuration(app):
+    assert app.config["TESTING"] is True
