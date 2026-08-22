@@ -105,39 +105,6 @@ def calculate_age(dob):
     today = datetime.today()
     return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
 
-@routes.route('/users', methods=['POST'])
-@jwt_required()
-def create_user():
-    user_id = int(get_jwt_identity())
-    data = request.json
-    try:
-        if 'age' in data:
-            return jsonify({"error": "Age should not be provided manually. It will be calculated from date of birth."}), 400
-            
-        dob = parse_date(data['dob'])
-        new_user = User(
-            id=user_id,  # Use JWT identity as user ID
-            name=data['name'],
-            age=calculate_age(dob),
-            dob=dob,
-            place=data['place']
-        )
-        db.session.add(new_user)
-        db.session.commit()
-        return jsonify({
-            'id': new_user.id,
-            'name': new_user.name,
-            'age': new_user.age,
-            'dob': new_user.dob.strftime("%Y-%m-%d"),
-            'place': new_user.place
-        }), 201
-    except ValueError:
-        return jsonify({"error": "Invalid date format. Use 'YYYY-MM-DD'."}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 400
-
-
 @routes.route('/users', methods=['GET'])
 @jwt_required()
 def get_users():
@@ -417,26 +384,6 @@ def get_credit_card(card_id):
         "last_payment_date": card.last_payment_date.astimezone(IST).strftime('%d%m%Y') if card.last_payment_date else None,
         "last_payment_amount": card.last_payment_amount
     })
-
-@routes.route('/users/<int:user_id>/credit_cards', methods=['GET'])
-@jwt_required()
-def get_user_credit_cards(user_id):
-    current_user_id = int(get_jwt_identity())
-    if current_user_id != user_id:
-        return jsonify({"error": "Unauthorized access"}), 403
-        
-    cards = CreditCard.query.filter_by(user_id=user_id).all()
-    return jsonify([{
-        "id": card.id,
-        "name": card.name,
-        "limit": card.limit,
-        "available_limit": card.available_limit,
-        "used": card.used,
-        "billed_unpaid": card.billed_unpaid,
-        "unbilled_spends": card.unbilled_spends,
-        "billing_cycle_start": card.billing_cycle_start,
-        "total_payable": card.total_payable
-    } for card in cards])
 
 @routes.route('/credit_cards/<int:card_id>', methods=['PUT'])
 @jwt_required()
@@ -1582,6 +1529,86 @@ def delete_saving(saving_id):
     db.session.commit()
     return jsonify({'message': 'Saving account deleted successfully'}), 200
 
+# ========== UTILITY ROUTES ==========
+@routes.route('/banks/dropdown', methods=['GET'])
+@jwt_required()
+def get_banks_dropdown():
+    user_id = int(get_jwt_identity())
+    banks = Bank.query.filter_by(user_id=user_id).all()
+    return jsonify([{'id': bank.id, 'name': bank.name} for bank in banks])
+
+@routes.route('/bank_balance', methods=['GET'])
+def get_bank_balance():
+    bank_id = request.args.get('bank_id')
+    if not bank_id:
+        return jsonify({"error": "bank_id parameter is required"}), 400
+    
+    bank = Bank.query.get(bank_id)
+    if not bank:
+        return jsonify({"error": "Bank not found"}), 404
+    
+    return jsonify({
+        "id": bank.id,           # Bank ID
+        "name": bank.name,        # Bank name
+        "balance": bank.balance   # Current balance
+    })
+
+"""
+Redundant comment block at the end of the file. It can be removed as it doesn't serve any purpose.
+
+@routes.route('/users', methods=['POST'])
+@jwt_required()
+def create_user():
+    user_id = int(get_jwt_identity())
+    data = request.json
+    try:
+        if 'age' in data:
+            return jsonify({"error": "Age should not be provided manually. It will be calculated from date of birth."}), 400
+            
+        dob = parse_date(data['dob'])
+        new_user = User(
+            id=user_id,  # Use JWT identity as user ID
+            name=data['name'],
+            age=calculate_age(dob),
+            dob=dob,
+            place=data['place']
+        )
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({
+            'id': new_user.id,
+            'name': new_user.name,
+            'age': new_user.age,
+            'dob': new_user.dob.strftime("%Y-%m-%d"),
+            'place': new_user.place
+        }), 201
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Use 'YYYY-MM-DD'."}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+        
+@routes.route('/users/<int:user_id>/credit_cards', methods=['GET'])
+@jwt_required()
+def get_user_credit_cards(user_id):
+    current_user_id = int(get_jwt_identity())
+    if current_user_id != user_id:
+        return jsonify({"error": "Unauthorized access"}), 403
+        
+    cards = CreditCard.query.filter_by(user_id=user_id).all()
+    return jsonify([{
+        "id": card.id,
+        "name": card.name,
+        "limit": card.limit,
+        "available_limit": card.available_limit,
+        "used": card.used,
+        "billed_unpaid": card.billed_unpaid,
+        "unbilled_spends": card.unbilled_spends,
+        "billing_cycle_start": card.billing_cycle_start,
+        "total_payable": card.total_payable
+    } for card in cards])
+
 # ========== TRANSFER ROUTES ==========
 @routes.route('/transfers', methods=['POST'])
 def create_transfer():
@@ -1638,7 +1665,6 @@ def get_account(account_type, account_id):
         return Saving.query.get(account_id)
     return None
 
-# ========== UTILITY ROUTES ==========
 @routes.route('/users/dropdown', methods=['GET'])
 @jwt_required()
 def get_users_dropdown():
@@ -1652,25 +1678,6 @@ def get_users_dropdown():
         'name': user.name
     }])
 
-@routes.route('/banks/dropdown', methods=['GET'])
-@jwt_required()
-def get_banks_dropdown():
-    user_id = int(get_jwt_identity())
-    banks = Bank.query.filter_by(user_id=user_id).all()
-    return jsonify([{'id': bank.id, 'name': bank.name} for bank in banks])
 
-@routes.route('/bank_balance', methods=['GET'])
-def get_bank_balance():
-    bank_id = request.args.get('bank_id')
-    if not bank_id:
-        return jsonify({"error": "bank_id parameter is required"}), 400
     
-    bank = Bank.query.get(bank_id)
-    if not bank:
-        return jsonify({"error": "Bank not found"}), 404
-    
-    return jsonify({
-        "id": bank.id,           # Bank ID
-        "name": bank.name,        # Bank name
-        "balance": bank.balance   # Current balance
-    })
+"""

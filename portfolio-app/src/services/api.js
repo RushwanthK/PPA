@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { format } from 'date-fns';
 
-//const API_URL = 'https://rs-ppa-backend.onrender.com';
 //const API_URL = 'http://localhost:5000';
 
 // Create an axios instance with base URL
@@ -20,18 +19,6 @@ api.interceptors.request.use(config => {
 });
 
 export default api;
-
-// User API calls
-/*
-export const createUser = async (userData) => {
-  return api.post('/users', userData);
-};
-*/
-
-export const getCurrentUser = async () => {
-  const res = await api.get('/me');
-  return res.data;
-};
 
 export const getUsers = async () => {
   const response = await api.get('/users');  // now returns only the logged-in user
@@ -138,16 +125,6 @@ export const getBankTransactions = async (bankId) => {
   }
 };
 
-export const getBanksForUser = async () => {
-  try {
-    const response = await api.get('/banks/dropdown');
-    return { data: response.data };
-  } catch (error) {
-    console.error('Error fetching user banks:', error);
-    throw error;
-  }
-};
-
 // Bank Balance API call
 export const getBankBalance = async (bankId) => {
   try {
@@ -160,17 +137,6 @@ export const getBankBalance = async (bankId) => {
       `Failed to fetch balance for bank ${bankId}`;
     console.error('Error fetching bank balance:', errorMsg);
     throw new Error(errorMsg);
-  }
-};
-
-// Add this new function specifically for Bank page
-export const getUsersForBank = async () => {
-  try {
-    const response = await api.get('/users');
-    return { data: response.data };
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    throw error;
   }
 };
 
@@ -253,16 +219,6 @@ export const getCreditCard = async (cardId) => {
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
     throw new Error(`Failed to fetch credit card: ${errorMessage}`);
-  }
-};
-
-export const getUserCreditCards = async (userId) => {
-  try {
-    const response = await api.get(`/users/${userId}/credit_cards`);
-    return response.data;
-  } catch (error) {
-    const errorMessage = error.response?.data?.error || error.message;
-    throw new Error(`Failed to fetch user credit cards: ${errorMessage}`);
   }
 };
 
@@ -421,11 +377,6 @@ export const addSavingTransaction = async (savingId, transactionData) => {
   }
 };
 
-// Transfer API calls
-export const createTransfer = async (transferData) => {
-  return api.post('/transfers', transferData);
-};
-
 export const getBanksByUser = async () => {
   try {
     const response = await api.get('/banks/dropdown');
@@ -484,3 +435,52 @@ export const getDashboardAssetAllocation = async () => {
     );
   }
 };
+
+
+/*
+Garbage api helpers
+
+export const getCurrentUser = async () => {
+  const res = await api.get('/me');
+  return res.data;
+};
+
+export const getBanksForUser = async () => {
+  try {
+    const response = await api.get('/banks/dropdown');
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error fetching user banks:', error);
+    throw error;
+  }
+};
+
+// Add this new function specifically for Bank page
+export const getUsersForBank = async () => {
+  try {
+    const response = await api.get('/users');
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    throw error;
+  }
+};
+
+export const getUserCreditCards = async (userId) => {
+  try {
+    const response = await api.get(`/users/${userId}/credit_cards`);
+    return response.data;
+  } catch (error) {
+    const errorMessage = error.response?.data?.error || error.message;
+    throw new Error(`Failed to fetch user credit cards: ${errorMessage}`);
+  }
+};
+
+// Transfer API calls
+export const createTransfer = async (transferData) => {
+  return api.post('/transfers', transferData);
+};
+
+
+
+*/

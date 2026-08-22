@@ -209,22 +209,6 @@ export default function Savings() {
     }
   };
 
-  // ---------- bank helpers ----------
-  /*const handleUserChange = async (userId) => {
-    try {
-      if (userId) {
-        const banksResponse = await getBanksByUser(userId);
-        setFilteredBanks(banksResponse.data || banksResponse || []);
-      } else {
-        setFilteredBanks([]);
-      }
-    } catch (error) {
-      console.error('Error fetching banks:', error);
-      setFilteredBanks([]);
-      setError('Failed to load banks');
-    }
-  };*/
-
   const handleAddTransactionClick = async (saving) => {
     setTransaction(prev => ({ ...prev, savingId: saving.id }));
     setTransactionVisible(true);
