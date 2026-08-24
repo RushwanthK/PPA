@@ -110,7 +110,7 @@ def calculate_age(dob):
 def get_users():
     
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -126,7 +126,7 @@ def get_users():
 @jwt_required()
 def get_current_user():
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
 
@@ -145,7 +145,7 @@ def update_user(id):
     if id != user_id:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    user = User.query.get(id)
+    user = db.session.get(User, id)
     if not user:
         return jsonify({'message': 'User not found'}), 404
 
@@ -196,7 +196,7 @@ def delete_user(id):
     if id != user_id:
         return jsonify({'error': 'Unauthorized'}), 403
         
-    user = User.query.get(id)
+    user = db.session.get(User, id)
     if not user:
         return jsonify({'message': 'User not found'}), 404
     
@@ -229,7 +229,7 @@ def can_delete_user(id):
     if id != user_id:
         return jsonify({'error': 'Unauthorized'}), 403
         
-    user = User.query.get(id)
+    user = db.session.get(User, id)
     if not user:
         return jsonify({"error": "User not found"}), 404
     
@@ -1543,7 +1543,7 @@ def get_bank_balance():
     if not bank_id:
         return jsonify({"error": "bank_id parameter is required"}), 400
     
-    bank = Bank.query.get(bank_id)
+    bank = db.session.get(Bank, bank_id)
     if not bank:
         return jsonify({"error": "Bank not found"}), 404
     

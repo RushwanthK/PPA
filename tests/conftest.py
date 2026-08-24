@@ -95,8 +95,11 @@ def test_user(db_session):
 
     yield user
 
-    db_session.delete(user)
-    db_session.commit()
+    existing_user = db_session.get(User, user.id)
+
+    if existing_user is not None:
+        db_session.delete(existing_user)
+        db_session.commit()
 
 
 @pytest.fixture()
@@ -116,3 +119,25 @@ def authenticated_client(client, test_user):
     client.environ_base["HTTP_AUTHORIZATION"] = f"Bearer {token}"
 
     return client
+
+@pytest.fixture()
+def other_user(db_session):
+    user = User(
+        name="otheruser",
+        age=28,
+        dob=date(1997, 3, 15),
+        place="Mysuru",
+    )
+
+    user.set_password("OtherPassword123!")
+
+    db_session.add(user)
+    db_session.commit()
+
+    yield user
+
+    existing_user = db_session.get(User, user.id)
+
+    if existing_user is not None:
+        db_session.delete(existing_user)
+        db_session.commit()
