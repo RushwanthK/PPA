@@ -1538,6 +1538,7 @@ def get_banks_dropdown():
     return jsonify([{'id': bank.id, 'name': bank.name} for bank in banks])
 
 @routes.route('/bank_balance', methods=['GET'])
+@jwt_required()
 def get_bank_balance():
     bank_id = request.args.get('bank_id')
     if not bank_id:

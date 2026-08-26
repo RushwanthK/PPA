@@ -141,3 +141,25 @@ def other_user(db_session):
     if existing_user is not None:
         db_session.delete(existing_user)
         db_session.commit()
+
+
+@pytest.fixture()
+def test_bank(db_session, test_user):
+    from app.models import Bank
+
+    bank = Bank(
+        name="Test Bank",
+        balance=10000,
+        user_id=test_user.id,
+    )
+
+    db_session.add(bank)
+    db_session.commit()
+
+    yield bank
+
+    existing_bank = db_session.get(Bank, bank.id)
+
+    if existing_bank is not None:
+        db_session.delete(existing_bank)
+        db_session.commit()
