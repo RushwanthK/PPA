@@ -1,4 +1,17 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
+from io import BytesIO
+from openpyxl import Workbook
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer
+)
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func
@@ -39,6 +52,494 @@ routes = Blueprint('routes', __name__)
 def parse_date(date_str):
     return datetime.strptime(date_str, "%Y-%m-%d").date()
 
+def get_transaction_export_rows(user_id):
+    """
+    Return normalized transaction rows for the specified user.
+
+    Includes all Transaction subclasses:
+    - BankTransaction
+    - CreditCardTransaction
+    - AssetTransaction
+    - SavingTransaction
+    """
+
+    transactions = (
+        db.session.query(Transaction)
+        .filter(Transaction.user_id == user_id)
+        .order_by(Transaction.date.asc(), Transaction.id.asc())
+        .all()
+    )
+
+    rows = []
+
+    for transaction in transactions:
+        account_type = ""
+        account_name = ""
+        balance_after = ""
+
+        if isinstance(transaction, BankTransaction):
+            account_type = "Bank"
+            bank = db.session.get(Bank, transaction.bank_id)
+
+            if bank:
+                account_name = bank.name
+
+            balance_after = transaction.bank_balance_after
+
+        elif isinstance(transaction, CreditCardTransaction):
+            account_type = "Credit Card"
+            card = db.session.get(
+                CreditCard,
+                transaction.credit_card_id
+            )
+
+            if card:
+                account_name = card.name
+
+            balance_after = transaction.card_balance_after
+
+        elif isinstance(transaction, AssetTransaction):
+            account_type = "Asset"
+            asset = db.session.get(
+                Asset,
+                transaction.asset_id
+            )
+
+            if asset:
+                account_name = asset.name
+
+            balance_after = transaction.asset_balance_after
+
+        elif isinstance(transaction, SavingTransaction):
+            account_type = "Saving"
+            saving = db.session.get(
+                Saving,
+                transaction.saving_id
+            )
+
+            if saving:
+                account_name = saving.name
+
+            balance_after = transaction.saving_balance_after
+
+        else:
+            account_type = "Transaction"
+
+        rows.append({
+            "id": transaction.id,
+            "date": (
+                transaction.date.strftime("%Y-%m-%d %H:%M:%S")
+                if transaction.date
+                else ""
+            ),
+            "amount": transaction.amount,
+            "transaction_type": transaction.transaction_type or "",
+            "description": transaction.description or "",
+            "category": transaction.category or "",
+            "account_type": account_type,
+            "account_name": account_name,
+            "balance_after": balance_after
+        })
+
+    return rows
+
+
+def get_transfer_export_rows(user_id):
+    """
+    Return transfer transaction rows for the specified user.
+    """
+
+    transfers = (
+        db.session.query(TransferTransaction)
+        .filter(TransferTransaction.user_id == user_id)
+        .order_by(
+            TransferTransaction.date.asc(),
+            TransferTransaction.id.asc()
+        )
+        .all()
+    )
+
+    rows = []
+
+    for transfer in transfers:
+        rows.append({
+            "id": transfer.id,
+            "date": (
+                transfer.date.strftime("%Y-%m-%d %H:%M:%S")
+                if transfer.date
+                else ""
+            ),
+            "amount": transfer.amount,
+            "from_account_type": (
+                transfer.from_account_type or ""
+            ),
+            "from_account_id": (
+                transfer.from_account_id or ""
+            ),
+            "to_account_type": (
+                transfer.to_account_type or ""
+            ),
+            "to_account_id": (
+                transfer.to_account_id or ""
+            ),
+            "description": transfer.description or "",
+            "fee": transfer.fee or 0
+        })
+
+    return rows
+
+
+def get_total_transaction_history_count(user_id):
+    transaction_count = (
+        db.session.query(Transaction)
+        .filter(Transaction.user_id == user_id)
+        .count()
+    )
+
+    transfer_count = (
+        db.session.query(TransferTransaction)
+        .filter(TransferTransaction.user_id == user_id)
+        .count()
+    )
+
+    return transaction_count + transfer_count
+
+
+def create_transaction_excel(user_id):
+    transactions = get_transaction_export_rows(user_id)
+    transfers = get_transfer_export_rows(user_id)
+
+    workbook = Workbook()
+
+    # -----------------------------
+    # Transactions worksheet
+    # -----------------------------
+    transaction_sheet = workbook.active
+    transaction_sheet.title = "Transactions"
+
+    transaction_headers = [
+        "ID",
+        "Date",
+        "Amount",
+        "Transaction Type",
+        "Description",
+        "Category",
+        "Account Type",
+        "Account Name",
+        "Balance After"
+    ]
+
+    transaction_sheet.append(transaction_headers)
+
+    for row in transactions:
+        transaction_sheet.append([
+            row["id"],
+            row["date"],
+            row["amount"],
+            row["transaction_type"],
+            row["description"],
+            row["category"],
+            row["account_type"],
+            row["account_name"],
+            row["balance_after"]
+        ])
+
+    # -----------------------------
+    # Transfers worksheet
+    # -----------------------------
+    transfer_sheet = workbook.create_sheet("Transfers")
+
+    transfer_headers = [
+        "ID",
+        "Date",
+        "Amount",
+        "From Account Type",
+        "From Account ID",
+        "To Account Type",
+        "To Account ID",
+        "Description",
+        "Fee"
+    ]
+
+    transfer_sheet.append(transfer_headers)
+
+    for row in transfers:
+        transfer_sheet.append([
+            row["id"],
+            row["date"],
+            row["amount"],
+            row["from_account_type"],
+            row["from_account_id"],
+            row["to_account_type"],
+            row["to_account_id"],
+            row["description"],
+            row["fee"]
+        ])
+
+    # Make columns readable.
+    for sheet in workbook.worksheets:
+        for column_cells in sheet.columns:
+            max_length = 0
+
+            for cell in column_cells:
+                value = "" if cell.value is None else str(cell.value)
+                max_length = max(
+                    max_length,
+                    len(value)
+                )
+
+            column_letter = column_cells[0].column_letter
+
+            sheet.column_dimensions[
+                column_letter
+            ].width = min(max_length + 2, 40)
+
+        sheet.freeze_panes = "A2"
+        sheet.auto_filter.ref = sheet.dimensions
+
+    output = BytesIO()
+
+    workbook.save(output)
+
+    output.seek(0)
+
+    return output
+
+
+def create_transaction_pdf(user_id):
+    transactions = get_transaction_export_rows(user_id)
+    transfers = get_transfer_export_rows(user_id)
+
+    output = BytesIO()
+
+    document = SimpleDocTemplate(
+        output,
+        pagesize=landscape(A4),
+        rightMargin=10 * mm,
+        leftMargin=10 * mm,
+        topMargin=10 * mm,
+        bottomMargin=10 * mm
+    )
+
+    styles = getSampleStyleSheet()
+
+    elements = []
+
+    elements.append(
+        Paragraph(
+            "PPA Transaction History Backup",
+            styles["Title"]
+        )
+    )
+
+    elements.append(
+        Spacer(1, 5 * mm)
+    )
+
+    # -----------------------------
+    # Transactions
+    # -----------------------------
+    elements.append(
+        Paragraph(
+            "Transactions",
+            styles["Heading2"]
+        )
+    )
+
+    transaction_data = [[
+        "ID",
+        "Date",
+        "Amount",
+        "Type",
+        "Description",
+        "Category",
+        "Account",
+        "Account Name",
+        "Balance After"
+    ]]
+
+    for row in transactions:
+        transaction_data.append([
+            str(row["id"]),
+            row["date"],
+            str(row["amount"]),
+            row["transaction_type"],
+            row["description"],
+            row["category"],
+            row["account_type"],
+            row["account_name"],
+            str(row["balance_after"])
+        ])
+
+    if len(transaction_data) == 1:
+        transaction_data.append([
+            "",
+            "",
+            "",
+            "",
+            "No transaction records",
+            "",
+            "",
+            "",
+            ""
+        ])
+
+    transaction_table = Table(
+        transaction_data,
+        repeatRows=1
+    )
+
+    transaction_table.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.lightgrey
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "TOP"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                7
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            )
+        ])
+    )
+
+    elements.append(transaction_table)
+
+    elements.append(
+        Spacer(1, 8 * mm)
+    )
+
+    # -----------------------------
+    # Transfers
+    # -----------------------------
+    elements.append(
+        Paragraph(
+            "Transfers",
+            styles["Heading2"]
+        )
+    )
+
+    transfer_data = [[
+        "ID",
+        "Date",
+        "Amount",
+        "From Type",
+        "From ID",
+        "To Type",
+        "To ID",
+        "Description",
+        "Fee"
+    ]]
+
+    for row in transfers:
+        transfer_data.append([
+            str(row["id"]),
+            row["date"],
+            str(row["amount"]),
+            row["from_account_type"],
+            str(row["from_account_id"]),
+            row["to_account_type"],
+            str(row["to_account_id"]),
+            row["description"],
+            str(row["fee"])
+        ])
+
+    if len(transfer_data) == 1:
+        transfer_data.append([
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "No transfer records",
+            ""
+        ])
+
+    transfer_table = Table(
+        transfer_data,
+        repeatRows=1
+    )
+
+    transfer_table.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.lightgrey
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "TOP"
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                7
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                4
+            )
+        ])
+    )
+
+    elements.append(transfer_table)
+
+    document.build(elements)
+
+    output.seek(0)
+
+    return output
+
 # Home route
 @routes.route('/')
 def home():
@@ -69,9 +570,17 @@ def register():
 
         return jsonify({'message': 'User registered successfully'}), 201
 
+    except ValueError:
+        db.session.rollback()
+        return jsonify({
+            "error": "Invalid date format. Use 'YYYY-MM-DD'."
+        }), 400
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            "error": str(e)
+        }), 500
 
 @routes.route('/login', methods=['POST'])
 def login():
@@ -188,86 +697,301 @@ def update_user(id):
         db.session.rollback()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
 
-
 @routes.route('/users/<int:id>', methods=['DELETE'])
 @jwt_required()
 def delete_user(id):
-    user_id = int(get_jwt_identity())
-    if id != user_id:
-        return jsonify({'error': 'Unauthorized'}), 403
-        
     user = db.session.get(User, id)
+
     if not user:
-        return jsonify({'message': 'User not found'}), 404
-    
-    # Check balances before deletion
-    has_bank_balances = any(bank.balance != 0 for bank in user.banks)
-    has_asset_balances = any(asset.balance != 0 for asset in user.assets)
-    has_saving_balances = any(saving.balance != 0 for saving in user.savings)
-    has_credit_balances = any(card.used != 0 for card in user.credit_cards)
-    
-    if has_bank_balances or has_asset_balances or has_saving_balances or has_credit_balances:
         return jsonify({
-            'error': 'Cannot delete user with existing balances',
-            'details': {
-                'has_bank_balances': has_bank_balances,
-                'has_asset_balances': has_asset_balances,
-                'has_saving_balances': has_saving_balances,
-                'has_credit_balances': has_credit_balances
+            "error": "User not found"
+        }), 404
+
+    user_id = int(get_jwt_identity())
+
+    if id != user_id:
+        return jsonify({
+            "error": "Unauthorized"
+        }), 403
+
+    # Check balances before deletion.
+    has_bank_balances = any(
+        bank.balance != 0
+        for bank in user.banks
+    )
+
+    has_asset_balances = any(
+        asset.balance != 0
+        for asset in user.assets
+    )
+
+    has_saving_balances = any(
+        saving.balance != 0
+        for saving in user.savings
+    )
+
+    has_credit_balances = any(
+        card.used != 0
+        for card in user.credit_cards
+    )
+
+    if (
+        has_bank_balances
+        or has_asset_balances
+        or has_saving_balances
+        or has_credit_balances
+    ):
+        return jsonify({
+            "error": (
+                "Cannot delete user with existing balances"
+            ),
+            "details": {
+                "has_bank_balances": has_bank_balances,
+                "has_asset_balances": has_asset_balances,
+                "has_saving_balances": has_saving_balances,
+                "has_credit_balances": has_credit_balances
             }
         }), 400
-    
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({'message': 'User deleted successfully'}), 200
 
+    try:
+        transaction_count = (
+            db.session.query(Transaction)
+            .filter(
+                Transaction.user_id == user.id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        transfer_count = (
+            db.session.query(TransferTransaction)
+            .filter(
+                TransferTransaction.user_id == user.id
+            )
+            .delete(
+                synchronize_session=False
+            )
+        )
+
+        db.session.delete(user)
+
+        db.session.commit()
+
+        return jsonify({
+            "message": "User deleted successfully",
+            "deleted_transaction_count": (
+                transaction_count or 0
+            ),
+            "deleted_transfer_count": (
+                transfer_count or 0
+            )
+        }), 200
+
+    except Exception:
+        db.session.rollback()
+
+        return jsonify({
+            "error": "Unable to delete user account"
+        }), 500
 
 @routes.route('/users/<int:id>/can_delete', methods=['GET'])
 @jwt_required()
 def can_delete_user(id):
-    user_id = int(get_jwt_identity())
-    if id != user_id:
-        return jsonify({'error': 'Unauthorized'}), 403
-        
     user = db.session.get(User, id)
+
     if not user:
-        return jsonify({"error": "User not found"}), 404
-    
-    # Check all associated balances
-    has_bank_balances = any(bank.balance != 0 for bank in user.banks)
-    has_asset_balances = any(asset.balance != 0 for asset in user.assets)
-    has_saving_balances = any(saving.balance != 0 for saving in user.savings)
-    has_credit_balances = any(card.used != 0 for card in user.credit_cards)
-    
-    can_delete = not (has_bank_balances or has_asset_balances or 
-                     has_saving_balances or has_credit_balances)
-    
+        return jsonify({
+            "error": "User not found"
+        }), 404
+
+    user_id = int(get_jwt_identity())
+
+    if id != user_id:
+        return jsonify({
+            "error": "Unauthorized"
+        }), 403
+
+    # Check all associated balances.
+    has_bank_balances = any(
+        bank.balance != 0
+        for bank in user.banks
+    )
+
+    has_asset_balances = any(
+        asset.balance != 0
+        for asset in user.assets
+    )
+
+    has_saving_balances = any(
+        saving.balance != 0
+        for saving in user.savings
+    )
+
+    has_credit_balances = any(
+        card.used != 0
+        for card in user.credit_cards
+    )
+
+    can_delete = not (
+        has_bank_balances
+        or has_asset_balances
+        or has_saving_balances
+        or has_credit_balances
+    )
+
+    transaction_count = (
+        db.session.query(Transaction)
+        .filter(Transaction.user_id == user.id)
+        .count()
+    )
+
+    transfer_count = (
+        db.session.query(TransferTransaction)
+        .filter(
+            TransferTransaction.user_id == user.id
+        )
+        .count()
+    )
+
+    total_transaction_count = (
+        transaction_count + transfer_count
+    )
+
     if not can_delete:
-        message = "Cannot delete user account. Please clear all balances from: "
+        message = (
+            "Cannot delete user account. "
+            "Please clear all balances from: "
+        )
+
         reasons = []
+
         if has_bank_balances:
             reasons.append("bank accounts")
+
         if has_asset_balances:
             reasons.append("assets")
+
         if has_saving_balances:
             reasons.append("savings")
+
         if has_credit_balances:
             reasons.append("credit cards")
-        message += ", ".join(reasons) + " and try again."
+
+        message += (
+            ", ".join(reasons)
+            + " and try again."
+        )
+
+    elif total_transaction_count > 0:
+        message = (
+            "User account can be deleted, but "
+            f"{total_transaction_count} transaction records "
+            "will be permanently deleted."
+        )
+
     else:
-        message = "User account can be deleted as there are no balances."
-        
+        message = (
+            "User account can be deleted "
+            "as there are no balances."
+        )
+
     return jsonify({
         "can_delete": can_delete,
         "message": message,
+        "has_transaction_history": (
+            total_transaction_count > 0
+        ),
+        "transaction_count": total_transaction_count,
         "details": {
             "has_bank_balances": has_bank_balances,
             "has_asset_balances": has_asset_balances,
             "has_saving_balances": has_saving_balances,
             "has_credit_balances": has_credit_balances
         }
+    }), 200
 
-    })
+@routes.route('/users/<int:id>/transactions/export/excel',methods=['GET'])
+@jwt_required()
+def export_user_transactions_excel(id):
+    user = db.session.get(User, id)
+
+    if not user:
+        return jsonify({
+            "error": "User not found"
+        }), 404
+
+    user_id = int(get_jwt_identity())
+
+    if id != user_id:
+        return jsonify({
+            "error": "Unauthorized"
+        }), 403
+
+    try:
+        output = create_transaction_excel(user.id)
+
+        filename = (
+            f"transaction_backup_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            )
+        )
+
+    except Exception:
+        db.session.rollback()
+
+        return jsonify({
+            "error": "Unable to generate transaction backup"
+        }), 500
+
+@routes.route('/users/<int:id>/transactions/export/pdf',methods=['GET'])
+@jwt_required()
+def export_user_transactions_pdf(id):
+    user = db.session.get(User, id)
+
+    if not user:
+        return jsonify({
+            "error": "User not found"
+        }), 404
+
+    user_id = int(get_jwt_identity())
+
+    if id != user_id:
+        return jsonify({
+            "error": "Unauthorized"
+        }), 403
+
+    try:
+        output = create_transaction_pdf(user.id)
+
+        filename = (
+            f"transaction_backup_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        )
+
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/pdf"
+        )
+
+    except Exception:
+        db.session.rollback()
+
+        return jsonify({
+            "error": "Unable to generate transaction backup"
+        }), 500
+
 
 # ========== CREDIT CARD ROUTES ==========
 @routes.route('/credit_cards', methods=['POST'])
@@ -339,7 +1063,6 @@ def create_credit_card():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
-
 
 
 @routes.route('/credit_cards', methods=['GET'])
@@ -897,29 +1620,67 @@ def get_billing_cycle_range(reference_date, billing_day):
 @jwt_required()
 def create_bank():
     user_id = int(get_jwt_identity())
-    data = request.json
+    data = request.get_json(silent=True) or {}
+
+    name = data.get("name")
+
+    if not isinstance(name, str) or not name.strip():
+        return jsonify({
+            "error": "Bank name is required"
+        }), 400
+
+    name = name.strip()
+
+    try:
+        balance = float(data.get("balance", 0))
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Balance must be a valid number"
+        }), 400
+
+    if balance < 0:
+        return jsonify({
+            "error": "Bank balance cannot be negative"
+        }), 400
+
     try:
         bank = Bank(
-            name=data['name'],
+            name=name,
             user_id=user_id,
-            balance=money(data.get('balance', 0))
+            balance=money(balance)
         )
+
         db.session.add(bank)
         db.session.commit()
+
         return jsonify({
-            "id": bank.id,
-            "name": bank.name,
-            "user_id": bank.user_id,
-            "balance": bank.balance
+            "message": "Bank created successfully",
+            "bank": {
+                "id": bank.id,
+                "name": bank.name,
+                "user_id": bank.user_id,
+                "balance": bank.balance
+            }
         }), 201
+
     except IntegrityError as e:
         db.session.rollback()
+
         if 'bank_name_key' in str(e.orig):
-            return jsonify({"error": "Bank name already exists"}), 400
-        return jsonify({"error": "Database integrity error"}), 400
-    except Exception as e:
+            return jsonify({
+                "error": "Bank name already exists"
+            }), 400
+
+        return jsonify({
+            "error": "Database integrity error"
+        }), 400
+
+    except Exception:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+        return jsonify({
+            "error": "Unable to create bank"
+        }), 500
 
 @routes.route('/banks', methods=['GET'])
 @jwt_required()
@@ -937,29 +1698,64 @@ def get_banks():
 @jwt_required()
 def update_bank(bank_id):
     user_id = int(get_jwt_identity())
-    bank = Bank.query.filter_by(id=bank_id, user_id=user_id).first()
+
+    bank = Bank.query.filter_by(
+        id=bank_id,
+        user_id=user_id
+    ).first()
+
     if not bank:
-        return jsonify({"error": "Bank not found"}), 404
-    
-    data = request.json
-    bank.name = data.get('name', bank.name)
-    
+        return jsonify({
+            "error": "Bank not found"
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+
+    if "name" not in data:
+        return jsonify({
+            "error": "Bank name is required"
+        }), 400
+
+    name = data.get("name")
+
+    if not isinstance(name, str) or not name.strip():
+        return jsonify({
+            "error": "Bank name is required"
+        }), 400
+
+    bank.name = name.strip()
+
     try:
         db.session.commit()
+
         return jsonify({
-            "id": bank.id,
-            "name": bank.name,
-            "user_id": bank.user_id,
-            "balance": bank.balance
-        })
+            "message": "Bank updated successfully",
+            "bank": {
+                "id": bank.id,
+                "name": bank.name,
+                "user_id": bank.user_id,
+                "balance": bank.balance
+            }
+        }), 200
+
     except IntegrityError as e:
         db.session.rollback()
+
         if 'bank_name_key' in str(e.orig):
-            return jsonify({"error": "Bank name already exists"}), 400
-        return jsonify({"error": "Database integrity error"}), 400
-    except Exception as e:
+            return jsonify({
+                "error": "Bank name already exists"
+            }), 400
+
+        return jsonify({
+            "error": "Database integrity error"
+        }), 400
+
+    except Exception:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+
+        return jsonify({
+            "error": "Unable to update bank"
+        }), 500
 
 
 @routes.route('/banks/<int:bank_id>', methods=['DELETE'])
@@ -990,45 +1786,77 @@ def delete_bank(bank_id):
 @jwt_required()
 def add_bank_transaction(bank_id):
     user_id = int(get_jwt_identity())
-    bank = Bank.query.filter_by(id=bank_id, user_id=user_id).first()
+
+    bank = Bank.query.filter_by(
+        id=bank_id,
+        user_id=user_id
+    ).first()
+
     if not bank:
-        return jsonify({"error": "Bank not found"}), 404
-    
-    data = request.json
+        return jsonify({
+            "error": "Bank not found"
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+
+    if "amount" not in data:
+        return jsonify({
+            "error": "Amount is required"
+        }), 400
+
     try:
-        amount = float(data['amount'])
-        transaction_type = data.get('type', 'income')
-        description = data.get('description', '')
-        category = data.get('category', '')
-        
-        if transaction_type not in ('income', 'expense'):
-            return jsonify({"error": "Invalid transaction type"}), 400
-            
-        if transaction_type == 'expense' and bank.balance < amount:
-            return jsonify({"error": "Insufficient balance"}), 400
-            
-        if transaction_type == 'income':
+        amount = float(data["amount"])
+    except (TypeError, ValueError):
+        return jsonify({
+            "error": "Amount must be a valid number"
+        }), 400
+
+    if amount <= 0:
+        return jsonify({
+            "error": "Amount must be greater than 0"
+        }), 400
+
+    transaction_type = data.get("type", "income")
+
+    if transaction_type not in ("income", "expense"):
+        return jsonify({
+            "error": "Invalid transaction type"
+        }), 400
+
+    if transaction_type == "expense" and bank.balance < amount:
+        return jsonify({
+            "error": "Insufficient balance"
+        }), 400
+
+    try:
+        if transaction_type == "income":
             new_balance = money(bank.balance + amount)
         else:
             new_balance = money(bank.balance - amount)
-        
+
         transaction = BankTransaction(
             bank_id=bank_id,
             user_id=user_id,
             amount=amount,
-            description=description,
-            category=category,
+            description=data.get("description", ""),
+            category=data.get("category", ""),
             transaction_type=transaction_type,
             bank_balance_after=new_balance,
             date=datetime.now(timezone.utc)
         )
-        
-        bank.balance = money(new_balance)
+
+        bank.balance = new_balance
+
         db.session.add(transaction)
+
+        # Force SQLAlchemy to execute the INSERT here.
+        # This makes DB problems appear at this exact point.
+        db.session.flush()
+
         db.session.commit()
-        
+
         return jsonify({
-            "message": "Transaction added",
+            "message": "Transaction added successfully",
             "balance": new_balance,
             "transaction": {
                 "id": transaction.id,
@@ -1040,8 +1868,20 @@ def add_bank_transaction(bank_id):
                 "balance_after": new_balance
             }
         }), 201
-    except ValueError:
-        return jsonify({"error": "Invalid amount"}), 400
+
+    except IntegrityError:
+        db.session.rollback()
+
+        return jsonify({
+            "error": "Unable to save bank transaction because of a database integrity error"
+        }), 400
+
+    except Exception:
+        db.session.rollback()
+
+        return jsonify({
+            "error": "Unable to add bank transaction"
+        }), 500
 
 @routes.route('/banks/<int:bank_id>/transactions', methods=['GET'])
 @jwt_required()
@@ -1540,13 +2380,24 @@ def get_banks_dropdown():
 @routes.route('/bank_balance', methods=['GET'])
 @jwt_required()
 def get_bank_balance():
-    bank_id = request.args.get('bank_id')
+    bank_id = request.args.get("bank_id")
+
     if not bank_id:
-        return jsonify({"error": "bank_id parameter is required"}), 400
-    
-    bank = db.session.get(Bank, bank_id)
+        return jsonify({
+            "error": "bank_id parameter is required"
+        }), 400
+
+    user_id = int(get_jwt_identity())
+
+    bank = Bank.query.filter_by(
+        id=bank_id,
+        user_id=user_id
+    ).first()
+
     if not bank:
-        return jsonify({"error": "Bank not found"}), 404
+        return jsonify({
+            "error": "Bank not found"
+        }), 404
     
     return jsonify({
         "id": bank.id,           # Bank ID

@@ -1,40 +1,78 @@
 import React, { useState, useEffect } from 'react';
-import { getUsers, updateUser, deleteUser, canDeleteUser } from '../services/api';
+import {
+  getUsers,
+  updateUser,
+  deleteUser,
+  canDeleteUser,
+  exportUserTransactionsExcel,
+  exportUserTransactionsPdf
+} from '../services/api';
+
 import './users.css';
 
 const Users = () => {
   const [users, setUsers] = useState([]);
-  const [updatedUser, setUpdatedUser] = useState({ 
-    id: '', 
-    name: '',  
-    dob: '', 
+
+  const [updatedUser, setUpdatedUser] = useState({
+    id: '',
+    name: '',
+    dob: '',
     place: '',
-    password: '',       
-    confirmPassword: '' 
+    password: '',
+    confirmPassword: ''
   });
+
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+
+  const [notification, setNotification] = useState({
+    show: false,
+    message: '',
+    type: ''
+  });
+
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteInfo, setDeleteInfo] = useState(null);
+
+  // Tracks exactly which user id the delete modal is currently acting on.
+  // Kept separate from `users[0]` so this stays correct even if the users
+  // list ever contains more than one entry in the future.
+  const [deletingUserId, setDeletingUserId] = useState(null);
+
+  const [isDownloadingBackup, setIsDownloadingBackup] = useState(false);
+
+  // Tracks whether the user has already downloaded a backup for the
+  // account currently pending deletion, purely so the confirm button
+  // can reflect that back to them.
+  const [backupDownloaded, setBackupDownloaded] = useState(false);
 
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3000);
+
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: '' });
+    }, 3000);
   };
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
+
         const response = await getUsers();
         console.log('API Response:', response);
+
         setUsers(response);
         setError(null);
       } catch (err) {
         console.error('Failed to fetch users:', err);
+
         setError('Failed to load users. Please try again.');
         setUsers([]);
+
         showNotification('Failed to load users. Please try again.', 'error');
       } finally {
         setLoading(false);
@@ -45,14 +83,14 @@ const Users = () => {
   }, []);
 
   const handleUpdateUser = async () => {
-    // Password validation
     if (updatedUser.password && updatedUser.password !== updatedUser.confirmPassword) {
-      showNotification("Passwords do not match", "error");
+      showNotification('Passwords do not match', 'error');
       return;
     }
 
     try {
       setLoading(true);
+
       const updatePayload = {
         name: updatedUser.name,
         dob: updatedUser.dob,
@@ -64,19 +102,32 @@ const Users = () => {
       }
 
       const response = await updateUser(updatedUser.id, updatePayload);
-      
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
+
+      setUsers(prevUsers =>
+        prevUsers.map(user =>
           user.id === updatedUser.id ? response.data : user
         )
       );
-      
-      setUpdatedUser({ id: '', name: '', dob: '', place: '', password: '', confirmPassword: '' });
+
+      setUpdatedUser({
+        id: '',
+        name: '',
+        dob: '',
+        place: '',
+        password: '',
+        confirmPassword: ''
+      });
+
       setIsEditing(false);
       showNotification('User updated successfully!');
     } catch (err) {
       console.error('Failed to update user:', err);
-      const errorMessage = err.response?.data?.error || 'Failed to update user. Please try again.';
+
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Failed to update user. Please try again.';
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -84,65 +135,179 @@ const Users = () => {
   };
 
   const handleDeleteUser = async (id) => {
-  if (isDeleting) return;
-  
-  try {
-    setIsDeleting(true);
-    const checkResponse = await canDeleteUser(id);
-    
-    if (!checkResponse.data.can_delete) {
-      // Updated error message handling based on backend response
-      const errorDetails = checkResponse.data.details || {};
-      const reasons = [];
-      
-      if (errorDetails.has_bank_balances) reasons.push("bank accounts");
-      if (errorDetails.has_asset_balances) reasons.push("assets");
-      if (errorDetails.has_saving_balances) reasons.push("savings");
-      if (errorDetails.has_credit_balances) reasons.push("credit cards");
-      
-      const errorMessage = checkResponse.data.message || 
-        `Cannot delete user account. Please clear balances from ${reasons.join(', ')} and try again.`;
-      
-      setError(errorMessage);
-      setIsDeleting(false);
+    if (isDeleting) {
       return;
     }
 
-    // Proceed with deletion if no balances
-    if (!window.confirm("Are you sure you want to delete this user?")) {
+    try {
+      setIsDeleting(true);
+      setError(null);
+
+      const checkResponse = await canDeleteUser(id);
+      const deletionData = checkResponse.data;
+
+      if (!deletionData.can_delete) {
+        const errorDetails = deletionData.details || {};
+        const reasons = [];
+
+        if (errorDetails.has_bank_balances) reasons.push('bank accounts');
+        if (errorDetails.has_asset_balances) reasons.push('assets');
+        if (errorDetails.has_saving_balances) reasons.push('savings');
+        if (errorDetails.has_credit_balances) reasons.push('credit cards');
+
+        const errorMessage =
+          deletionData.message ||
+          `Cannot delete user account. Please clear balances from ${reasons.join(', ')} and try again.`;
+
+        setError(errorMessage);
+        return;
+      }
+
+      setDeleteInfo(deletionData);
+      setDeletingUserId(id);
+      setBackupDownloaded(false);
+      setShowDeleteModal(true);
+    } catch (err) {
+      console.error('Failed to check user deletion:', err);
+
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Unable to check whether this account can be deleted.';
+
+      setError(errorMessage);
+    } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeleting || isDownloadingBackup) {
       return;
     }
-    
-    await deleteUser(id);
-    setUsers(prevUsers => prevUsers.filter(user => user.id !== id));
-    showNotification('User deleted successfully!');
-    
-    // Log out after deletion
-    localStorage.removeItem('token');
-    window.location.href = '/';
-  } catch (err) {
-    console.error('Failed to delete user:', err);
-    const errorMessage = err.response?.data?.error || 
-      err.response?.data?.message || 
-      'Failed to delete user. Please try again.';
-    setError(errorMessage);
-  } finally {
-    setIsDeleting(false);
-  }
-};
+
+    setShowDeleteModal(false);
+    setDeleteInfo(null);
+    setDeletingUserId(null);
+    setBackupDownloaded(false);
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadExcel = async () => {
+    if (!deleteInfo || !deletingUserId) {
+      return;
+    }
+
+    try {
+      setIsDownloadingBackup(true);
+      setError(null);
+
+      const response = await exportUserTransactionsExcel(deletingUserId);
+
+      const filename = `ppa_transaction_backup_${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx`;
+
+      downloadBlob(response.data, filename);
+
+      setBackupDownloaded(true);
+      showNotification('Transaction backup downloaded successfully.');
+    } catch (err) {
+      console.error('Failed to download Excel backup:', err);
+      setError('Unable to download the Excel backup. Your transaction data has not been deleted.');
+    } finally {
+      setIsDownloadingBackup(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!deleteInfo || !deletingUserId) {
+      return;
+    }
+
+    try {
+      setIsDownloadingBackup(true);
+      setError(null);
+
+      const response = await exportUserTransactionsPdf(deletingUserId);
+
+      const filename = `ppa_transaction_backup_${new Date()
+        .toISOString()
+        .slice(0, 10)}.pdf`;
+
+      downloadBlob(response.data, filename);
+
+      setBackupDownloaded(true);
+      showNotification('Transaction backup downloaded successfully.');
+    } catch (err) {
+      console.error('Failed to download PDF backup:', err);
+      setError('Unable to download the PDF backup. Your transaction data has not been deleted.');
+    } finally {
+      setIsDownloadingBackup(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteInfo || !deletingUserId || isDeleting) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      setError(null);
+
+      const response = await deleteUser(deletingUserId);
+
+      setShowDeleteModal(false);
+      setDeleteInfo(null);
+      setDeletingUserId(null);
+      setBackupDownloaded(false);
+
+      setUsers([]);
+
+      showNotification(response.data?.message || 'User deleted successfully!');
+
+      localStorage.removeItem('token');
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Failed to delete user. Please try again.';
+
+      setError(errorMessage);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleEditClick = (user) => {
-    // Format the date for the date input field (YYYY-MM-DD)
     const formattedDob = user.dob.split('T')[0];
+
     setUpdatedUser({
       id: user.id,
       name: user.name,
       dob: formattedDob,
       place: user.place,
-      password: '',       // Initialize empty
-      confirmPassword: '' // Initialize empty
+      password: '',
+      confirmPassword: ''
     });
+
     setIsEditing(true);
   };
 
@@ -154,7 +319,6 @@ const Users = () => {
     );
   }
 
-  
   return (
     <div className="users-container">
       {notification.show && (
@@ -164,7 +328,7 @@ const Users = () => {
       )}
 
       <h2>Edit Profile</h2>
-      
+
       {error && (
         <div className="error">
           <span>{error}</span>
@@ -183,15 +347,15 @@ const Users = () => {
               <div className="user-main-info">
                 <span className="user-name">{user.name}</span>
                 <div className="user-actions">
-                  <button 
+                  <button
                     onClick={() => handleEditClick(user)}
                     disabled={loading}
                     className="edit-btn"
                   >
                     Edit
                   </button>
-                  <button 
-                    className="delete-button" 
+                  <button
+                    className="delete-button"
                     onClick={() => handleDeleteUser(user.id)}
                     disabled={loading || isDeleting}
                   >
@@ -218,32 +382,34 @@ const Users = () => {
             e.preventDefault();
             handleUpdateUser();
           }}>
-            <input 
-              type="text" 
-              placeholder="Name" 
-              value={updatedUser.name} 
-              onChange={(e) => setUpdatedUser({ ...updatedUser, name: e.target.value })} 
+            <input
+              type="text"
+              placeholder="Name"
+              value={updatedUser.name}
+              onChange={(e) => setUpdatedUser({ ...updatedUser, name: e.target.value })}
               required
               disabled={loading}
             />
-            
-            <input 
-              type="date" 
-              placeholder="Date of Birth" 
-              value={updatedUser.dob} 
-              onChange={(e) => setUpdatedUser({ ...updatedUser, dob: e.target.value })} 
+
+            <input
+              type="date"
+              placeholder="Date of Birth"
+              value={updatedUser.dob}
+              onChange={(e) => setUpdatedUser({ ...updatedUser, dob: e.target.value })}
               required
               disabled={loading}
               max={new Date().toISOString().split('T')[0]}
             />
-            <input 
-              type="text" 
-              placeholder="Place" 
-              value={updatedUser.place} 
-              onChange={(e) => setUpdatedUser({ ...updatedUser, place: e.target.value })} 
+
+            <input
+              type="text"
+              placeholder="Place"
+              value={updatedUser.place}
+              onChange={(e) => setUpdatedUser({ ...updatedUser, place: e.target.value })}
               required
               disabled={loading}
             />
+
             <input
               type="password"
               placeholder="New Password (optional)"
@@ -251,6 +417,7 @@ const Users = () => {
               onChange={(e) => setUpdatedUser({ ...updatedUser, password: e.target.value })}
               disabled={loading}
             />
+
             <input
               type="password"
               placeholder="Confirm Password"
@@ -258,24 +425,91 @@ const Users = () => {
               onChange={(e) => setUpdatedUser({ ...updatedUser, confirmPassword: e.target.value })}
               disabled={loading}
             />
+
             <div className="form-buttons">
-              <button 
-                type="submit" 
-                className="create-btn"
-                disabled={loading}
-              >
+              <button type="submit" className="create-btn" disabled={loading}>
                 {loading ? 'Updating...' : 'Update'}
               </button>
-              <button 
-                type="button" 
-                className="cancel-btn" 
-                onClick={() => setIsEditing(false)}
-                disabled={loading}
-              >
+              <button type="button" className="cancel-btn" onClick={() => setIsEditing(false)} disabled={loading}>
                 Cancel
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {showDeleteModal && deleteInfo && (
+        <div className="delete-modal-backdrop" onClick={closeDeleteModal}>
+          <div className="delete-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Delete Account</h3>
+
+            <div className="delete-warning">
+              <strong>Please review before continuing.</strong>
+              <p>Your account can currently be deleted because all required balances have been cleared.</p>
+
+              {deleteInfo.has_transaction_history ? (
+                <>
+                  <p>
+                    You have <strong>{deleteInfo.transaction_count}</strong> transaction records in your account history.
+                  </p>
+                  <p>Deleting your account will permanently delete this transaction history.</p>
+                  <p>You may optionally download a backup before deleting your account.</p>
+                </>
+              ) : (
+                <p>No transaction history was found.</p>
+              )}
+            </div>
+
+            {deleteInfo.has_transaction_history && (
+              <div className="backup-options">
+                <h4>Optional Backup</h4>
+                <div className="backup-buttons">
+                  <button
+                    type="button"
+                    className="backup-btn"
+                    onClick={handleDownloadExcel}
+                    disabled={isDownloadingBackup || isDeleting}
+                  >
+                    {isDownloadingBackup ? 'Preparing...' : 'Download Excel'}
+                  </button>
+                  <button
+                    type="button"
+                    className="backup-btn"
+                    onClick={handleDownloadPdf}
+                    disabled={isDownloadingBackup || isDeleting}
+                  >
+                    {isDownloadingBackup ? 'Preparing...' : 'Download PDF'}
+                  </button>
+                </div>
+                {backupDownloaded && (
+                  <p className="backup-confirmed">A backup has been downloaded to your device.</p>
+                )}
+              </div>
+            )}
+
+            <div className="delete-modal-actions">
+              <button
+                type="button"
+                className="delete-confirm-btn"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting || isDownloadingBackup}
+              >
+                {isDeleting
+                  ? 'Deleting...'
+                  : backupDownloaded
+                    ? 'Delete Account'
+                    : 'Delete Without Backup'}
+              </button>
+              <button
+                type="button"
+                className="delete-cancel-btn"
+                onClick={closeDeleteModal}
+                disabled={isDeleting || isDownloadingBackup}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

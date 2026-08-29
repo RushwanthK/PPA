@@ -37,6 +37,24 @@ export const canDeleteUser = async (id) => {
   return api.get(`/users/${id}/can_delete`);
 };
 
+export const exportUserTransactionsExcel = async (id) => {
+  return api.get(
+    `/users/${id}/transactions/export/excel`,
+    {
+      responseType: 'blob'
+    }
+  );
+};
+
+export const exportUserTransactionsPdf = async (id) => {
+  return api.get(
+    `/users/${id}/transactions/export/pdf`,
+    {
+      responseType: 'blob'
+    }
+  );
+};
+
 // Bank API calls
 export const getBanks = async () => {
   try {

@@ -9,7 +9,7 @@ from datetime import date
 load_dotenv(".env.test", override=True)
 
 from app import create_app, db
-from app.models import User
+from app.models import User, Transaction
 
 
 TEST_DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -95,6 +95,15 @@ def test_user(db_session):
 
     yield user
 
+    db_session.rollback()
+
+    # Remove transactions created by the test before deleting the user.
+    db_session.query(Transaction).filter(
+        Transaction.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    db_session.commit()
+
     existing_user = db_session.get(User, user.id)
 
     if existing_user is not None:
@@ -120,6 +129,7 @@ def authenticated_client(client, test_user):
 
     return client
 
+
 @pytest.fixture()
 def other_user(db_session):
     user = User(
@@ -136,6 +146,14 @@ def other_user(db_session):
 
     yield user
 
+    db_session.rollback()
+
+    db_session.query(Transaction).filter(
+        Transaction.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    db_session.commit()
+
     existing_user = db_session.get(User, user.id)
 
     if existing_user is not None:
@@ -145,7 +163,7 @@ def other_user(db_session):
 
 @pytest.fixture()
 def test_bank(db_session, test_user):
-    from app.models import Bank
+    from app.models import Bank, BankTransaction
 
     bank = Bank(
         name="Test Bank",
@@ -157,6 +175,15 @@ def test_bank(db_session, test_user):
     db_session.commit()
 
     yield bank
+
+    db_session.rollback()
+
+    # Delete transactions belonging to this bank first.
+    db_session.query(BankTransaction).filter(
+        BankTransaction.bank_id == bank.id
+    ).delete(synchronize_session=False)
+
+    db_session.commit()
 
     existing_bank = db_session.get(Bank, bank.id)
 

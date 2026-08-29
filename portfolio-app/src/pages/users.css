@@ -1,20 +1,67 @@
-/* General Layout */
+/* ==========================================================================
+   Design tokens
+   ========================================================================== */
+:root {
+  --up-bg: #0e0f11;
+  --up-surface: #161719;
+  --up-surface-elevated: #1e2023;
+  --up-border: #2c2e33;
+  --up-border-soft: #26282c;
+
+  --up-text: #f3f4f6;
+  --up-text-muted: #9ca0a8;
+  --up-text-dim: #6b6f76;
+
+  --up-primary: #5b8cff;
+  --up-primary-hover: #4574e6;
+  --up-primary-soft: rgba(91, 140, 255, 0.14);
+
+  --up-success: #22c55e;
+  --up-success-hover: #16a34a;
+
+  --up-danger: #f0475a;
+  --up-danger-hover: #d63a4c;
+  --up-danger-soft: rgba(240, 71, 90, 0.12);
+
+  --up-name: #34d399;
+
+  --up-radius-sm: 8px;
+  --up-radius-md: 12px;
+  --up-radius-lg: 18px;
+
+  --up-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --up-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --up-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+
+  --up-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   Base layout
+   ========================================================================== */
 body {
-  font-family: Arial, sans-serif;
-  background-color: #333;
-  color: #f9f9f9;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+  background: radial-gradient(circle at top, #17181b 0%, #0b0c0d 65%);
+  color: var(--up-text);
   margin: 0;
   padding: 0;
 }
 
 .users-container {
-  margin: 20px auto;
-  padding: 20px;
+  margin: clamp(16px, 4vw, 40px) auto;
+  padding: clamp(20px, 4vw, 36px);
+  width: 100%;
   max-width: 800px;
-  background-color: #151414;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(180deg, var(--up-surface) 0%, #131417 100%);
+  border: 1px solid var(--up-border-soft);
+  border-radius: var(--up-radius-lg);
+  box-shadow: var(--up-shadow-lg);
   position: relative;
+  box-sizing: border-box;
+}
+
+.users-container * {
+  box-sizing: border-box;
 }
 
 /* Add User Button */
@@ -22,79 +69,89 @@ body {
   position: absolute;
   top: 20px;
   right: 20px;
-  background-color: #007bff;
+  background: linear-gradient(135deg, var(--up-primary), var(--up-primary-hover));
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 8px 15px;
+  border-radius: var(--up-radius-sm);
+  padding: 8px 16px;
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  transition: transform var(--up-transition), box-shadow var(--up-transition);
 }
 
 .add-user-btn:hover {
-  background-color: #0056b3;
-  opacity: 0.9;
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: var(--up-shadow-sm);
 }
 
-/* Heading Styles */
+/* Headings */
 h2 {
   text-align: center;
-  font-size: 24px;
-  color: #f7f5f5;
-  margin-bottom: 20px;
-  padding-right: 100px; /* Space for add button */
+  font-size: clamp(20px, 2.4vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--up-text);
+  margin: 0 0 24px;
+  padding-right: 100px;
 }
 
 h3 {
-  font-size: 20px;
-  color: #d33030;
+  font-size: clamp(17px, 1.8vw, 21px);
+  font-weight: 600;
+  color: var(--up-text);
   margin-top: 20px;
 }
 
-/* User List */
+/* ==========================================================================
+   User list
+   ========================================================================== */
 .user-list {
   list-style-type: none;
   padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .user-item {
-  padding: 15px;
-  border: 1px solid #444;
-  border-radius: 6px;
-  margin-bottom: 15px;
-  background-color: #070707;
-  transition: all 0.3s ease;
+  padding: 18px 20px;
+  border: 1px solid var(--up-border-soft);
+  border-radius: var(--up-radius-md);
+  background: var(--up-surface-elevated);
+  transition: border-color var(--up-transition), transform var(--up-transition), box-shadow var(--up-transition);
 }
 
 .user-item:hover {
-  background-color: #1a1a1a;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  border-color: #3a3d43;
+  transform: translateY(-1px);
+  box-shadow: var(--up-shadow-sm);
 }
 
 .user-main-info {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
 .user-name {
-  font-weight: bold;
-  font-size: 18px;
-  color: #06aa1c;
+  font-weight: 700;
+  font-size: clamp(17px, 1.6vw, 20px);
+  color: var(--up-name);
 }
 
 .user-additional-info {
   display: flex;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 8px 20px;
   font-size: 14px;
-  color: #bbb;
-  padding-top: 8px;
-  border-top: 1px dashed #444;
+  color: var(--up-text-muted);
+  padding-top: 10px;
+  border-top: 1px dashed var(--up-border);
   margin-top: 8px;
 }
 
@@ -106,135 +163,177 @@ h3 {
 .user-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .user-actions button {
-  background-color: #007bff;
+  background: var(--up-primary);
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
+  border-radius: var(--up-radius-sm);
+  padding: 8px 16px;
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s ease;
-  min-width: 70px;
+  font-weight: 600;
+  transition: transform var(--up-transition), background-color var(--up-transition), opacity var(--up-transition);
+  min-width: 76px;
 }
 
-.user-actions button:hover {
+.user-actions button:hover:not(:disabled) {
   transform: translateY(-1px);
-  opacity: 0.9;
+  filter: brightness(1.08);
 }
 
-.user-actions button:active {
+.user-actions button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.user-actions .delete-button {
-  background-color: #dc3545;
+.user-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.user-actions .delete-button:hover {
-  background-color: #b52a34;
+.user-actions .delete-button {
+  background: var(--up-danger);
+}
+
+.user-actions .delete-button:hover:not(:disabled) {
+  background: var(--up-danger-hover);
 }
 
 .edit-btn {
-  background-color: #4907ff;
-  color: #212529;
+  background: var(--up-surface);
+  border: 1px solid var(--up-border);
+  color: var(--up-text);
 }
 
-.edit-btn:hover {
-  background-color: #2b07f8;
+.edit-btn:hover:not(:disabled) {
+  border-color: var(--up-primary);
+  color: var(--up-primary);
 }
 
-/* Forms */
+/* ==========================================================================
+   Edit form
+   ========================================================================== */
 .form-container {
-  background-color: #1e1e1e;
-  padding: 20px;
-  border-radius: 8px;
-  margin-top: 20px;
-  border: 1px solid #444;
+  background: var(--up-surface-elevated);
+  padding: clamp(18px, 3vw, 26px);
+  border-radius: var(--up-radius-md);
+  margin-top: 24px;
+  border: 1px solid var(--up-border-soft);
 }
 
 form {
   margin-top: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+@media (min-width: 560px) {
+  form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  form input[placeholder="Name"],
+  form input[type="password"] {
+    grid-column: span 2;
+  }
 }
 
 form input {
-  padding: 10px;
+  padding: 11px 14px;
   font-size: 14px;
-  border: 1px solid #444;
-  border-radius: 6px;
+  border: 1px solid var(--up-border);
+  border-radius: var(--up-radius-sm);
   outline: none;
-  background-color: #2d2d2d;
-  color: #fff;
-  transition: border-color 0.3s ease;
+  background: var(--up-bg);
+  color: var(--up-text);
+  transition: border-color var(--up-transition), box-shadow var(--up-transition);
+  width: 100%;
+}
+
+form input::placeholder {
+  color: var(--up-text-dim);
 }
 
 form input:focus {
-  border-color: #059ffe;
+  border-color: var(--up-primary);
+  box-shadow: 0 0 0 3px var(--up-primary-soft);
 }
 
-/* Form Buttons */
 .form-buttons {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 4px;
+  grid-column: 1 / -1;
 }
 
 .create-btn {
-  background-color: #28a745;
+  background: linear-gradient(135deg, var(--up-success), var(--up-success-hover));
   color: white;
   border: none;
-  border-radius: 6px;
-  padding: 8px 20px;
+  border-radius: var(--up-radius-sm);
+  padding: 10px 22px;
   cursor: pointer;
   font-size: 14px;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  transition: transform var(--up-transition), filter var(--up-transition);
 }
 
-.create-btn:hover {
-  background-color: #218838;
-  opacity: 0.9;
+.create-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
 }
 
 .cancel-btn {
-  background-color: #dc3545;
-  color: rgb(255, 255, 255);
+  background: transparent;
+  border: 1px solid var(--up-border);
+  color: var(--up-text-muted);
+  border-radius: var(--up-radius-sm);
+  padding: 10px 22px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: border-color var(--up-transition), color var(--up-transition);
 }
 
-.cancel-btn:hover {
-  background-color: #b52a34;
-  opacity: 0.9;
+.cancel-btn:hover:not(:disabled) {
+  border-color: var(--up-danger);
+  color: var(--up-danger);
 }
 
-/* Notifications */
+/* ==========================================================================
+   Notifications
+   ========================================================================== */
 .notification {
   position: fixed;
   top: 20px;
   right: 20px;
-  padding: 15px 20px;
-  border-radius: 5px;
+  max-width: min(90vw, 360px);
+  padding: 14px 20px;
+  border-radius: var(--up-radius-sm);
   color: white;
   z-index: 1000;
-  animation: slideIn 0.5s, fadeOut 0.5s 2.5s;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  font-size: 14px;
+  font-weight: 500;
+  animation: slideIn 0.4s ease, fadeOut 0.4s ease 2.5s;
+  box-shadow: var(--up-shadow-md);
 }
 
 .notification.success {
-  background-color: #4CAF50;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
 }
 
 .notification.error {
-  background-color: #860e05;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
 }
 
 @keyframes slideIn {
-  from { right: -300px; opacity: 0; }
-  to { right: 20px; opacity: 1; }
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes fadeOut {
@@ -242,14 +341,14 @@ form input:focus {
   to { opacity: 0; }
 }
 
-/* Loading states */
+/* ==========================================================================
+   Loading states
+   ========================================================================== */
 .loading-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.7);
+  inset: 0;
+  background: rgba(10, 10, 11, 0.75);
+  backdrop-filter: blur(3px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -257,18 +356,18 @@ form input:focus {
 }
 
 .loading-spinner {
-  border: 5px solid rgba(243, 243, 243, 0.3);
-  border-top: 5px solid #3498db;
+  border: 4px solid rgba(255, 255, 255, 0.12);
+  border-top: 4px solid var(--up-primary);
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  animation: spin 1s linear infinite;
+  width: 46px;
+  height: 46px;
+  animation: spin 0.9s linear infinite;
 }
 
 .loading {
   text-align: center;
-  padding: 20px;
-  color: #aaa;
+  padding: 24px;
+  color: var(--up-text-dim);
   font-style: italic;
 }
 
@@ -277,13 +376,15 @@ form input:focus {
   100% { transform: rotate(360deg); }
 }
 
-/* Error message (styled like savings) */
+/* ==========================================================================
+   Error banner
+   ========================================================================== */
 .error {
-  background-color: rgba(220, 53, 69, 0.15);
-  border: 1px solid #ff4c4c;
-  color: #ff4c4c;
+  background: var(--up-danger-soft);
+  border: 1px solid rgba(240, 71, 90, 0.4);
+  color: #ff8792;
   padding: 14px 44px 14px 16px;
-  border-radius: 6px;
+  border-radius: var(--up-radius-sm);
   font-size: 14px;
   margin: 20px 0;
   position: relative;
@@ -297,7 +398,7 @@ form input:focus {
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #ff4c4c;
+  color: #ff8792;
   font-size: 20px;
   font-weight: bold;
   cursor: pointer;
@@ -306,19 +407,214 @@ form input:focus {
 }
 
 .error button.error-dismiss:hover {
-  color: #e74c3c;
+  color: #ffb1b8;
 }
 
-/* Responsive Design */
+/* ==========================================================================
+   Delete confirmation modal
+   ========================================================================== */
+.delete-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 7, 8, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  z-index: 1100;
+  animation: fadeInBackdrop 0.2s ease;
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.delete-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--up-surface-elevated) 0%, #17181b 100%);
+  border: 1px solid var(--up-border-soft);
+  border-radius: var(--up-radius-lg);
+  padding: clamp(20px, 4vw, 28px);
+  box-shadow: var(--up-shadow-lg);
+  animation: popIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.delete-modal h3 {
+  margin-top: 0;
+  color: var(--up-danger);
+}
+
+.delete-warning {
+  font-size: 14px;
+  color: var(--up-text-muted);
+  line-height: 1.55;
+}
+
+.delete-warning strong {
+  color: var(--up-text);
+}
+
+.delete-warning p {
+  margin: 8px 0;
+}
+
+.backup-options {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--up-border);
+}
+
+.backup-options h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--up-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.backup-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.backup-btn {
+  flex: 1 1 140px;
+  background: var(--up-surface);
+  border: 1px solid var(--up-border);
+  color: var(--up-text);
+  border-radius: var(--up-radius-sm);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--up-transition), color var(--up-transition), transform var(--up-transition);
+}
+
+.backup-btn:hover:not(:disabled) {
+  border-color: var(--up-primary);
+  color: var(--up-primary);
+  transform: translateY(-1px);
+}
+
+.backup-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.backup-confirmed {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--up-success);
+}
+
+.delete-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+
+.delete-confirm-btn {
+  flex: 1 1 auto;
+  background: linear-gradient(135deg, var(--up-danger), var(--up-danger-hover));
+  color: white;
+  border: none;
+  border-radius: var(--up-radius-sm);
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--up-transition), filter var(--up-transition);
+}
+
+.delete-confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.delete-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.delete-cancel-btn {
+  flex: 1 1 auto;
+  background: transparent;
+  border: 1px solid var(--up-border);
+  color: var(--up-text-muted);
+  border-radius: var(--up-radius-sm);
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--up-transition), color var(--up-transition);
+}
+
+.delete-cancel-btn:hover:not(:disabled) {
+  border-color: var(--up-text-muted);
+  color: var(--up-text);
+}
+
+.delete-cancel-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Responsive: large screens / TV
+   ========================================================================== */
+@media (min-width: 1440px) {
+  .users-container {
+    max-width: 920px;
+  }
+}
+
+@media (min-width: 1920px) {
+  .users-container {
+    max-width: 1080px;
+    padding: 48px;
+  }
+
+  body {
+    font-size: 18px;
+  }
+
+  .user-item {
+    padding: 24px 26px;
+  }
+
+  .user-actions button {
+    padding: 10px 20px;
+    font-size: 16px;
+  }
+}
+
+/* ==========================================================================
+   Responsive: tablets / small laptops
+   ========================================================================== */
 @media (max-width: 768px) {
   .users-container {
-    padding: 15px;
-    margin: 10px;
+    padding: 18px;
+    margin: 12px;
   }
 
   h2 {
     padding-right: 0;
-    margin-bottom: 40px;
+    margin-bottom: 36px;
   }
 
   .add-user-btn {
@@ -341,7 +637,7 @@ form input:focus {
 
   .user-additional-info {
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
   }
 
   .form-buttons {
@@ -350,5 +646,36 @@ form input:focus {
 
   .form-buttons button {
     width: 100%;
+  }
+
+  .delete-modal-actions {
+    flex-direction: column;
+  }
+}
+
+/* ==========================================================================
+   Responsive: phones
+   ========================================================================== */
+@media (max-width: 420px) {
+  .users-container {
+    margin: 8px;
+    padding: 14px;
+    border-radius: var(--up-radius-md);
+  }
+
+  .user-actions button {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .backup-buttons {
+    flex-direction: column;
+  }
+
+  .notification {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    max-width: none;
   }
 }
