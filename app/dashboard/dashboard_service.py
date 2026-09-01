@@ -2,7 +2,7 @@ from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 
-from .models import (
+from ..models import (
     Asset,
     Bank,
     Saving,

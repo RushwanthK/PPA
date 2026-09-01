@@ -190,3 +190,36 @@ def test_bank(db_session, test_user):
     if existing_bank is not None:
         db_session.delete(existing_bank)
         db_session.commit()
+
+
+@pytest.fixture()
+def test_saving(db_session, test_user, test_bank):
+    from app.models import Saving, SavingTransaction
+
+    saving = Saving(
+        name="Test Saving",
+        user_id=test_user.id,
+        bank_id=test_bank.id,
+        balance=5000,
+    )
+
+    db_session.add(saving)
+    db_session.commit()
+
+    yield saving
+
+    db_session.rollback()
+
+    # Delete saving transactions first because the relationship
+    # does not currently use delete cascade.
+    db_session.query(SavingTransaction).filter(
+        SavingTransaction.saving_id == saving.id
+    ).delete(synchronize_session=False)
+
+    db_session.commit()
+
+    existing_saving = db_session.get(Saving, saving.id)
+
+    if existing_saving is not None:
+        db_session.delete(existing_saving)
+        db_session.commit()

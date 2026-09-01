@@ -38,10 +38,23 @@ def create_app():
     )
 
     from .routes import routes
-    from .dashboard_routes import dashboard_routes
+    from .dashboard.dashboard_routes import dashboard_routes
+    from .users.users_routes import users_routes
+    from .banks.bank_routes import bank_routes
+    from .savings.savings_routes import savings_routes
+    from .assets.assets_routes import assets_routes
+    from .credit_cards.credit_card_routes import credit_card_routes
+    from .login.login_routes import login_routes
+
 
     app.register_blueprint(routes)
     app.register_blueprint(dashboard_routes)
+    app.register_blueprint(users_routes)
+    app.register_blueprint(bank_routes)
+    app.register_blueprint(savings_routes)
+    app.register_blueprint(assets_routes)
+    app.register_blueprint(credit_card_routes)
+    app.register_blueprint(login_routes)
 
     @app.after_request
     def add_headers(response):
