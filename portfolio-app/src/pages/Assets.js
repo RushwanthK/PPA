@@ -6,9 +6,13 @@ import {
   createAsset,
   getAssetTransactions, 
   deleteAsset,
-  updateAsset
+  updateAsset,
+  getUsers,
+  exportUserTransactionsExcel,
+  exportUserTransactionsPdf
 } from '../services/api';
 import './Assets.css';
+import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
 
 export default function Assets() {
   const ASSET_CATEGORIES = [
@@ -40,6 +44,19 @@ export default function Assets() {
   const [showAddAssetForm, setShowAddAssetForm] = useState(false);
   const [expandedAssetId, setExpandedAssetId] = useState(null);
   const [transactions, setTransactions] = useState({});
+
+  // ---------- Delete confirmation dialog ----------
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState(null);
+  const [isDeletingAsset, setIsDeletingAsset] = useState(false);
+
+  // Errors specific to the delete dialog.
+  // These must stay inside the modal.
+  const [deleteDialogError, setDeleteDialogError] = useState(null);
+
+  // Backup/download state.
+  const [isDownloadingAssetBackup, setIsDownloadingAssetBackup] = useState(false);
+  const [assetBackupDownloaded, setAssetBackupDownloaded] = useState(false);
 
   // UI: search & sort
   const [searchText, setSearchText] = useState('');
@@ -160,28 +177,246 @@ export default function Assets() {
   };
 
   // Handle asset deletion
-  const handleDeleteAsset = async (assetId) => {
-    const asset = assets.find(a => a.id === assetId);
+  const handleDeleteAsset = (assetId) => {
+    if (isDeletingAsset || isDownloadingAssetBackup) {
+      return;
+    }
+
+    const asset = assets.find(
+      a => String(a.id) === String(assetId)
+    );
+
+    // Delete-specific errors belong inside the delete dialog.
+    setError(null);
+
     if (!asset) {
-      setError("Asset not found in state.");
+      setDeletingAssetId(assetId);
+      setDeleteDialogError('Asset not found in state.');
+      setAssetBackupDownloaded(false);
+      setShowDeleteModal(true);
       return;
     }
 
-    if (safeNumber(asset.balance) !== 0) {
-      setError("Asset cannot be deleted because its balance is not zero.");
+    const balance = safeNumber(asset.balance);
+
+    if (balance !== 0) {
+      setDeleteDialogError(
+        `Asset "${asset.name}" cannot be deleted because its current balance is Rs. ${balance.toFixed(2)}. Please bring the balance to zero and try again.`
+      );
+    } else {
+      setDeleteDialogError(null);
+    }
+
+    setDeletingAssetId(assetId);
+    setAssetBackupDownloaded(false);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeletingAsset || isDownloadingAssetBackup) {
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this asset?")) return;
+    setShowDeleteModal(false);
+    setDeletingAssetId(null);
+    setDeleteDialogError(null);
+    setAssetBackupDownloaded(false);
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getCurrentUserIdForBackup = async () => {
+    const usersResponse = await getUsers();
+
+    const users = Array.isArray(usersResponse)
+      ? usersResponse
+      : (
+          Array.isArray(usersResponse?.data)
+            ? usersResponse.data
+            : []
+        );
+
+    const userId = users[0]?.id;
+
+    if (!userId) {
+      throw new Error(
+        'Unable to determine the current user account for backup export.'
+      );
+    }
+
+    return userId;
+  };
+
+  const handleDownloadAssetBackupExcel = async () => {
+    if (
+      !deletingAssetId ||
+      isDeletingAsset ||
+      isDownloadingAssetBackup
+    ) {
+      return;
+    }
 
     try {
-      await deleteAsset(assetId);
-      // Trigger refresh
-      setRefreshFlag(prev => !prev);
+      setIsDownloadingAssetBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      // Reuse the existing transaction export API.
+      // "assets" means only asset transactions.
+      const response = await exportUserTransactionsExcel(
+        userId,
+        ['assets']
+      );
+
+      const filename =
+        `asset_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`;
+
+      downloadBlob(response.data, filename);
+
+      setAssetBackupDownloaded(true);
+    } catch (error) {
+      console.error(
+        'Failed to download asset Excel backup:',
+        error
+      );
+
+      setDeleteDialogError(
+        error.message ||
+        'Unable to download the Excel asset transaction backup. Your asset has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingAssetBackup(false);
+    }
+  };
+
+  const handleDownloadAssetBackupPdf = async () => {
+    if (
+      !deletingAssetId ||
+      isDeletingAsset ||
+      isDownloadingAssetBackup
+    ) {
+      return;
+    }
+
+    try {
+      setIsDownloadingAssetBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      const response = await exportUserTransactionsPdf(
+        userId,
+        ['assets']
+      );
+
+      const filename =
+        `asset_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`;
+
+      downloadBlob(response.data, filename);
+
+      setAssetBackupDownloaded(true);
+    } catch (error) {
+      console.error(
+        'Failed to download asset PDF backup:',
+        error
+      );
+
+      setDeleteDialogError(
+        error.message ||
+        'Unable to download the PDF asset transaction backup. Your asset has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingAssetBackup(false);
+    }
+  };
+
+  const handleConfirmDeleteAsset = async () => {
+    if (
+      !deletingAssetId ||
+      isDeletingAsset ||
+      isDownloadingAssetBackup
+    ) {
+      return;
+    }
+
+    const asset = assets.find(
+      a => String(a.id) === String(deletingAssetId)
+    );
+
+    if (!asset) {
+      setDeleteDialogError('Asset not found in state.');
+      return;
+    }
+
+    const balance = safeNumber(asset.balance);
+
+    // Preserve your existing rule:
+    // Assets can only be deleted when their balance is zero.
+    if (balance !== 0) {
+      setDeleteDialogError(
+        `Asset "${asset.name}" cannot be deleted because its current balance is Rs. ${balance.toFixed(2)}. Please bring the balance to zero and try again.`
+      );
+      return;
+    }
+
+    try {
+      setIsDeletingAsset(true);
+      setDeleteDialogError(null);
       setError(null);
-    } catch (err) {
-      console.error("Failed to delete asset:", err);
-      setError(err.response?.data?.error || "Failed to delete asset");
+
+      await deleteAsset(deletingAssetId);
+
+      // Preserve your existing refresh mechanism.
+      setRefreshFlag(prev => !prev);
+
+      // Remove cached transactions for the deleted asset.
+      setTransactions(prev => {
+        const next = { ...prev };
+        delete next[deletingAssetId];
+        return next;
+      });
+
+      if (expandedAssetId === deletingAssetId) {
+        setExpandedAssetId(null);
+      }
+
+      setShowDeleteModal(false);
+      setDeletingAssetId(null);
+      setDeleteDialogError(null);
+      setAssetBackupDownloaded(false);
+
+      setError(null);
+    } catch (error) {
+      console.error(
+        'Failed to delete asset:',
+        error
+      );
+
+      // Important:
+      // Keep deletion errors inside the dialog.
+      setDeleteDialogError(
+        error.message ||
+        `Failed to delete asset "${asset.name}".`
+      );
+    } finally {
+      setIsDeletingAsset(false);
     }
   };
 
@@ -511,6 +746,65 @@ export default function Assets() {
           </tr>
         </tfoot>
       </table>
+
+      {/* Asset Delete Confirmation Dialog */}
+      {deletingAssetId && (
+        <DeleteConfirmationDialog
+          isOpen={showDeleteModal}
+          onClose={closeDeleteModal}
+          onConfirm={handleConfirmDeleteAsset}
+
+          title="Delete Asset"
+
+          headline={`Delete "${
+            assets.find(
+              a => String(a.id) === String(deletingAssetId)
+            )?.name || 'this asset'
+          }"?`}
+
+          description={`Current balance: Rs. ${
+            safeNumber(
+              assets.find(
+                a => String(a.id) === String(deletingAssetId)
+              )?.balance
+            ).toFixed(2)
+          }`}
+
+          detailLines={[
+            'This action cannot be undone.',
+            'An asset can only be deleted when its balance is zero.',
+            'You may download a backup of the asset transaction history before deleting this asset.'
+          ]}
+
+          isDeleting={isDeletingAsset}
+
+          confirmLabel="Delete Asset"
+          confirmWithoutBackupLabel="Delete Without Backup"
+
+          cancelLabel="Cancel"
+
+          /* Backup */
+          showBackupSection={true}
+          backupSectionTitle="Backup Asset Transactions"
+
+          onDownloadExcel={handleDownloadAssetBackupExcel}
+          onDownloadPdf={handleDownloadAssetBackupPdf}
+
+          isDownloading={isDownloadingAssetBackup}
+          backupDownloaded={assetBackupDownloaded}
+
+          backupConfirmedMessage={
+            'Asset transaction backup downloaded successfully.'
+          }
+
+          excelDownloadLabel="Download Excel"
+          pdfDownloadLabel="Download PDF"
+
+          /* Error */
+          dialogError={deleteDialogError}
+          onDismissDialogError={() => setDeleteDialogError(null)}
+        />
+      )}
 
       {/* Transaction Form */}
       {transactionVisible && (

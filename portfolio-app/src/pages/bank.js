@@ -5,8 +5,12 @@ import {
   createBank,
   deleteBank,
   addBankTransaction,
-  getBankTransactions
+  getBankTransactions,
+  getUsers,
+  exportUserTransactionsExcel,
+  exportUserTransactionsPdf
 } from '../services/api';
+import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
 import './bank.css';
 
 export default function Bank() {
@@ -27,6 +31,16 @@ export default function Bank() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Delete-confirmation dialog state, kept separate from the general
+  // `loading` flag (same pattern as the Users page) so the rest of the
+  // page isn't disabled just because the delete dialog is open.
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingBankId, setDeletingBankId] = useState(null);
+  const [isDeletingBank, setIsDeletingBank] = useState(false);
+  const [deleteDialogError, setDeleteDialogError] = useState(null);
+  const [isDownloadingBankBackup, setIsDownloadingBankBackup] = useState(false);
+  const [bankBackupDownloaded, setBankBackupDownloaded] = useState(false);
 
   // UI state for search & sorting
   const [searchText, setSearchText] = useState('');
@@ -147,26 +161,239 @@ export default function Bank() {
     }
   };
 
-  const handleDeleteBank = async (bankId) => {
-    if (!window.confirm('Are you sure you want to delete this bank?')) return;
+  const handleDeleteBank = (bankId) => {
+    if (isDeletingBank || isDownloadingBankBackup) return;
+
+    const bank = banks.find(
+      b => String(b.id) === String(bankId)
+    );
+
+    const currentBalance = safeNumber(bank?.balance);
+
+    // General page errors should not be used for delete-dialog errors.
+    setError(null);
+    setSuccess(null);
+
+    // Show the balance validation directly inside the delete dialog.
+    setDeleteDialogError(
+      Math.abs(currentBalance) > 0.000001
+        ? `Cannot delete "${bank?.name || 'this bank'}" because its current balance is Rs. ${currentBalance.toFixed(2)}. Please bring the balance to zero and try again.`
+        : null
+    );
+
+    setDeletingBankId(bankId);
+    setBankBackupDownloaded(false);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeletingBank || isDownloadingBankBackup) return;
+
+    setShowDeleteModal(false);
+    setDeletingBankId(null);
+    setDeleteDialogError(null);
+    setBankBackupDownloaded(false);
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getCurrentUserIdForBackup = async () => {
+    const usersResponse = await getUsers();
+
+    const users = Array.isArray(usersResponse)
+      ? usersResponse
+      : (
+          Array.isArray(usersResponse?.data)
+            ? usersResponse.data
+            : []
+        );
+
+    const userId = users[0]?.id;
+
+    if (!userId) {
+      throw new Error(
+        'Unable to determine the current user account for backup export.'
+      );
+    }
+
+    return userId;
+  };
+
+  const handleDownloadBankBackupExcel = async () => {
+    if (
+      !deletingBankId ||
+      isDownloadingBankBackup ||
+      isDeletingBank
+    ) {
+      return;
+    }
+
     try {
+      setIsDownloadingBankBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      // IMPORTANT:
+      // This reuses your existing Users export endpoint.
+      // categories=['banks'] means export bank transactions only.
+      const response = await exportUserTransactionsExcel(
+        userId,
+        ['banks']
+      );
+
+      const filename =
+        `bank_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`;
+
+      downloadBlob(response.data, filename);
+
+      setBankBackupDownloaded(true);
+    } catch (err) {
+      console.error(
+        'Failed to download bank Excel backup:',
+        err
+      );
+
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the Excel transaction backup. Your bank account has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingBankBackup(false);
+    }
+  };
+
+  const handleDownloadBankBackupPdf = async () => {
+    if (
+      !deletingBankId ||
+      isDownloadingBankBackup ||
+      isDeletingBank
+    ) {
+      return;
+    }
+
+    try {
+      setIsDownloadingBankBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      const response = await exportUserTransactionsPdf(
+        userId,
+        ['banks']
+      );
+
+      const filename =
+        `bank_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`;
+
+      downloadBlob(response.data, filename);
+
+      setBankBackupDownloaded(true);
+    } catch (err) {
+      console.error(
+        'Failed to download bank PDF backup:',
+        err
+      );
+
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the PDF transaction backup. Your bank account has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingBankBackup(false);
+    }
+  };
+
+  const handleConfirmDeleteBank = async () => {
+    if (
+      !deletingBankId ||
+      isDeletingBank ||
+      isDownloadingBankBackup
+    ) {
+      return;
+    }
+
+    const bank = banks.find(
+      b => String(b.id) === String(deletingBankId)
+    );
+
+    const currentBalance = safeNumber(bank?.balance);
+
+    // Prevent the request from even being sent when the balance
+    // is non-zero. The error stays inside the dialog.
+    if (Math.abs(currentBalance) > 0.000001) {
+      setDeleteDialogError(
+        `Cannot delete "${bank?.name || 'this bank'}" because its current balance is Rs. ${currentBalance.toFixed(2)}. Please bring the balance to zero and try again.`
+      );
+
+      return;
+    }
+
+    try {
+      setIsDeletingBank(true);
+
+      // Delete-specific errors belong to the dialog.
+      setDeleteDialogError(null);
+
+      // Make sure an old page-level error does not appear behind
+      // the delete modal.
       setError(null);
       setSuccess(null);
-      setLoading(true);
-      await deleteBank(bankId);
+
+      await deleteBank(deletingBankId);
+
       const banksResponse = await getBanks();
-      setBanks(banksResponse.data || banksResponse || []);
+
+      setBanks(
+        banksResponse.data ||
+        banksResponse ||
+        []
+      );
+
+      setShowDeleteModal(false);
+      setDeletingBankId(null);
+      setBankBackupDownloaded(false);
+      setDeleteDialogError(null);
+
       setSuccess('Bank deleted successfully!');
     } catch (err) {
       console.error('Error deleting bank:', err);
-      // customized error message (as you had)
-      if (err.response?.data?.error?.includes('linked savings accounts')) {
-        setError('Cannot delete bank because it has linked savings accounts. Please remove all linked savings accounts first.');
+
+      const errorMessage =
+        err.message ||
+        'Failed to delete bank';
+
+      // Your api.js converts the Axios error into a normal Error,
+      // so err.message is the reliable value here.
+      if (
+        errorMessage
+          .toLowerCase()
+          .includes('linked savings accounts')
+      ) {
+        setDeleteDialogError(
+          'Cannot delete bank because it has linked savings accounts. Please remove all linked savings accounts first.'
+        );
       } else {
-        setError(err.message || 'Failed to delete bank');
+        setDeleteDialogError(errorMessage);
       }
     } finally {
-      setLoading(false);
+      setIsDeletingBank(false);
     }
   };
 
@@ -248,6 +475,8 @@ export default function Bank() {
     }, { balance: 0 });
   }, [visibleBanks]);
 
+  const bankPendingDeletion = banks.find(b => b.id === deletingBankId) || null;
+
   // ---------- Render ----------
   if (loading && banks.length === 0) return <div className="loading">Loading banks...</div>;
 
@@ -269,7 +498,7 @@ export default function Bank() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+      <div className="bank-toolbar">
         <button
           type="button"
           onClick={() => setShowForm(true)}
@@ -279,13 +508,13 @@ export default function Bank() {
           {loading ? 'Processing...' : 'Add Bank'}
         </button>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="bank-toolbar-search">
           <input
             type="text"
             placeholder="Search by name..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ padding: '8px 10px', borderRadius: 4, border: '1px solid #444', background: '#2d2d2d', color: '#fff' }}
+            className="search-input"
             aria-label="Search banks by name"
           />
         </div>
@@ -326,7 +555,7 @@ export default function Bank() {
       {showTransactionForm && (
         <div className="modal transaction-form-modal">
           <div className="modal-content">
-            <h2>Add Transaction - <span style={{ color: '#007bff' }}>{banks.find(b => String(b.id) === String(transactionData.bankId))?.name || 'Bank'}</span></h2>
+            <h2>Add Transaction - <span className="accent-text">{banks.find(b => String(b.id) === String(transactionData.bankId))?.name || 'Bank'}</span></h2>
             <form onSubmit={handleTransactionSubmit}>
               <div className="form-group">
                 <label htmlFor="type">Transaction Type:</label>
@@ -460,7 +689,7 @@ export default function Bank() {
                     <button type="button" onClick={() => handleEdit(bank)} className="edit-button" disabled={loading}>Edit</button>
                     <button type="button" onClick={() => handleAddTransaction(bank.id)} className="transaction-button" disabled={loading}>Add Transaction</button>
                     <button type="button" onClick={() => handleViewTransactions(bank.id)} className="view-button" disabled={loading}>View Transactions</button>
-                    <button type="button" onClick={() => handleDeleteBank(bank.id)} className="delete-button" disabled={loading}>Delete</button>
+                    <button type="button" onClick={() => handleDeleteBank(bank.id)} className="delete-button" disabled={loading || isDeletingBank}>Delete</button>
                   </td>
                 </tr>
               ))
@@ -480,6 +709,64 @@ export default function Bank() {
           </tfoot>
         </table>
       </div>
+
+      {deletingBankId && (
+        <DeleteConfirmationDialog
+          isOpen={showDeleteModal}
+          onClose={closeDeleteModal}
+          onConfirm={handleConfirmDeleteBank}
+
+          title="Delete Bank Account"
+
+          headline={`Delete "${bankPendingDeletion?.name || 'this bank'}"?`}
+
+          description={
+            `Current balance: Rs. ${
+              safeNumber(bankPendingDeletion?.balance).toFixed(2)
+            }`
+          }
+
+          detailLines={[
+            'This action cannot be undone.',
+            'A bank account can only be deleted once its balance is zero and it has no linked savings accounts.',
+            'You may download a backup of all bank transaction history before deleting this bank.'
+          ]}
+
+          isDeleting={isDeletingBank}
+
+          confirmLabel="Delete Bank"
+          confirmWithoutBackupLabel="Delete Without Backup"
+
+          cancelLabel="Cancel"
+
+          /* ---------------- BACKUP ---------------- */
+
+          showBackupSection={true}
+
+          backupSectionTitle="Backup Bank Transactions"
+
+          onDownloadExcel={handleDownloadBankBackupExcel}
+          onDownloadPdf={handleDownloadBankBackupPdf}
+
+          isDownloading={isDownloadingBankBackup}
+
+          backupDownloaded={bankBackupDownloaded}
+
+          backupConfirmedMessage={
+            'Bank transaction backup downloaded successfully.'
+          }
+
+          excelDownloadLabel="Download Excel"
+          pdfDownloadLabel="Download PDF"
+
+          /* ---------------- ERROR ---------------- */
+
+          dialogError={deleteDialogError}
+          onDismissDialogError={() =>
+            setDeleteDialogError(null)
+          }
+        />
+      )}
     </div>
   );
 }

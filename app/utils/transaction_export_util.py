@@ -1,277 +1,408 @@
 from io import BytesIO
+from html import escape
 
 from openpyxl import Workbook
-
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet
+from openpyxl.styles import Alignment, Font, PatternFill
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    Paragraph,
     SimpleDocTemplate,
+    Spacer,
     Table,
     TableStyle,
-    Paragraph,
-    Spacer
 )
 
-from ..models import (
-    Transaction,
-    BankTransaction,
-    CreditCardTransaction,
-    AssetTransaction,
-    SavingTransaction,
-    Bank,
-    CreditCard,
-    Asset,
-    Saving,
-    TransferTransaction
-)
 from .. import db
+from ..models import (
+    Asset,
+    AssetTransaction,
+    Bank,
+    BankTransaction,
+    CreditCard,
+    CreditCardTransaction,
+    Saving,
+    SavingTransaction,
+)
 
-def get_transaction_export_rows(user_id):
+
+# ============================================================
+# EXPORT CATEGORY CONFIGURATION
+# ============================================================
+
+TRANSACTION_EXPORT_CONFIG = {
+    "banks": {
+        "label": "Banks",
+        "account_type": "Bank",
+        "transaction_model": BankTransaction,
+        "account_model": Bank,
+        "account_id_field": "bank_id",
+        "balance_field": "bank_balance_after",
+    },
+    "savings": {
+        "label": "Savings",
+        "account_type": "Saving",
+        "transaction_model": SavingTransaction,
+        "account_model": Saving,
+        "account_id_field": "saving_id",
+        "balance_field": "saving_balance_after",
+    },
+    "assets": {
+        "label": "Assets",
+        "account_type": "Asset",
+        "transaction_model": AssetTransaction,
+        "account_model": Asset,
+        "account_id_field": "asset_id",
+        "balance_field": "asset_balance_after",
+    },
+    "credit_cards": {
+        "label": "Credit Cards",
+        "account_type": "Credit Card",
+        "transaction_model": CreditCardTransaction,
+        "account_model": CreditCard,
+        "account_id_field": "credit_card_id",
+        "balance_field": "card_balance_after",
+    },
+}
+
+CATEGORY_ORDER = tuple(TRANSACTION_EXPORT_CONFIG.keys())
+
+CATEGORY_ALIASES = {
+    "bank": "banks",
+    "saving": "savings",
+    "asset": "assets",
+    "credit_card": "credit_cards",
+    "credit-card": "credit_cards",
+    "creditcard": "credit_cards",
+    "credit-cards": "credit_cards",
+    "select_all": "all",
+    "select-all": "all",
+}
+
+TRANSACTION_HEADERS = [
+    "ID",
+    "Date",
+    "Amount",
+    "Transaction Type",
+    "Description",
+    "Category",
+    "Account Type",
+    "Account Name",
+    "Balance After",
+]
+
+TRANSFER_HEADERS = [
+    "ID",
+    "Date",
+    "Amount",
+    "From Account Type",
+    "From Account ID",
+    "To Account Type",
+    "To Account ID",
+    "Description",
+    "Fee",
+]
+
+
+# ============================================================
+# CATEGORY NORMALIZATION
+# ============================================================
+
+def normalize_export_categories(values=None):
     """
-    Return normalized transaction rows for the specified user.
+    Validate and normalize selected transaction categories.
 
-    Includes all Transaction subclasses:
-    - BankTransaction
-    - CreditCardTransaction
-    - AssetTransaction
-    - SavingTransaction
+    Supported values:
+        all
+        banks
+        savings
+        assets
+        credit_cards
+
+    The function also accepts comma-separated values and repeated
+    query parameters, for example:
+
+        categories=assets,savings
+
+    or:
+
+        categories=assets&categories=savings
     """
 
-    transactions = (
-        db.session.query(Transaction)
-        .filter(Transaction.user_id == user_id)
-        .order_by(Transaction.date.asc(), Transaction.id.asc())
-        .all()
-    )
+    if not values:
+        return list(CATEGORY_ORDER)
 
-    rows = []
+    tokens = []
 
-    for transaction in transactions:
-        account_type = ""
-        account_name = ""
-        balance_after = ""
-
-        if isinstance(transaction, BankTransaction):
-            account_type = "Bank"
-            bank = db.session.get(Bank, transaction.bank_id)
-
-            if bank:
-                account_name = bank.name
-
-            balance_after = transaction.bank_balance_after
-
-        elif isinstance(transaction, CreditCardTransaction):
-            account_type = "Credit Card"
-            card = db.session.get(
-                CreditCard,
-                transaction.credit_card_id
-            )
-
-            if card:
-                account_name = card.name
-
-            balance_after = transaction.card_balance_after
-
-        elif isinstance(transaction, AssetTransaction):
-            account_type = "Asset"
-            asset = db.session.get(
-                Asset,
-                transaction.asset_id
-            )
-
-            if asset:
-                account_name = asset.name
-
-            balance_after = transaction.asset_balance_after
-
-        elif isinstance(transaction, SavingTransaction):
-            account_type = "Saving"
-            saving = db.session.get(
-                Saving,
-                transaction.saving_id
-            )
-
-            if saving:
-                account_name = saving.name
-
-            balance_after = transaction.saving_balance_after
-
-        else:
-            account_type = "Transaction"
-
-        rows.append({
-            "id": transaction.id,
-            "date": (
-                transaction.date.strftime("%Y-%m-%d %H:%M:%S")
-                if transaction.date
-                else ""
-            ),
-            "amount": transaction.amount,
-            "transaction_type": transaction.transaction_type or "",
-            "description": transaction.description or "",
-            "category": transaction.category or "",
-            "account_type": account_type,
-            "account_name": account_name,
-            "balance_after": balance_after
-        })
-
-    return rows
-
-
-def get_transfer_export_rows(user_id):
-    """
-    Return transfer transaction rows for the specified user.
-    """
-
-    transfers = (
-        db.session.query(TransferTransaction)
-        .filter(TransferTransaction.user_id == user_id)
-        .order_by(
-            TransferTransaction.date.asc(),
-            TransferTransaction.id.asc()
+    for value in values:
+        tokens.extend(
+            token.strip().lower()
+            for token in value.split(",")
+            if token.strip()
         )
-        .all()
-    )
 
-    rows = []
+    if not tokens:
+        return list(CATEGORY_ORDER)
 
-    for transfer in transfers:
-        rows.append({
-            "id": transfer.id,
-            "date": (
-                transfer.date.strftime("%Y-%m-%d %H:%M:%S")
-                if transfer.date
-                else ""
-            ),
-            "amount": transfer.amount,
-            "from_account_type": (
-                transfer.from_account_type or ""
-            ),
-            "from_account_id": (
-                transfer.from_account_id or ""
-            ),
-            "to_account_type": (
-                transfer.to_account_type or ""
-            ),
-            "to_account_id": (
-                transfer.to_account_id or ""
-            ),
-            "description": transfer.description or "",
-            "fee": transfer.fee or 0
-        })
-
-    return rows
-
-
-def get_total_transaction_history_count(user_id):
-    transaction_count = (
-        db.session.query(Transaction)
-        .filter(Transaction.user_id == user_id)
-        .count()
-    )
-
-    transfer_count = (
-        db.session.query(TransferTransaction)
-        .filter(TransferTransaction.user_id == user_id)
-        .count()
-    )
-
-    return transaction_count + transfer_count
-
-
-def create_transaction_excel(user_id):
-    transactions = get_transaction_export_rows(user_id)
-    transfers = get_transfer_export_rows(user_id)
-
-    workbook = Workbook()
-
-    # -----------------------------
-    # Transactions worksheet
-    # -----------------------------
-    transaction_sheet = workbook.active
-    transaction_sheet.title = "Transactions"
-
-    transaction_headers = [
-        "ID",
-        "Date",
-        "Amount",
-        "Transaction Type",
-        "Description",
-        "Category",
-        "Account Type",
-        "Account Name",
-        "Balance After"
+    normalized = [
+        CATEGORY_ALIASES.get(token, token)
+        for token in tokens
     ]
 
-    transaction_sheet.append(transaction_headers)
+    if "all" in normalized:
+        if len(normalized) > 1:
+            raise ValueError(
+                "'all' cannot be combined with other categories"
+            )
 
-    for row in transactions:
-        transaction_sheet.append([
+        return list(CATEGORY_ORDER)
+
+    unknown = [
+        category
+        for category in normalized
+        if category not in TRANSACTION_EXPORT_CONFIG
+    ]
+
+    if unknown:
+        allowed = ", ".join(
+            ["all", *CATEGORY_ORDER]
+        )
+
+        raise ValueError(
+            f"Invalid transaction category: {unknown[0]}. "
+            f"Allowed values: {allowed}"
+        )
+
+    # Always return categories in a stable backend-defined order.
+    return [
+        category
+        for category in CATEGORY_ORDER
+        if category in normalized
+    ]
+
+
+# ============================================================
+# COMMON TRANSACTION DATA LAYER
+# ============================================================
+
+def get_transaction_export_rows(
+    user_id,
+    categories=None,
+):
+    """
+    Return normalized transaction data grouped by category.
+
+    This function contains no Excel/PDF logic. It is the common
+    data layer used by all export formats.
+    """
+
+    selected_categories = normalize_export_categories(
+        categories
+    )
+
+    export_data = {
+        category: []
+        for category in selected_categories
+    }
+
+    for category in selected_categories:
+        config = TRANSACTION_EXPORT_CONFIG[category]
+
+        transaction_model = config["transaction_model"]
+        account_model = config["account_model"]
+
+        account_id_column = getattr(
+            transaction_model,
+            config["account_id_field"],
+        )
+
+        balance_field = config["balance_field"]
+
+        records = (
+            db.session
+            .query(
+                transaction_model,
+                account_model.name,
+            )
+            .outerjoin(
+                account_model,
+                account_id_column == account_model.id,
+            )
+            .filter(
+                transaction_model.user_id == user_id
+            )
+            .order_by(
+                transaction_model.date.asc(),
+                transaction_model.id.asc(),
+            )
+            .all()
+        )
+
+        export_data[category] = [
+            {
+                "id": transaction.id,
+                "date": transaction.date,
+                "amount": transaction.amount,
+                "transaction_type": (
+                    transaction.transaction_type or ""
+                ),
+                "description": (
+                    transaction.description or ""
+                ),
+                "category": transaction.category or "",
+                "account_type": config["account_type"],
+                "account_name": account_name or "",
+                "balance_after": getattr(
+                    transaction,
+                    balance_field,
+                ),
+            }
+            for transaction, account_name in records
+        ]
+
+    return export_data
+
+
+# ============================================================
+# EXCEL
+# ============================================================
+
+def _style_excel_sheet(sheet):
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="D9E1F2",
+    )
+
+    header_font = Font(bold=True)
+
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    for row in sheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True,
+            )
+
+    for cell in sheet["B"][1:]:
+        if cell.value is not None:
+            cell.number_format = "yyyy-mm-dd hh:mm:ss"
+
+    for cell in sheet["C"][1:]:
+        if cell.value is not None:
+            cell.number_format = "0.00"
+
+    for cell in sheet["I"][1:]:
+        if cell.value is not None:
+            cell.number_format = "0.00"
+
+    for column_cells in sheet.columns:
+        max_length = max(
+            len(str(cell.value))
+            if cell.value is not None
+            else 0
+            for cell in column_cells
+        )
+
+        column_letter = (
+            column_cells[0].column_letter
+        )
+
+        sheet.column_dimensions[
+            column_letter
+        ].width = min(
+            max(max_length + 2, 12),
+            40,
+        )
+
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+
+
+def _append_transaction_sheet(
+    workbook,
+    title,
+    rows,
+):
+    sheet = workbook.create_sheet(title)
+
+    sheet.append(TRANSACTION_HEADERS)
+
+    for row in rows:
+        excel_date = row["date"]
+
+        if (
+            excel_date is not None
+            and excel_date.tzinfo is not None
+        ):
+            excel_date = excel_date.replace(
+                tzinfo=None
+            )
+
+        sheet.append([
             row["id"],
-            row["date"],
+            excel_date,
             row["amount"],
             row["transaction_type"],
             row["description"],
             row["category"],
             row["account_type"],
             row["account_name"],
-            row["balance_after"]
+            row["balance_after"],
         ])
 
-    # -----------------------------
-    # Transfers worksheet
-    # -----------------------------
-    transfer_sheet = workbook.create_sheet("Transfers")
+    _style_excel_sheet(sheet)
 
-    transfer_headers = [
-        "ID",
-        "Date",
-        "Amount",
-        "From Account Type",
-        "From Account ID",
-        "To Account Type",
-        "To Account ID",
-        "Description",
-        "Fee"
-    ]
+    return sheet
 
-    transfer_sheet.append(transfer_headers)
 
-    for row in transfers:
-        transfer_sheet.append([
-            row["id"],
-            row["date"],
-            row["amount"],
-            row["from_account_type"],
-            row["from_account_id"],
-            row["to_account_type"],
-            row["to_account_id"],
-            row["description"],
-            row["fee"]
-        ])
+def _append_empty_transfer_sheet(workbook):
+    sheet = workbook.create_sheet("Transfers")
 
-    # Make columns readable.
-    for sheet in workbook.worksheets:
-        for column_cells in sheet.columns:
-            max_length = 0
+    sheet.append(TRANSFER_HEADERS)
 
-            for cell in column_cells:
-                value = "" if cell.value is None else str(cell.value)
-                max_length = max(
-                    max_length,
-                    len(value)
-                )
+    _style_excel_sheet(sheet)
 
-            column_letter = column_cells[0].column_letter
+    return sheet
 
-            sheet.column_dimensions[
-                column_letter
-            ].width = min(max_length + 2, 40)
 
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = sheet.dimensions
+def create_transaction_excel(
+    user_id,
+    categories=None,
+):
+    selected_categories = normalize_export_categories(
+        categories
+    )
+
+    export_data = get_transaction_export_rows(
+        user_id,
+        selected_categories,
+    )
+
+    workbook = Workbook()
+
+    # Remove the default Sheet.
+    workbook.remove(workbook.active)
+
+    for category in selected_categories:
+        config = TRANSACTION_EXPORT_CONFIG[category]
+
+        _append_transaction_sheet(
+            workbook,
+            config["label"],
+            export_data[category],
+        )
+
+    # Transfers deliberately remain empty for the current scope.
+    _append_empty_transfer_sheet(workbook)
 
     output = BytesIO()
 
@@ -282,233 +413,330 @@ def create_transaction_excel(user_id):
     return output
 
 
-def create_transaction_pdf(user_id):
-    transactions = get_transaction_export_rows(user_id)
-    transfers = get_transfer_export_rows(user_id)
+# ============================================================
+# PDF
+# ============================================================
+
+def _pdf_cell(value, style):
+    text = "" if value is None else str(value)
+
+    return Paragraph(
+        escape(text),
+        style,
+    )
+
+
+def _build_pdf_transaction_table(
+    rows,
+    styles,
+):
+    data = [[
+        _pdf_cell(
+            header,
+            styles["TableHeader"],
+        )
+        for header in TRANSACTION_HEADERS
+    ]]
+
+    for row in rows:
+        date_value = (
+            row["date"].strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            if row["date"]
+            else ""
+        )
+
+        data.append([
+            _pdf_cell(
+                row["id"],
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                date_value,
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                row["amount"],
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                row["transaction_type"],
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                row["description"],
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                row["category"],
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                row["account_type"],
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                row["account_name"],
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                row["balance_after"],
+                styles["TableCell"],
+            ),
+        ])
+
+    if len(data) == 1:
+        data.append([
+            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell(
+                "No transaction records",
+                styles["TableCell"],
+            ),
+            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell("", styles["TableCell"]),
+        ])
+
+    table = Table(
+        data,
+        repeatRows=1,
+        colWidths=[
+            11 * mm,
+            28 * mm,
+            18 * mm,
+            22 * mm,
+            55 * mm,
+            25 * mm,
+            23 * mm,
+            35 * mm,
+            25 * mm,
+        ],
+    )
+
+    table.setStyle(TableStyle([
+        (
+            "BACKGROUND",
+            (0, 0),
+            (-1, 0),
+            colors.lightgrey,
+        ),
+        (
+            "GRID",
+            (0, 0),
+            (-1, -1),
+            0.5,
+            colors.grey,
+        ),
+        (
+            "VALIGN",
+            (0, 0),
+            (-1, -1),
+            "TOP",
+        ),
+        (
+            "LEFTPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "RIGHTPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "TOPPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "BOTTOMPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+    ]))
+
+    return table
+
+
+def _build_empty_transfer_table(styles):
+    data = [[
+        Paragraph(
+            header,
+            styles["TableHeader"],
+        )
+        for header in TRANSFER_HEADERS
+    ], [
+        Paragraph("", styles["TableCell"]),
+        Paragraph("", styles["TableCell"]),
+        Paragraph("", styles["TableCell"]),
+        Paragraph("", styles["TableCell"]),
+        Paragraph("", styles["TableCell"]),
+        Paragraph("", styles["TableCell"]),
+        Paragraph("", styles["TableCell"]),
+        Paragraph(
+            "No transfer records",
+            styles["TableCell"],
+        ),
+        Paragraph("", styles["TableCell"]),
+    ]]
+
+    table = Table(
+        data,
+        repeatRows=1,
+    )
+
+    table.setStyle(TableStyle([
+        (
+            "BACKGROUND",
+            (0, 0),
+            (-1, 0),
+            colors.lightgrey,
+        ),
+        (
+            "GRID",
+            (0, 0),
+            (-1, -1),
+            0.5,
+            colors.grey,
+        ),
+        (
+            "VALIGN",
+            (0, 0),
+            (-1, -1),
+            "TOP",
+        ),
+        (
+            "LEFTPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "RIGHTPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "TOPPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+        (
+            "BOTTOMPADDING",
+            (0, 0),
+            (-1, -1),
+            3,
+        ),
+    ]))
+
+    return table
+
+
+def create_transaction_pdf(
+    user_id,
+    categories=None,
+):
+    selected_categories = normalize_export_categories(
+        categories
+    )
+
+    export_data = get_transaction_export_rows(
+        user_id,
+        selected_categories,
+    )
 
     output = BytesIO()
 
     document = SimpleDocTemplate(
         output,
         pagesize=landscape(A4),
-        rightMargin=10 * mm,
-        leftMargin=10 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm
+        rightMargin=8 * mm,
+        leftMargin=8 * mm,
+        topMargin=8 * mm,
+        bottomMargin=8 * mm,
     )
 
     styles = getSampleStyleSheet()
 
-    elements = []
+    styles.add(
+        ParagraphStyle(
+            name="TableHeader",
+            parent=styles["BodyText"],
+            fontSize=6.5,
+            leading=7.5,
+            fontName="Helvetica-Bold",
+        )
+    )
 
-    elements.append(
+    styles.add(
+        ParagraphStyle(
+            name="TableCell",
+            parent=styles["BodyText"],
+            fontSize=6.5,
+            leading=7.5,
+        )
+    )
+
+    elements = [
         Paragraph(
             "PPA Transaction History Backup",
-            styles["Title"]
-        )
-    )
+            styles["Title"],
+        ),
+        Spacer(1, 4 * mm),
+    ]
 
-    elements.append(
-        Spacer(1, 5 * mm)
-    )
+    for index, category in enumerate(
+        selected_categories
+    ):
+        config = TRANSACTION_EXPORT_CONFIG[category]
 
-    # -----------------------------
-    # Transactions
-    # -----------------------------
-    elements.append(
-        Paragraph(
-            "Transactions",
-            styles["Heading2"]
-        )
-    )
-
-    transaction_data = [[
-        "ID",
-        "Date",
-        "Amount",
-        "Type",
-        "Description",
-        "Category",
-        "Account",
-        "Account Name",
-        "Balance After"
-    ]]
-
-    for row in transactions:
-        transaction_data.append([
-            str(row["id"]),
-            row["date"],
-            str(row["amount"]),
-            row["transaction_type"],
-            row["description"],
-            row["category"],
-            row["account_type"],
-            row["account_name"],
-            str(row["balance_after"])
-        ])
-
-    if len(transaction_data) == 1:
-        transaction_data.append([
-            "",
-            "",
-            "",
-            "",
-            "No transaction records",
-            "",
-            "",
-            "",
-            ""
-        ])
-
-    transaction_table = Table(
-        transaction_data,
-        repeatRows=1
-    )
-
-    transaction_table.setStyle(
-        TableStyle([
-            (
-                "BACKGROUND",
-                (0, 0),
-                (-1, 0),
-                colors.lightgrey
-            ),
-            (
-                "GRID",
-                (0, 0),
-                (-1, -1),
-                0.5,
-                colors.grey
-            ),
-            (
-                "VALIGN",
-                (0, 0),
-                (-1, -1),
-                "TOP"
-            ),
-            (
-                "FONTSIZE",
-                (0, 0),
-                (-1, -1),
-                7
-            ),
-            (
-                "BOTTOMPADDING",
-                (0, 0),
-                (-1, -1),
-                4
-            ),
-            (
-                "TOPPADDING",
-                (0, 0),
-                (-1, -1),
-                4
+        elements.append(
+            Paragraph(
+                config["label"],
+                styles["Heading2"],
             )
-        ])
-    )
+        )
 
-    elements.append(transaction_table)
+        elements.append(
+            _build_pdf_transaction_table(
+                export_data[category],
+                styles,
+            )
+        )
 
+        if index < len(selected_categories) - 1:
+            elements.append(
+                Spacer(1, 6 * mm)
+            )
+
+    # Transfers are deliberately empty.
     elements.append(
-        Spacer(1, 8 * mm)
+        Spacer(1, 6 * mm)
     )
 
-    # -----------------------------
-    # Transfers
-    # -----------------------------
     elements.append(
         Paragraph(
             "Transfers",
-            styles["Heading2"]
+            styles["Heading2"],
         )
     )
 
-    transfer_data = [[
-        "ID",
-        "Date",
-        "Amount",
-        "From Type",
-        "From ID",
-        "To Type",
-        "To ID",
-        "Description",
-        "Fee"
-    ]]
-
-    for row in transfers:
-        transfer_data.append([
-            str(row["id"]),
-            row["date"],
-            str(row["amount"]),
-            row["from_account_type"],
-            str(row["from_account_id"]),
-            row["to_account_type"],
-            str(row["to_account_id"]),
-            row["description"],
-            str(row["fee"])
-        ])
-
-    if len(transfer_data) == 1:
-        transfer_data.append([
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "No transfer records",
-            ""
-        ])
-
-    transfer_table = Table(
-        transfer_data,
-        repeatRows=1
+    elements.append(
+        _build_empty_transfer_table(
+            styles
+        )
     )
-
-    transfer_table.setStyle(
-        TableStyle([
-            (
-                "BACKGROUND",
-                (0, 0),
-                (-1, 0),
-                colors.lightgrey
-            ),
-            (
-                "GRID",
-                (0, 0),
-                (-1, -1),
-                0.5,
-                colors.grey
-            ),
-            (
-                "VALIGN",
-                (0, 0),
-                (-1, -1),
-                "TOP"
-            ),
-            (
-                "FONTSIZE",
-                (0, 0),
-                (-1, -1),
-                7
-            ),
-            (
-                "BOTTOMPADDING",
-                (0, 0),
-                (-1, -1),
-                4
-            ),
-            (
-                "TOPPADDING",
-                (0, 0),
-                (-1, -1),
-                4
-            )
-        ])
-    )
-
-    elements.append(transfer_table)
 
     document.build(elements)
 

@@ -1,14 +1,19 @@
-from flask import Blueprint, jsonify, send_file
+from flask import Blueprint, jsonify, request, send_file
 from datetime import datetime
 
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import (
+    get_jwt_identity,
+    jwt_required,
+)
 
 from . import db
 from .models import User
 
 from .utils.transaction_export_util import (
+    CATEGORY_ORDER,
     create_transaction_excel,
     create_transaction_pdf,
+    normalize_export_categories,
 )
 
 routes = Blueprint('routes', __name__)
@@ -18,30 +23,87 @@ routes = Blueprint('routes', __name__)
 def home():
     return "Welcome to the Personal Portfolio App!"
 
-# ========== TRANSACTION EXPORT ROUTES ==========
-@routes.route('/users/<int:id>/transactions/export/excel',methods=['GET'])
-@jwt_required()
-def export_user_transactions_excel(id):
-    user = db.session.get(User, id)
+# ============================================================
+# TRANSACTION EXPORT ROUTES
+# ============================================================
+
+def _get_authorized_export_user(user_id):
+    user = db.session.get(User, user_id)
 
     if not user:
-        return jsonify({
-            "error": "User not found"
-        }), 404
+        return None, (
+            jsonify({
+                "error": "User not found"
+            }),
+            404,
+        )
 
-    user_id = int(get_jwt_identity())
+    current_user_id = int(
+        get_jwt_identity()
+    )
 
-    if id != user_id:
-        return jsonify({
-            "error": "Unauthorized"
-        }), 403
+    if user_id != current_user_id:
+        return None, (
+            jsonify({
+                "error": "Unauthorized"
+            }),
+            403,
+        )
+
+    return user, None
+
+
+def _get_requested_export_categories():
+    values = request.args.getlist(
+        "categories"
+    )
+
+    return normalize_export_categories(
+        values
+    )
+
+
+@routes.route("/users/<int:id>/transactions/export/excel",methods=["GET"],)
+@jwt_required()
+def export_user_transactions_excel(id):
+    user, error_response = (
+        _get_authorized_export_user(id)
+    )
+
+    if error_response:
+        return error_response
 
     try:
-        output = create_transaction_excel(user.id)
+        categories = (
+            _get_requested_export_categories()
+        )
+
+    except ValueError as exc:
+        return jsonify({
+            "error": str(exc),
+            "allowed_categories": [
+                "all",
+                *CATEGORY_ORDER,
+            ],
+        }), 400
+
+    try:
+        output = create_transaction_excel(
+            user.id,
+            categories,
+        )
+
+        category_label = (
+            "all"
+            if categories == list(CATEGORY_ORDER)
+            else "selected"
+        )
 
         filename = (
             f"transaction_backup_"
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            f"{category_label}_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            f".xlsx"
         )
 
         return send_file(
@@ -49,57 +111,82 @@ def export_user_transactions_excel(id):
             as_attachment=True,
             download_name=filename,
             mimetype=(
-                "application/vnd.openxmlformats-officedocument."
+                "application/"
+                "vnd.openxmlformats-officedocument."
                 "spreadsheetml.sheet"
-            )
+            ),
         )
 
     except Exception:
         db.session.rollback()
 
         return jsonify({
-            "error": "Unable to generate transaction backup"
+            "error": (
+                "Unable to generate "
+                "transaction backup"
+            )
         }), 500
 
-@routes.route('/users/<int:id>/transactions/export/pdf',methods=['GET'])
+
+@routes.route("/users/<int:id>/transactions/export/pdf",methods=["GET"],)
 @jwt_required()
 def export_user_transactions_pdf(id):
-    user = db.session.get(User, id)
+    user, error_response = (
+        _get_authorized_export_user(id)
+    )
 
-    if not user:
-        return jsonify({
-            "error": "User not found"
-        }), 404
-
-    user_id = int(get_jwt_identity())
-
-    if id != user_id:
-        return jsonify({
-            "error": "Unauthorized"
-        }), 403
+    if error_response:
+        return error_response
 
     try:
-        output = create_transaction_pdf(user.id)
+        categories = (
+            _get_requested_export_categories()
+        )
+
+    except ValueError as exc:
+        return jsonify({
+            "error": str(exc),
+            "allowed_categories": [
+                "all",
+                *CATEGORY_ORDER,
+            ],
+        }), 400
+
+    try:
+        output = create_transaction_pdf(
+            user.id,
+            categories,
+        )
+
+        category_label = (
+            "all"
+            if categories == list(CATEGORY_ORDER)
+            else "selected"
+        )
 
         filename = (
             f"transaction_backup_"
-            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            f"{category_label}_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            f".pdf"
         )
 
         return send_file(
             output,
             as_attachment=True,
             download_name=filename,
-            mimetype="application/pdf"
+            mimetype="application/pdf",
         )
 
     except Exception:
         db.session.rollback()
 
         return jsonify({
-            "error": "Unable to generate transaction backup"
+            "error": (
+                "Unable to generate "
+                "transaction backup"
+            )
         }), 500
-
 
 """
 Redundant comment block at the end of the file. It can be removed as it doesn't serve any purpose.

@@ -505,3 +505,46 @@ button:hover {
   margin-right: 8px;
   accent-color: var(--accent-primary);
 }
+
+/* ---------------------------------------------------------
+   Credit Card delete-dialog support
+--------------------------------------------------------- */
+
+.dcd-modal .dcd-backup-options {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.dcd-modal .dcd-backup-options h4 {
+  color: var(--text-primary);
+}
+
+.dcd-modal .dcd-backup-btn {
+  background-color: var(--accent-secondary);
+  color: #ffffff;
+}
+
+.dcd-modal .dcd-backup-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.dcd-modal .dcd-confirm-btn {
+  background-color: var(--accent-danger);
+  color: #ffffff;
+}
+
+.dcd-modal .dcd-cancel-btn {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.dcd-modal .dcd-backup-confirmed {
+  color: var(--accent-primary);
+}
+
+.dcd-modal .dcd-category-warning {
+  color: var(--accent-warning);
+}

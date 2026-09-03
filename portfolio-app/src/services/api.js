@@ -37,20 +37,34 @@ export const canDeleteUser = async (id) => {
   return api.get(`/users/${id}/can_delete`);
 };
 
-export const exportUserTransactionsExcel = async (id) => {
+// `categories` is an optional array of category keys, e.g. ['banks', 'savings'].
+// When omitted (or empty), no `categories` param is sent and the backend
+// defaults to exporting every category, so existing callers keep working
+// exactly as before.
+const buildExportParams = (categories) => {
+  if (!categories || categories.length === 0) {
+    return {};
+  }
+
+  return { categories: categories.join(',') };
+};
+
+export const exportUserTransactionsExcel = async (id, categories) => {
   return api.get(
     `/users/${id}/transactions/export/excel`,
     {
-      responseType: 'blob'
+      responseType: 'blob',
+      params: buildExportParams(categories)
     }
   );
 };
 
-export const exportUserTransactionsPdf = async (id) => {
+export const exportUserTransactionsPdf = async (id, categories) => {
   return api.get(
     `/users/${id}/transactions/export/pdf`,
     {
-      responseType: 'blob'
+      responseType: 'blob',
+      params: buildExportParams(categories)
     }
   );
 };

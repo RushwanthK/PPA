@@ -1,23 +1,117 @@
-/* bank.css - Aligned with savings.css */
+/* bank.css — themed to match the Users page (see pages/users.css) */
 
+/* ==========================================================================
+   Design tokens
+   Duplicated (not just imported) from users.css on purpose: this keeps the
+   Banks page visually correct even if it's ever loaded on its own, without
+   depending on users.css having been loaded first. Values are identical,
+   so there's no conflict when both are present.
+   ========================================================================== */
+:root {
+  --up-bg: #0e0f11;
+  --up-surface: #161719;
+  --up-surface-elevated: #1e2023;
+  --up-border: #2c2e33;
+  --up-border-soft: #26282c;
+
+  --up-text: #f3f4f6;
+  --up-text-muted: #9ca0a8;
+  --up-text-dim: #6b6f76;
+
+  --up-primary: #5b8cff;
+  --up-primary-hover: #4574e6;
+  --up-primary-soft: rgba(91, 140, 255, 0.14);
+
+  --up-success: #22c55e;
+  --up-success-hover: #16a34a;
+  --up-success-soft: rgba(34, 197, 94, 0.12);
+
+  --up-danger: #f0475a;
+  --up-danger-hover: #d63a4c;
+  --up-danger-soft: rgba(240, 71, 90, 0.12);
+
+  --up-radius-sm: 8px;
+  --up-radius-md: 12px;
+  --up-radius-lg: 18px;
+
+  --up-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --up-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --up-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+
+  --up-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   Page shell
+   ========================================================================== */
 .bank-container {
-  background-color: #121212;
-  color: #ffffff;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+  color: var(--up-text);
+  background: radial-gradient(circle at top, #17181b 0%, #0b0c0d 65%);
   padding: 20px;
   padding-top: 80px;
   max-width: 1200px;
   margin: 0 auto;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.bank-container * {
+  box-sizing: border-box;
 }
 
 .bank-container h1 {
-  font-size: 1.8rem;
-  font-weight: 600;
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   margin-bottom: 20px;
-  color: #ffffff;
+  color: var(--up-text);
 }
 
-/* Buttons */
+.accent-text {
+  color: var(--up-primary);
+}
+
+/* ==========================================================================
+   Toolbar (Add Bank + search)
+   ========================================================================== */
+.bank-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bank-toolbar-search {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.search-input {
+  padding: 9px 12px;
+  border-radius: var(--up-radius-sm);
+  border: 1px solid var(--up-border);
+  background: var(--up-bg);
+  color: var(--up-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color var(--up-transition), box-shadow var(--up-transition);
+}
+
+.search-input::placeholder {
+  color: var(--up-text-dim);
+}
+
+.search-input:focus {
+  border-color: var(--up-primary);
+  box-shadow: 0 0 0 3px var(--up-primary-soft);
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
 .add-button,
 .edit-button,
 .transaction-button,
@@ -26,47 +120,75 @@
 .save-button,
 .cancel-button {
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: var(--up-radius-sm);
   border: none;
   cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: transform var(--up-transition), filter var(--up-transition), border-color var(--up-transition), color var(--up-transition), opacity var(--up-transition);
   margin: 2px;
   color: white;
 }
 
 .save-button,
-.add-button,
+.add-button {
+  background: linear-gradient(135deg, var(--up-success), var(--up-success-hover));
+}
+
 .edit-button {
-  background-color: #4caf50;
+  background: var(--up-surface);
+  border: 1px solid var(--up-border);
+  color: var(--up-text);
 }
 
 .transaction-button,
 .view-button {
-  background-color: #2196f3;
+  background: linear-gradient(135deg, var(--up-primary), var(--up-primary-hover));
 }
 
-.cancel-button,
+.cancel-button {
+  background: transparent;
+  border: 1px solid var(--up-border);
+  color: var(--up-text-muted);
+}
+
 .delete-button {
-  background-color: #dc3545;
+  background: linear-gradient(135deg, var(--up-danger), var(--up-danger-hover));
 }
 
-button:hover {
-  opacity: 0.9;
+button:hover:not(:disabled) {
   transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.edit-button:hover:not(:disabled) {
+  border-color: var(--up-primary);
+  color: var(--up-primary);
+  filter: none;
+}
+
+.cancel-button:hover:not(:disabled) {
+  border-color: var(--up-danger);
+  color: var(--up-danger);
+  filter: none;
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
 }
 
-/* Table */
+/* ==========================================================================
+   Table
+   ========================================================================== */
 .table-container {
   overflow-x: auto;
   overflow-y: auto;
-  background-color: #1e1e1e;
-  border-radius: 8px;
+  background: linear-gradient(180deg, var(--up-surface) 0%, #131417 100%);
+  border: 1px solid var(--up-border-soft);
+  border-radius: var(--up-radius-md);
+  box-shadow: var(--up-shadow-sm);
   margin-top: 20px;
 }
 
@@ -80,97 +202,137 @@ button:disabled {
 .banks-table td {
   padding: 12px 15px;
   text-align: left;
-  border-bottom: 1px solid #444;
+  border-bottom: 1px solid var(--up-border-soft);
 }
 
 .banks-table th {
-  background-color: #2d2d2d;
-  color: white;
+  background: var(--up-surface-elevated);
+  color: var(--up-text);
   font-weight: 600;
 }
 
 .banks-table td {
-  background-color: #1e1e1e;
+  color: var(--up-text-muted);
 }
 
 .banks-table tr:hover td {
-  background-color: #2d2d2d;
+  background: var(--up-surface-elevated);
+  color: var(--up-text);
 }
 
 .no-data {
   text-align: center;
   padding: 20px;
-  color: #aaa;
+  color: var(--up-text-dim);
 }
 
 .income {
-  color: #4caf50;
-  font-weight: 500;
+  color: var(--up-success);
+  font-weight: 600;
 }
 
 .expense {
-  color: #dc3545;
-  font-weight: 500;
+  color: var(--up-danger);
+  font-weight: 600;
 }
 
-/* Modal */
+/* sortable header */
+.banks-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--up-transition);
+}
+
+.banks-table th.sortable:hover {
+  color: var(--up-primary);
+}
+
+/* totals row */
+.banks-table tfoot .totals-row td {
+  background: var(--up-surface-elevated);
+  border-top: 2px solid var(--up-border);
+  padding-top: 12px;
+  font-size: 0.95rem;
+  color: var(--up-text);
+}
+
+/* ==========================================================================
+   Modals (Add/Edit Bank, Add Transaction, View Transactions)
+   ========================================================================== */
 .modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  inset: 0;
+  background: rgba(6, 7, 8, 0.72);
+  backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 20px;
   z-index: 1000;
+  animation: bankFadeInBackdrop 0.2s ease;
+}
+
+.transaction-form-modal {
+  z-index: 1100;
+}
+
+@keyframes bankFadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .modal-content {
-  background-color: #1e1e1e;
+  background: linear-gradient(180deg, var(--up-surface-elevated) 0%, #17181b 100%);
+  border: 1px solid var(--up-border-soft);
   padding: 25px;
-  border-radius: 8px;
+  border-radius: var(--up-radius-lg);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
   overflow-y: auto;
   position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--up-shadow-lg);
+  animation: bankPopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes bankPopIn {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
 }
 
 .modal-content h2 {
   font-size: 1.3rem;
-  color: #ffffff;
+  font-weight: 600;
+  color: var(--up-text);
   margin-top: 0;
 }
 
 .transaction-modal {
   display: flex;
   flex-direction: column;
-
   max-height: 85vh;
-
   width: fit-content;
   max-width: 95vw;
-
   overflow: hidden;
 }
 
 .close-button {
   background: none;
   border: none;
-  color: #aaa;
+  color: var(--up-text-dim);
   font-size: 1.5rem;
   cursor: pointer;
   padding: 5px;
+  transition: color var(--up-transition);
 }
 
 .close-button:hover {
-  color: #fff;
+  color: var(--up-text);
 }
 
-/* Forms */
+/* ==========================================================================
+   Forms
+   ========================================================================== */
 .form-group {
   margin-bottom: 15px;
 }
@@ -178,26 +340,32 @@ button:disabled {
 .form-group label {
   display: block;
   margin-bottom: 5px;
-  font-weight: 500;
-  color: #ddd;
+  font-weight: 600;
+  color: var(--up-text-muted);
+  font-size: 13px;
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
   padding: 10px 12px;
-  border-radius: 4px;
+  border-radius: var(--up-radius-sm);
   font-size: 0.9rem;
-  border: 1px solid #444;
-  background-color: #2d2d2d;
-  color: #ffffff;
+  border: 1px solid var(--up-border);
+  background: var(--up-bg);
+  color: var(--up-text);
+  outline: none;
+  transition: border-color var(--up-transition), box-shadow var(--up-transition);
+}
+
+.form-group input::placeholder {
+  color: var(--up-text-dim);
 }
 
 .form-group input:focus,
 .form-group select:focus {
-  outline: none;
-  border-color: #4caf50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  border-color: var(--up-primary);
+  box-shadow: 0 0 0 3px var(--up-primary-soft);
 }
 
 .form-actions {
@@ -207,13 +375,15 @@ button:disabled {
   margin-top: 20px;
 }
 
-/* Error Styling */
+/* ==========================================================================
+   Error / success banners
+   ========================================================================== */
 .bank-error-with-close {
-  background-color: rgba(220, 53, 69, 0.15);
-  border: 1px solid #ff4c4c;
-  color: #ff4c4c;
+  background: var(--up-danger-soft);
+  border: 1px solid rgba(240, 71, 90, 0.4);
+  color: #ff8792;
   padding: 14px 44px 14px 16px;
-  border-radius: 6px;
+  border-radius: var(--up-radius-sm);
   font-size: 14px;
   margin: 20px 0;
   position: relative;
@@ -227,7 +397,7 @@ button:disabled {
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #ff4c4c;
+  color: #ff8792;
   font-size: 20px;
   font-weight: bold;
   cursor: pointer;
@@ -236,70 +406,67 @@ button:disabled {
 }
 
 .bank-error-with-close button.error-dismiss:hover {
-  color: #e74c3c;
+  color: #ffb1b8;
 }
 
-/* Actions cell */
+.success-message {
+  background: var(--up-success-soft);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #7be7a3;
+  padding: 14px 44px 14px 16px;
+  border-radius: var(--up-radius-sm);
+  font-size: 14px;
+  margin: 20px 0;
+  position: relative;
+  text-align: left;
+}
+
+.success-message strong {
+  color: #a9f2c1;
+}
+
+.success-message .close-success {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #7be7a3;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.success-message .close-success:hover {
+  color: #a9f2c1;
+}
+
+/* ==========================================================================
+   Actions cell / loading state
+   ========================================================================== */
 .actions-cell {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
 }
 
-/* Loading state */
 .loading {
   padding: 20px;
   text-align: center;
-  color: #aaa;
+  color: var(--up-text-dim);
+  font-style: italic;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .banks-table th,
-  .banks-table td {
-    padding: 8px 10px;
-    font-size: 0.8rem;
-  }
-
-  .modal-content {
-    width: 95%;
-    padding: 15px;
-  }
-
-  .actions-cell {
-    flex-direction: column;
-  }
-
-  .add-button,
-  .edit-button,
-  .transaction-button,
-  .view-button,
-  .delete-button,
-  .save-button,
-  .cancel-button {
-    width: 100%;
-    margin-top: 5px;
-  }
-}
-
-/* sortable header */
-.banks-table th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-
-/* totals row */
-.banks-table tfoot .totals-row td {
-  background-color: rgba(255,255,255,0.03);
-  border-top: 2px solid #444;
-  padding-top: 12px;
-  font-size: 0.95rem;
-}
-
-/* Transaction Modal */
+/* ==========================================================================
+   Transaction modal specifics
+   ========================================================================== */
 .transaction-modal .table-container {
   flex: 1;
   overflow: auto;
+  margin-top: 0;
 }
 
 .transaction-modal .banks-table {
@@ -318,10 +485,6 @@ button:disabled {
   margin-left: auto;
 }
 
-.transaction-form-modal {
-  z-index: 1100;
-}
-
 .transaction-modal-header {
   display: flex;
   align-items: center;
@@ -331,4 +494,57 @@ button:disabled {
 
 .transaction-modal-title {
   margin: 0;
+  color: var(--up-text);
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 768px) {
+  .bank-container {
+    padding: 16px;
+    padding-top: 72px;
+  }
+
+  .bank-toolbar-search {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .banks-table th,
+  .banks-table td {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+
+  .modal-content {
+    width: 95%;
+    padding: 18px;
+  }
+
+  .actions-cell {
+    flex-direction: column;
+  }
+
+  .add-button,
+  .edit-button,
+  .transaction-button,
+  .view-button,
+  .delete-button,
+  .save-button,
+  .cancel-button {
+    width: 100%;
+    margin-top: 5px;
+  }
+}
+
+@media (max-width: 420px) {
+  .bank-container {
+    padding: 12px;
+    padding-top: 68px;
+  }
 }

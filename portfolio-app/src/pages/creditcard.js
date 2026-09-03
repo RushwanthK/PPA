@@ -8,9 +8,13 @@ import {
   deleteCreditCard,
   getCreditCardTransactions,
   addCreditCardTransaction,
-  processBilling
+  processBilling,
+  getUsers,
+  exportUserTransactionsExcel,
+  exportUserTransactionsPdf
 } from '../services/api';
 import './creditcard.css';
+import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
 import { format, parse } from 'date-fns';
 
 export default function CreditCard() {
@@ -39,6 +43,18 @@ export default function CreditCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  // Credit-card delete dialog state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingCardId, setDeletingCardId] = useState(null);
+  const [isDeletingCard, setIsDeletingCard] = useState(false);
+
+  // Errors specifically belonging to the delete dialog.
+  // These must not appear behind/below the dialog.
+  const [deleteDialogError, setDeleteDialogError] = useState(null);
+
+  // Backup/download state.
+  const [isDownloadingCardBackup, setIsDownloadingCardBackup] = useState(false);
+  const [cardBackupDownloaded, setCardBackupDownloaded] = useState(false);
 
   // Sorting / filtering state
   const [searchText, setSearchText] = useState('');
@@ -206,22 +222,202 @@ export default function CreditCard() {
     }
   };
 
-  const handleDeleteCard = async (cardId) => {
-    if (window.confirm('Are you sure you want to delete this credit card?')) {
-      try {
-        setLoading(true);
-        await deleteCreditCard(cardId);
-        const updatedCards = await getCreditCards();
-        setCards(updatedCards);
-        setSelectedCard(null);
-        setShowCardDetails(false);
-        setError(null);
-      } catch (err) {
-        console.error('Error deleting card:', err);
-        setError(err.message || 'Failed to delete credit card');
-      } finally {
-        setLoading(false);
-      }
+  const handleDeleteCard = (cardId) => {
+    if (isDeletingCard || isDownloadingCardBackup) {
+      return;
+    }
+
+    // Clear normal page errors. Delete-specific errors belong
+    // inside the confirmation dialog.
+    setError(null);
+
+    setDeleteDialogError(null);
+    setDeletingCardId(cardId);
+    setCardBackupDownloaded(false);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeletingCard || isDownloadingCardBackup) {
+      return;
+    }
+
+    setShowDeleteModal(false);
+    setDeletingCardId(null);
+    setDeleteDialogError(null);
+    setCardBackupDownloaded(false);
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getCurrentUserIdForBackup = async () => {
+    const usersResponse = await getUsers();
+
+    const users = Array.isArray(usersResponse)
+      ? usersResponse
+      : (
+          Array.isArray(usersResponse?.data)
+            ? usersResponse.data
+            : []
+        );
+
+    const userId = users[0]?.id;
+
+    if (!userId) {
+      throw new Error(
+        'Unable to determine the current user account for backup export.'
+      );
+    }
+
+    return userId;
+  };
+
+  const handleDownloadCardBackupExcel = async () => {
+    if (
+      !deletingCardId ||
+      isDeletingCard ||
+      isDownloadingCardBackup
+    ) {
+      return;
+    }
+
+    try {
+      setIsDownloadingCardBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      // Reuse the existing user transaction export API.
+      // "credit_cards" means only credit-card transactions.
+      const response = await exportUserTransactionsExcel(
+        userId,
+        ['credit_cards']
+      );
+
+      const filename =
+        `credit_card_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`;
+
+      downloadBlob(response.data, filename);
+
+      setCardBackupDownloaded(true);
+    } catch (err) {
+      console.error(
+        'Failed to download credit-card Excel backup:',
+        err
+      );
+
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the Excel credit-card transaction backup. Your credit card has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingCardBackup(false);
+    }
+  };
+
+  const handleDownloadCardBackupPdf = async () => {
+    if (
+      !deletingCardId ||
+      isDeletingCard ||
+      isDownloadingCardBackup
+    ) {
+      return;
+    }
+
+    try {
+      setIsDownloadingCardBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      const response = await exportUserTransactionsPdf(
+        userId,
+        ['credit_cards']
+      );
+
+      const filename =
+        `credit_card_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`;
+
+      downloadBlob(response.data, filename);
+
+      setCardBackupDownloaded(true);
+    } catch (err) {
+      console.error(
+        'Failed to download credit-card PDF backup:',
+        err
+      );
+
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the PDF credit-card transaction backup. Your credit card has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingCardBackup(false);
+    }
+  };
+
+  const handleConfirmDeleteCard = async () => {
+    if (
+      !deletingCardId ||
+      isDeletingCard ||
+      isDownloadingCardBackup
+    ) {
+      return;
+    }
+
+    const card = cards.find(
+      c => String(c.id) === String(deletingCardId)
+    );
+
+    try {
+      setIsDeletingCard(true);
+      setDeleteDialogError(null);
+      setError(null);
+
+      await deleteCreditCard(deletingCardId);
+
+      const updatedCards = await getCreditCards();
+
+      setCards(updatedCards);
+
+      // Keep the existing behavior after deletion.
+      setSelectedCard(null);
+      setShowCardDetails(false);
+
+      setShowDeleteModal(false);
+      setDeletingCardId(null);
+      setCardBackupDownloaded(false);
+      setDeleteDialogError(null);
+
+      setError(null);
+    } catch (err) {
+      console.error('Error deleting credit card:', err);
+
+      // IMPORTANT:
+      // Keep this error inside the dialog.
+      // Do not use setError() here.
+      setDeleteDialogError(
+        err.message ||
+        `Failed to delete credit card "${card?.name || ''}".`
+      );
+    } finally {
+      setIsDeletingCard(false);
     }
   };
 
@@ -579,6 +775,64 @@ export default function CreditCard() {
           </tfoot>
         </table>
       </div>
+
+      {/* Credit Card Delete Confirmation Dialog */}
+      {deletingCardId && (
+        <DeleteConfirmationDialog
+          isOpen={showDeleteModal}
+          onClose={closeDeleteModal}
+          onConfirm={handleConfirmDeleteCard}
+
+          title="Delete Credit Card"
+
+          headline={`Delete "${
+            cards.find(c => String(c.id) === String(deletingCardId))?.name
+            || 'this credit card'
+          }"?`}
+
+          description={`Current total payable: Rs.${
+            safeNumber(
+              cards.find(
+                c => String(c.id) === String(deletingCardId)
+              )?.total_payable
+            ).toFixed(2)
+          }`}
+
+          detailLines={[
+            'This action cannot be undone.',
+            'Any transaction history associated with this credit card may be permanently deleted.',
+            'You may download a backup of your credit card transactions before deleting the card.'
+          ]}
+
+          isDeleting={isDeletingCard}
+
+          confirmLabel="Delete Credit Card"
+          confirmWithoutBackupLabel="Delete Without Backup"
+
+          cancelLabel="Cancel"
+
+          /* Backup */
+          showBackupSection={true}
+          backupSectionTitle="Backup Credit Card Transactions"
+
+          onDownloadExcel={handleDownloadCardBackupExcel}
+          onDownloadPdf={handleDownloadCardBackupPdf}
+
+          isDownloading={isDownloadingCardBackup}
+          backupDownloaded={cardBackupDownloaded}
+
+          backupConfirmedMessage={
+            'Credit card transaction backup downloaded successfully.'
+          }
+
+          excelDownloadLabel="Download Excel"
+          pdfDownloadLabel="Download PDF"
+
+          /* Error */
+          dialogError={deleteDialogError}
+          onDismissDialogError={() => setDeleteDialogError(null)}
+        />
+      )}
 
       {/* Card Details Modal */}
       {showCardDetails && selectedCard && (

@@ -411,168 +411,12 @@ form input:focus {
 }
 
 /* ==========================================================================
-   Delete confirmation modal
+   Note: the delete-confirmation modal (including the optional backup /
+   category-export UI) has moved to the shared, reusable
+   src/components/DeleteConfirmationDialog.js + .css, so it can be used
+   from any page with a consistent look. See that component's CSS for
+   those styles (.dcd-*).
    ========================================================================== */
-.delete-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(6, 7, 8, 0.72);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  z-index: 1100;
-  animation: fadeInBackdrop 0.2s ease;
-}
-
-@keyframes fadeInBackdrop {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.delete-modal {
-  width: 100%;
-  max-width: 460px;
-  max-height: 90vh;
-  overflow-y: auto;
-  background: linear-gradient(180deg, var(--up-surface-elevated) 0%, #17181b 100%);
-  border: 1px solid var(--up-border-soft);
-  border-radius: var(--up-radius-lg);
-  padding: clamp(20px, 4vw, 28px);
-  box-shadow: var(--up-shadow-lg);
-  animation: popIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes popIn {
-  from { transform: scale(0.94) translateY(8px); opacity: 0; }
-  to { transform: scale(1) translateY(0); opacity: 1; }
-}
-
-.delete-modal h3 {
-  margin-top: 0;
-  color: var(--up-danger);
-}
-
-.delete-warning {
-  font-size: 14px;
-  color: var(--up-text-muted);
-  line-height: 1.55;
-}
-
-.delete-warning strong {
-  color: var(--up-text);
-}
-
-.delete-warning p {
-  margin: 8px 0;
-}
-
-.backup-options {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--up-border);
-}
-
-.backup-options h4 {
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--up-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.backup-buttons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.backup-btn {
-  flex: 1 1 140px;
-  background: var(--up-surface);
-  border: 1px solid var(--up-border);
-  color: var(--up-text);
-  border-radius: var(--up-radius-sm);
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color var(--up-transition), color var(--up-transition), transform var(--up-transition);
-}
-
-.backup-btn:hover:not(:disabled) {
-  border-color: var(--up-primary);
-  color: var(--up-primary);
-  transform: translateY(-1px);
-}
-
-.backup-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.backup-confirmed {
-  margin: 10px 0 0;
-  font-size: 13px;
-  color: var(--up-success);
-}
-
-.delete-modal-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 22px;
-  flex-wrap: wrap;
-}
-
-.delete-confirm-btn {
-  flex: 1 1 auto;
-  background: linear-gradient(135deg, var(--up-danger), var(--up-danger-hover));
-  color: white;
-  border: none;
-  border-radius: var(--up-radius-sm);
-  padding: 11px 18px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform var(--up-transition), filter var(--up-transition);
-}
-
-.delete-confirm-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.08);
-}
-
-.delete-confirm-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.delete-cancel-btn {
-  flex: 1 1 auto;
-  background: transparent;
-  border: 1px solid var(--up-border);
-  color: var(--up-text-muted);
-  border-radius: var(--up-radius-sm);
-  padding: 11px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color var(--up-transition), color var(--up-transition);
-}
-
-.delete-cancel-btn:hover:not(:disabled) {
-  border-color: var(--up-text-muted);
-  color: var(--up-text);
-}
-
-.delete-cancel-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
 
 /* ==========================================================================
    Responsive: large screens / TV
@@ -647,10 +491,6 @@ form input:focus {
   .form-buttons button {
     width: 100%;
   }
-
-  .delete-modal-actions {
-    flex-direction: column;
-  }
 }
 
 /* ==========================================================================
@@ -666,10 +506,6 @@ form input:focus {
   .user-actions button {
     min-width: 0;
     flex: 1;
-  }
-
-  .backup-buttons {
-    flex-direction: column;
   }
 
   .notification {

@@ -1,0 +1,359 @@
+/* ==========================================================================
+   Design tokens (scoped to this component so it renders identically no
+   matter which page uses it, without depending on another page's CSS
+   having loaded first). Values match the Users page theme.
+   ========================================================================== */
+.dcd-backdrop {
+  --dcd-surface: #161719;
+  --dcd-surface-elevated: #1e2023;
+  --dcd-border: #2c2e33;
+  --dcd-border-soft: #26282c;
+
+  --dcd-text: #f3f4f6;
+  --dcd-text-muted: #9ca0a8;
+  --dcd-text-dim: #6b6f76;
+
+  --dcd-primary: #5b8cff;
+  --dcd-primary-hover: #4574e6;
+
+  --dcd-success: #22c55e;
+
+  --dcd-danger: #f0475a;
+  --dcd-danger-hover: #d63a4c;
+
+  --dcd-radius-sm: 8px;
+  --dcd-radius-lg: 18px;
+
+  --dcd-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+
+  --dcd-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==========================================================================
+   Backdrop + modal shell
+   ========================================================================== */
+.dcd-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 7, 8, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  z-index: 1100;
+  animation: dcdFadeInBackdrop 0.2s ease;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+}
+
+@keyframes dcdFadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dcd-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--dcd-surface-elevated) 0%, #17181b 100%);
+  border: 1px solid var(--dcd-border-soft);
+  border-radius: var(--dcd-radius-lg);
+  padding: clamp(20px, 4vw, 28px);
+  box-shadow: var(--dcd-shadow-lg);
+  animation: dcdPopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-sizing: border-box;
+}
+
+@keyframes dcdPopIn {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.dcd-modal h3 {
+  margin-top: 0;
+  color: var(--dcd-danger);
+}
+
+/* ==========================================================================
+   Warning / description text
+   ========================================================================== */
+.dcd-warning {
+  font-size: 14px;
+  color: var(--dcd-text-muted);
+  line-height: 1.55;
+}
+
+.dcd-warning strong {
+  color: var(--dcd-text);
+}
+
+.dcd-warning p {
+  margin: 8px 0;
+}
+
+/* ==========================================================================
+   Optional backup / export section
+   ========================================================================== */
+.dcd-backup-options {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--dcd-border);
+}
+
+.dcd-backup-options h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--dcd-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dcd-category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.dcd-category-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dcd-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dcd-category-shortcuts {
+  display: flex;
+  gap: 6px;
+}
+
+.dcd-category-shortcut-btn {
+  background: transparent;
+  border: none;
+  color: var(--dcd-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color var(--dcd-transition);
+}
+
+.dcd-category-shortcut-btn:hover:not(:disabled) {
+  color: var(--dcd-primary-hover);
+  text-decoration: underline;
+}
+
+.dcd-category-shortcut-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.dcd-category-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.dcd-category-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dcd-border);
+  border-radius: var(--dcd-radius-sm);
+  background: var(--dcd-surface);
+  font-size: 13px;
+  color: var(--dcd-text);
+  cursor: pointer;
+  transition: border-color var(--dcd-transition), background-color var(--dcd-transition);
+}
+
+.dcd-category-option:hover {
+  border-color: var(--dcd-primary);
+}
+
+.dcd-category-option input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--dcd-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.dcd-category-warning {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--dcd-danger);
+}
+
+.dcd-backup-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dcd-backup-btn {
+  flex: 1 1 140px;
+  background: var(--dcd-surface);
+  border: 1px solid var(--dcd-border);
+  color: var(--dcd-text);
+  border-radius: var(--dcd-radius-sm);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dcd-transition), color var(--dcd-transition), transform var(--dcd-transition);
+}
+
+.dcd-backup-btn:hover:not(:disabled) {
+  border-color: var(--dcd-primary);
+  color: var(--dcd-primary);
+  transform: translateY(-1px);
+}
+
+.dcd-backup-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dcd-backup-confirmed {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--dcd-success);
+}
+
+/* ==========================================================================
+   Confirm / cancel actions
+   ========================================================================== */
+.dcd-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+
+.dcd-confirm-btn {
+  flex: 1 1 auto;
+  background: linear-gradient(135deg, var(--dcd-danger), var(--dcd-danger-hover));
+  color: white;
+  border: none;
+  border-radius: var(--dcd-radius-sm);
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform var(--dcd-transition), filter var(--dcd-transition);
+}
+
+.dcd-confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.dcd-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dcd-cancel-btn {
+  flex: 1 1 auto;
+  background: transparent;
+  border: 1px solid var(--dcd-border);
+  color: var(--dcd-text-muted);
+  border-radius: var(--dcd-radius-sm);
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--dcd-transition), color var(--dcd-transition);
+}
+
+.dcd-cancel-btn:hover:not(:disabled) {
+  border-color: var(--dcd-text-muted);
+  color: var(--dcd-text);
+}
+
+.dcd-cancel-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 768px) {
+  .dcd-modal-actions {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 420px) {
+  .dcd-backup-buttons {
+    flex-direction: column;
+  }
+
+  .dcd-category-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------
+   Delete dialog error
+   Displayed at the very top of the dialog.
+--------------------------------------------------------- */
+
+.dcd-dialog-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  margin: 0 0 16px 0;
+  padding: 12px 14px;
+
+  border: 1px solid #dc3545;
+  border-radius: 6px;
+
+  background-color: rgba(220, 53, 69, 0.15);
+  color: #dc3545;
+
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.dcd-dialog-error-message {
+  flex: 1;
+}
+
+.dcd-dialog-error-dismiss {
+  flex-shrink: 0;
+
+  margin: 0;
+  padding: 0;
+
+  border: none;
+  background: transparent;
+
+  color: #dc3545;
+
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.dcd-dialog-error-dismiss:hover {
+  opacity: 0.75;
+}

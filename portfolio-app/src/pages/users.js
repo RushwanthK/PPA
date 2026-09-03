@@ -7,8 +7,24 @@ import {
   exportUserTransactionsExcel,
   exportUserTransactionsPdf
 } from '../services/api';
+import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
 
 import './users.css';
+
+// Mirrors the backend's TRANSACTION_EXPORT_CONFIG categories (excluding
+// "all", which the backend treats as shorthand for every category below).
+const EXPORT_CATEGORY_OPTIONS = [
+  { key: 'banks', label: 'Banks' },
+  { key: 'savings', label: 'Savings' },
+  { key: 'assets', label: 'Assets' },
+  { key: 'credit_cards', label: 'Credit Cards' }
+];
+
+const allCategoriesSelected = () =>
+  EXPORT_CATEGORY_OPTIONS.reduce((selection, category) => {
+    selection[category.key] = true;
+    return selection;
+  }, {});
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -48,6 +64,11 @@ const Users = () => {
   // account currently pending deletion, purely so the confirm button
   // can reflect that back to them.
   const [backupDownloaded, setBackupDownloaded] = useState(false);
+
+  // Which transaction categories should be included in the backup export.
+  // Defaults to everything selected so existing "export everything" usage
+  // keeps working without the user needing to touch anything.
+  const [selectedCategories, setSelectedCategories] = useState(allCategoriesSelected());
 
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -166,6 +187,7 @@ const Users = () => {
       setDeleteInfo(deletionData);
       setDeletingUserId(id);
       setBackupDownloaded(false);
+      setSelectedCategories(allCategoriesSelected());
       setShowDeleteModal(true);
     } catch (err) {
       console.error('Failed to check user deletion:', err);
@@ -190,7 +212,39 @@ const Users = () => {
     setDeleteInfo(null);
     setDeletingUserId(null);
     setBackupDownloaded(false);
+    setSelectedCategories(allCategoriesSelected());
   };
+
+  const toggleCategory = (key) => {
+    setSelectedCategories(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+
+    // Selection changed, so any previously downloaded backup no longer
+    // reflects what's currently checked.
+    setBackupDownloaded(false);
+  };
+
+  const selectAllCategories = () => {
+    setSelectedCategories(allCategoriesSelected());
+    setBackupDownloaded(false);
+  };
+
+  const clearAllCategories = () => {
+    setSelectedCategories(
+      EXPORT_CATEGORY_OPTIONS.reduce((selection, category) => {
+        selection[category.key] = false;
+        return selection;
+      }, {})
+    );
+    setBackupDownloaded(false);
+  };
+
+  const getSelectedCategoryKeys = () =>
+    EXPORT_CATEGORY_OPTIONS
+      .filter(category => selectedCategories[category.key])
+      .map(category => category.key);
 
   const downloadBlob = (blob, filename) => {
     const url = window.URL.createObjectURL(blob);
@@ -211,11 +265,18 @@ const Users = () => {
       return;
     }
 
+    const categories = getSelectedCategoryKeys();
+
+    if (categories.length === 0) {
+      setError('Select at least one category to include in the backup.');
+      return;
+    }
+
     try {
       setIsDownloadingBackup(true);
       setError(null);
 
-      const response = await exportUserTransactionsExcel(deletingUserId);
+      const response = await exportUserTransactionsExcel(deletingUserId, categories);
 
       const filename = `ppa_transaction_backup_${new Date()
         .toISOString()
@@ -238,11 +299,18 @@ const Users = () => {
       return;
     }
 
+    const categories = getSelectedCategoryKeys();
+
+    if (categories.length === 0) {
+      setError('Select at least one category to include in the backup.');
+      return;
+    }
+
     try {
       setIsDownloadingBackup(true);
       setError(null);
 
-      const response = await exportUserTransactionsPdf(deletingUserId);
+      const response = await exportUserTransactionsPdf(deletingUserId, categories);
 
       const filename = `ppa_transaction_backup_${new Date()
         .toISOString()
@@ -275,6 +343,7 @@ const Users = () => {
       setDeleteInfo(null);
       setDeletingUserId(null);
       setBackupDownloaded(false);
+      setSelectedCategories(allCategoriesSelected());
 
       setUsers([]);
 
@@ -438,79 +507,40 @@ const Users = () => {
         </div>
       )}
 
-      {showDeleteModal && deleteInfo && (
-        <div className="delete-modal-backdrop" onClick={closeDeleteModal}>
-          <div className="delete-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Delete Account</h3>
-
-            <div className="delete-warning">
-              <strong>Please review before continuing.</strong>
-              <p>Your account can currently be deleted because all required balances have been cleared.</p>
-
-              {deleteInfo.has_transaction_history ? (
-                <>
-                  <p>
+      {deleteInfo && (
+        <DeleteConfirmationDialog
+          isOpen={showDeleteModal}
+          onClose={closeDeleteModal}
+          onConfirm={handleConfirmDelete}
+          title="Delete Account"
+          headline="Please review before continuing."
+          description="Your account can currently be deleted because all required balances have been cleared."
+          detailLines={
+            deleteInfo.has_transaction_history
+              ? [
+                  <>
                     You have <strong>{deleteInfo.transaction_count}</strong> transaction records in your account history.
-                  </p>
-                  <p>Deleting your account will permanently delete this transaction history.</p>
-                  <p>You may optionally download a backup before deleting your account.</p>
-                </>
-              ) : (
-                <p>No transaction history was found.</p>
-              )}
-            </div>
-
-            {deleteInfo.has_transaction_history && (
-              <div className="backup-options">
-                <h4>Optional Backup</h4>
-                <div className="backup-buttons">
-                  <button
-                    type="button"
-                    className="backup-btn"
-                    onClick={handleDownloadExcel}
-                    disabled={isDownloadingBackup || isDeleting}
-                  >
-                    {isDownloadingBackup ? 'Preparing...' : 'Download Excel'}
-                  </button>
-                  <button
-                    type="button"
-                    className="backup-btn"
-                    onClick={handleDownloadPdf}
-                    disabled={isDownloadingBackup || isDeleting}
-                  >
-                    {isDownloadingBackup ? 'Preparing...' : 'Download PDF'}
-                  </button>
-                </div>
-                {backupDownloaded && (
-                  <p className="backup-confirmed">A backup has been downloaded to your device.</p>
-                )}
-              </div>
-            )}
-
-            <div className="delete-modal-actions">
-              <button
-                type="button"
-                className="delete-confirm-btn"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting || isDownloadingBackup}
-              >
-                {isDeleting
-                  ? 'Deleting...'
-                  : backupDownloaded
-                    ? 'Delete Account'
-                    : 'Delete Without Backup'}
-              </button>
-              <button
-                type="button"
-                className="delete-cancel-btn"
-                onClick={closeDeleteModal}
-                disabled={isDeleting || isDownloadingBackup}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+                  </>,
+                  'Deleting your account will permanently delete this transaction history.',
+                  'You may optionally download a backup before deleting your account.'
+                ]
+              : ['No transaction history was found.']
+          }
+          isDeleting={isDeleting}
+          confirmLabel="Delete Account"
+          confirmWithoutBackupLabel="Delete Without Backup"
+          showBackupSection={deleteInfo.has_transaction_history}
+          backupSectionTitle="Optional Backup"
+          categories={EXPORT_CATEGORY_OPTIONS}
+          selectedCategories={selectedCategories}
+          onToggleCategory={toggleCategory}
+          onSelectAllCategories={selectAllCategories}
+          onClearAllCategories={clearAllCategories}
+          onDownloadExcel={handleDownloadExcel}
+          onDownloadPdf={handleDownloadPdf}
+          isDownloading={isDownloadingBackup}
+          backupDownloaded={backupDownloaded}
+        />
       )}
     </div>
   );

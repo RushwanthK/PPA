@@ -250,3 +250,46 @@ input::placeholder {
   padding: 8px 12px;
   border-bottom: 1px solid #444;
 }
+
+/* =========================================================
+   Delete Confirmation Dialog - Assets Theme
+   ========================================================= */
+
+.dcd-modal .dcd-backup-options {
+  background-color: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 6px;
+}
+
+.dcd-modal .dcd-backup-options h4 {
+  color: #ffffff;
+}
+
+.dcd-modal .dcd-backup-btn {
+  background-color: #2196f3;
+  color: #ffffff;
+}
+
+.dcd-modal .dcd-backup-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.dcd-modal .dcd-confirm-btn {
+  background-color: #dc3545;
+  color: #ffffff;
+}
+
+.dcd-modal .dcd-cancel-btn {
+  background-color: #2d2d2d;
+  color: #ffffff;
+  border: 1px solid #444;
+}
+
+.dcd-modal .dcd-backup-confirmed {
+  color: #4caf50;
+}
+
+.dcd-modal .dcd-category-warning {
+  color: #ff9800;
+}

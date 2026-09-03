@@ -9,9 +9,13 @@ import {
   getSavingTransactions,
   getBanks,
   getBanksByUser,
-  getBankBalance
+  getBankBalance,
+  getUsers,
+  exportUserTransactionsExcel,
+  exportUserTransactionsPdf
 } from '../services/api';
 import './savings.css';
+import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
 
 export default function Savings() {
   const [savings, setSavings] = useState([]);
@@ -38,6 +42,19 @@ export default function Savings() {
   const [showAddSavingForm, setShowAddSavingForm] = useState(false);
   const [expandedSavingId, setExpandedSavingId] = useState(null);
   const [transactions, setTransactions] = useState({});
+
+  // ---------- delete confirmation dialog ----------
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingSavingId, setDeletingSavingId] = useState(null);
+  const [isDeletingSaving, setIsDeletingSaving] = useState(false);
+
+  // Errors that belong specifically to the delete dialog.
+  // These should never appear behind/below the modal.
+  const [deleteDialogError, setDeleteDialogError] = useState(null);
+
+  // Backup/download state.
+  const [isDownloadingSavingBackup, setIsDownloadingSavingBackup] = useState(false);
+  const [savingBackupDownloaded, setSavingBackupDownloaded] = useState(false);
 
   // UI for search & sort
   const [searchText, setSearchText] = useState('');
@@ -156,28 +173,254 @@ export default function Savings() {
     }
   };
 
-  const handleDeleteSaving = async (savingId) => {
-    const saving = savings.find(s => s.id === savingId);
+  const handleDeleteSaving = (savingId) => {
+    if (isDeletingSaving || isDownloadingSavingBackup) {
+      return;
+    }
+
+    const saving = savings.find(
+      s => String(s.id) === String(savingId)
+    );
+
     if (!saving) {
-      setError("Saving account not found in state.");
+      setError(null);
+      setDeleteDialogError('Saving account not found in state.');
+      setDeletingSavingId(savingId);
+      setSavingBackupDownloaded(false);
+      setShowDeleteModal(true);
       return;
     }
 
-    if (safeNumber(saving.balance) !== 0) {
-      setError("Saving account cannot be deleted because its balance is not zero.");
+    // Normal page errors should not be used for delete-dialog errors.
+    setError(null);
+
+    const balance = safeNumber(saving.balance);
+
+    // A non-zero balance is a deletion restriction, but we still open
+    // the dialog so the user can back up the transaction history.
+    if (balance !== 0) {
+      setDeleteDialogError(
+        `Saving account "${saving.name}" cannot be deleted because its current balance is Rs.${balance.toFixed(2)}. Please bring the balance to zero and try again.`
+      );
+    } else {
+      setDeleteDialogError(null);
+    }
+
+    setDeletingSavingId(savingId);
+    setSavingBackupDownloaded(false);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeletingSaving || isDownloadingSavingBackup) {
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this saving account?")) return;
+    setShowDeleteModal(false);
+    setDeletingSavingId(null);
+    setDeleteDialogError(null);
+    setSavingBackupDownloaded(false);
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getCurrentUserIdForBackup = async () => {
+    const usersResponse = await getUsers();
+
+    const users = Array.isArray(usersResponse)
+      ? usersResponse
+      : (
+          Array.isArray(usersResponse?.data)
+            ? usersResponse.data
+            : []
+        );
+
+    const userId = users[0]?.id;
+
+    if (!userId) {
+      throw new Error(
+        'Unable to determine the current user account for backup export.'
+      );
+    }
+
+    return userId;
+  };
+
+  const handleDownloadSavingBackupExcel = async () => {
+    if (
+      !deletingSavingId ||
+      isDeletingSaving ||
+      isDownloadingSavingBackup
+    ) {
+      return;
+    }
 
     try {
-      await deleteSaving(savingId);
+      setIsDownloadingSavingBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      // Reuse the existing user export API.
+      // "savings" exports saving-account transactions.
+      const response = await exportUserTransactionsExcel(
+        userId,
+        ['savings']
+      );
+
+      const filename =
+        `savings_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`;
+
+      downloadBlob(response.data, filename);
+
+      setSavingBackupDownloaded(true);
+    } catch (error) {
+      console.error(
+        'Failed to download savings Excel backup:',
+        error
+      );
+
+      setDeleteDialogError(
+        error.message ||
+        'Unable to download the Excel savings transaction backup. Your savings account has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingSavingBackup(false);
+    }
+  };
+
+  const handleDownloadSavingBackupPdf = async () => {
+    if (
+      !deletingSavingId ||
+      isDeletingSaving ||
+      isDownloadingSavingBackup
+    ) {
+      return;
+    }
+
+    try {
+      setIsDownloadingSavingBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = await getCurrentUserIdForBackup();
+
+      const response = await exportUserTransactionsPdf(
+        userId,
+        ['savings']
+      );
+
+      const filename =
+        `savings_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`;
+
+      downloadBlob(response.data, filename);
+
+      setSavingBackupDownloaded(true);
+    } catch (error) {
+      console.error(
+        'Failed to download savings PDF backup:',
+        error
+      );
+
+      setDeleteDialogError(
+        error.message ||
+        'Unable to download the PDF savings transaction backup. Your savings account has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingSavingBackup(false);
+    }
+  };
+
+  const handleConfirmDeleteSaving = async () => {
+    if (
+      !deletingSavingId ||
+      isDeletingSaving ||
+      isDownloadingSavingBackup
+    ) {
+      return;
+    }
+
+    const saving = savings.find(
+      s => String(s.id) === String(deletingSavingId)
+    );
+
+    if (!saving) {
+      setDeleteDialogError('Saving account not found in state.');
+      return;
+    }
+
+    const balance = safeNumber(saving.balance);
+
+    // Preserve your existing rule:
+    // savings accounts can only be deleted when balance is zero.
+    if (balance !== 0) {
+      setDeleteDialogError(
+        `Saving account "${saving.name}" cannot be deleted because its current balance is Rs.${balance.toFixed(2)}. Please bring the balance to zero and try again.`
+      );
+      return;
+    }
+
+    try {
+      setIsDeletingSaving(true);
+      setDeleteDialogError(null);
+      setError(null);
+
+      await deleteSaving(deletingSavingId);
+
       const updatedSavings = await getSavings();
-      setSavings(updatedSavings.data || updatedSavings || []);
+
+      setSavings(
+        updatedSavings.data ||
+        updatedSavings ||
+        []
+      );
+
+      // Keep existing transaction UI state clean.
+      setTransactions(prev => {
+        const next = { ...prev };
+        delete next[deletingSavingId];
+        return next;
+      });
+
+      if (expandedSavingId === deletingSavingId) {
+        setExpandedSavingId(null);
+      }
+
+      setShowDeleteModal(false);
+      setDeletingSavingId(null);
+      setSavingBackupDownloaded(false);
+      setDeleteDialogError(null);
+
       setError(null);
     } catch (error) {
-      console.error("Failed to delete saving:", error);
-      setError(error.response?.data?.error || "Failed to delete saving");
+      console.error(
+        'Failed to delete saving:',
+        error
+      );
+
+      // Important:
+      // delete-specific errors stay INSIDE the dialog.
+      setDeleteDialogError(
+        error.message ||
+        `Failed to delete saving account "${saving.name}".`
+      );
+    } finally {
+      setIsDeletingSaving(false);
     }
   };
 
@@ -521,6 +764,65 @@ export default function Savings() {
           </tfoot>
         </table>
       </div>
+
+      {/* Savings Delete Confirmation Dialog */}
+      {deletingSavingId && (
+        <DeleteConfirmationDialog
+          isOpen={showDeleteModal}
+          onClose={closeDeleteModal}
+          onConfirm={handleConfirmDeleteSaving}
+
+          title="Delete Savings Account"
+
+          headline={`Delete "${
+            savings.find(
+              s => String(s.id) === String(deletingSavingId)
+            )?.name || 'this savings account'
+          }"?`}
+
+          description={`Current balance: Rs.${
+            safeNumber(
+              savings.find(
+                s => String(s.id) === String(deletingSavingId)
+              )?.balance
+            ).toFixed(2)
+          }`}
+
+          detailLines={[
+            'This action cannot be undone.',
+            'A savings account can only be deleted when its balance is zero.',
+            'You may download a backup of the savings transaction history before deleting the account.'
+          ]}
+
+          isDeleting={isDeletingSaving}
+
+          confirmLabel="Delete Savings Account"
+          confirmWithoutBackupLabel="Delete Without Backup"
+
+          cancelLabel="Cancel"
+
+          /* Backup */
+          showBackupSection={true}
+          backupSectionTitle="Backup Savings Transactions"
+
+          onDownloadExcel={handleDownloadSavingBackupExcel}
+          onDownloadPdf={handleDownloadSavingBackupPdf}
+
+          isDownloading={isDownloadingSavingBackup}
+          backupDownloaded={savingBackupDownloaded}
+
+          backupConfirmedMessage={
+            'Savings transaction backup downloaded successfully.'
+          }
+
+          excelDownloadLabel="Download Excel"
+          pdfDownloadLabel="Download PDF"
+
+          /* Error */
+          dialogError={deleteDialogError}
+          onDismissDialogError={() => setDeleteDialogError(null)}
+        />
+      )}
 
       {/* Transaction Form Modal */}
       {transactionVisible && (
