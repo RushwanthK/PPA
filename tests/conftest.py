@@ -278,6 +278,37 @@ def test_asset(
         db_session.commit()
 
 @pytest.fixture()
+def test_credit_card(db_session, test_user):
+    card = CreditCard(
+        name="Test Credit Card",
+        user_id=test_user.id,
+        limit=10000,
+        billing_cycle_start=1,
+        used=0,
+        billed_unpaid=0,
+        unbilled_spends=0,
+    )
+
+    db_session.add(card)
+    db_session.commit()
+
+    yield card
+
+    db_session.rollback()
+
+    db_session.query(CreditCardTransaction).filter(
+        CreditCardTransaction.credit_card_id == card.id
+    ).delete(synchronize_session=False)
+
+    db_session.commit()
+
+    existing_card = db_session.get(CreditCard, card.id)
+
+    if existing_card is not None:
+        db_session.delete(existing_card)
+        db_session.commit()
+
+@pytest.fixture()
 def export_test_data(
     db_session,
     test_user,

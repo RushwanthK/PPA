@@ -236,7 +236,7 @@ Username:
 postgresdocker
 
 Password:
-RushPGDO@13
+[DO NOT STORE REAL PASSWORDS IN PROJECT NOTES]
 
 Host:
 localhost
@@ -372,3 +372,206 @@ Axios uses environment variables for API communication.
 
 Environment-specific configuration was already implemented before Dockerization, making React containerization easier and cleaner.
 
+
+
+# Sprint 11 - Backend Automated Testing
+
+## Current Goal
+
+Phase 3 is focused on automated testing of the backend before frontend automated testing is introduced.
+
+The testing approach is not simply to make endpoints return `200` or `201`. The goal is to verify meaningful application behavior.
+
+## Testing Standard
+
+For each backend module, test:
+
+* Model / constraints where behavior is exposed
+* Active routes
+* Successful operations
+* Validation and error responses
+* Authentication
+* Authorization / ownership
+* Missing resources
+* Business rules
+* Database side effects
+* API feedback
+* Regression behavior
+
+A passing test should provide evidence that the application does the right thing, not merely that a line of code was executed.
+
+## Modules Tested So Far
+
+* Authentication / Users
+* Banks
+* Savings
+* Assets
+* Transaction exports / backup
+* Credit Cards
+* Dashboard
+
+## Credit Card Testing
+
+The credit-card page is a financially sensitive backend module.
+
+The test suite covers:
+
+* Credit-card CRUD
+* Authorization and ownership isolation
+* Input validation
+* Transaction creation and history
+* Expense rules
+* Payment rules
+* Credit-limit rules
+* Billing rules
+* Balance calculations
+* Deletion restrictions
+* Database side effects
+* API success and error feedback
+* Regression behavior
+
+Focused result:
+
+`79 passed`
+
+### Credit Card Testing Lesson
+
+Do not change production datetime behavior simply to make a test pass.
+
+The application's credit-card transaction timestamp behavior differs between local and deployed environments. Tests therefore need to be designed around the intended business behavior without rewriting the timestamp conversion/order logic unless a genuine application defect is identified.
+
+A particularly important lesson was to distinguish between:
+
+```text
+Test setup problem
+        vs
+Production behavior problem
+```
+
+A failing test does not automatically mean the route is broken.
+
+## Dashboard Testing
+
+The Dashboard is primarily a read/aggregation module.
+
+The test suite covers:
+
+* Summary endpoint
+* Spending endpoint
+* Asset-allocation endpoint
+* Authentication
+* Empty states
+* Financial aggregation
+* Date-range filtering
+* Invalid range feedback
+* Expense-only spending calculations
+* Bank + credit-card spending aggregation
+* Category normalization
+* Top-12 spending categories
+* Asset grouping and sorting
+* Cross-user isolation
+
+Focused result:
+
+`22 passed`
+
+### Dashboard Testing Lesson
+
+When an API sorts only by a value, equal values may legitimately have an unspecified relative order.
+
+Tests should not accidentally require an ordering rule that the application never promised.
+
+A better test dataset can also make the business rule unambiguous. For example:
+
+```text
+FD           15,000
+Stocks       11,000
+Mutual Funds 10,000
+```
+
+clearly exercises descending sorting without relying on tie ordering.
+
+## Full Backend Regression
+
+After adding Credit Card and Dashboard tests:
+
+`389 passed, 5 warnings`
+
+The warning count is currently left alone because the existing datetime deprecation warning is related to timestamp behavior that is considered sensitive. The objective of the current testing phase is behavioral coverage, not unrelated timestamp refactoring.
+
+## Testing Workflow Learned
+
+The preferred workflow is:
+
+```text
+Inspect implementation
+        ↓
+Understand current behavior
+        ↓
+Write focused tests
+        ↓
+Run module-specific tests
+        ↓
+Determine whether failures are test or production issues
+        ↓
+Fix tests when the expectation/setup is wrong
+        ↓
+Only change production code for genuine defects
+        ↓
+Run full regression suite
+```
+
+## Current Testing Position
+
+```text
+Backend module testing
+├── Authentication / Users   ✅
+├── Banks                    ✅
+├── Savings                  ✅
+├── Assets                   ✅
+├── Transaction exports      ✅
+├── Credit Cards             ✅
+├── Dashboard                ✅
+└── Transaction audit        ← NEXT
+```
+
+Frontend testing is intentionally deferred until the remaining meaningful backend testing work is complete.
+
+# Next Learning Goals
+
+## Backend Testing
+
+* Learn how to identify testing gaps from route and business-logic branches.
+* Distinguish unit-style assertions from API integration/behavior tests.
+* Strengthen database side-effect verification.
+* Identify transaction-specific edge cases that are worth testing.
+
+## CI Testing
+
+After backend and frontend tests are established, integrate them into GitHub Actions so that tests become part of the repository's required validation flow.
+
+## DevOps Progression
+
+The intended progression remains:
+
+```text
+Develop
+  ↓
+Version control
+  ↓
+CI
+  ↓
+Automated tests
+  ↓
+Docker build in CI
+  ↓
+Continuous deployment
+  ↓
+Production configuration/security
+  ↓
+Reliability
+  ↓
+Monitoring
+  ↓
+System design / scaling
+```
