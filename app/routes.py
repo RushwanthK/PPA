@@ -1,5 +1,11 @@
-from flask import Blueprint, jsonify, request, send_file
 from datetime import datetime
+
+from flask import (
+    Blueprint,
+    jsonify,
+    request,
+    send_file,
+)
 
 from flask_jwt_extended import (
     get_jwt_identity,
@@ -28,9 +34,12 @@ def home():
 # ============================================================
 
 def _get_authorized_export_user(user_id):
-    user = db.session.get(User, user_id)
+    user = db.session.get(
+        User,
+        user_id,
+    )
 
-    if not user:
+    if user is None:
         return None, (
             jsonify({
                 "error": "User not found"
@@ -63,7 +72,19 @@ def _get_requested_export_categories():
     )
 
 
-@routes.route("/users/<int:id>/transactions/export/excel",methods=["GET"],)
+def _export_error_response():
+    return jsonify({
+        "error": (
+            "Unable to generate "
+            "transaction backup"
+        )
+    }), 500
+
+
+@routes.route(
+    "/users/<int:id>/transactions/export/excel",
+    methods=["GET"],
+)
 @jwt_required()
 def export_user_transactions_excel(id):
     user, error_response = (
@@ -77,7 +98,6 @@ def export_user_transactions_excel(id):
         categories = (
             _get_requested_export_categories()
         )
-
     except ValueError as exc:
         return jsonify({
             "error": str(exc),
@@ -95,15 +115,16 @@ def export_user_transactions_excel(id):
 
         category_label = (
             "all"
-            if categories == list(CATEGORY_ORDER)
+            if categories
+            == list(CATEGORY_ORDER)
             else "selected"
         )
 
         filename = (
-            f"transaction_backup_"
+            "transaction_backup_"
             f"{category_label}_"
             f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            f".xlsx"
+            ".xlsx"
         )
 
         return send_file(
@@ -120,15 +141,13 @@ def export_user_transactions_excel(id):
     except Exception:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                "Unable to generate "
-                "transaction backup"
-            )
-        }), 500
+        return _export_error_response()
 
 
-@routes.route("/users/<int:id>/transactions/export/pdf",methods=["GET"],)
+@routes.route(
+    "/users/<int:id>/transactions/export/pdf",
+    methods=["GET"],
+)
 @jwt_required()
 def export_user_transactions_pdf(id):
     user, error_response = (
@@ -142,7 +161,6 @@ def export_user_transactions_pdf(id):
         categories = (
             _get_requested_export_categories()
         )
-
     except ValueError as exc:
         return jsonify({
             "error": str(exc),
@@ -160,15 +178,16 @@ def export_user_transactions_pdf(id):
 
         category_label = (
             "all"
-            if categories == list(CATEGORY_ORDER)
+            if categories
+            == list(CATEGORY_ORDER)
             else "selected"
         )
 
         filename = (
-            f"transaction_backup_"
+            "transaction_backup_"
             f"{category_label}_"
             f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            f".pdf"
+            ".pdf"
         )
 
         return send_file(
@@ -181,12 +200,7 @@ def export_user_transactions_pdf(id):
     except Exception:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                "Unable to generate "
-                "transaction backup"
-            )
-        }), 500
+        return _export_error_response()
 
 """
 Redundant comment block at the end of the file. It can be removed as it doesn't serve any purpose.

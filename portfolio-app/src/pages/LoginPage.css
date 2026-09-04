@@ -1,18 +1,26 @@
 /* LoginPage.css */
 .login-container {
-  max-width: 400px;
-  margin: 80px auto;
-  padding: 30px;
-  background-color: #1f1f1f; /* bg-color */
-  border-radius: 12px;
-  box-shadow: 0 0 12px rgba(0, 0, 0, 0.7);
+  width: min(92vw, 400px);
+  margin: clamp(40px, 10vh, 100px) auto;
+  padding: clamp(24px, 4vw, 34px);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   color: var(--text-color);
+  animation: login-fade-in var(--transition-base);
+}
+
+@keyframes login-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .login-container h2 {
   text-align: center;
-  margin-bottom: 20px;
-  font-size: 24px;
+  margin: 0 0 22px;
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 700;
   color: var(--text-color);
 }
 
@@ -22,30 +30,38 @@
 }
 
 .login-container input {
-  padding: 12px;
+  padding: 12px 14px;
   margin-bottom: 14px;
-  border-radius: 6px;
-  border: 1px solid #333;
-  background-color: #2a2a2a; /* slightly lighter than bg */
-  color: white;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--surface-alt);
+  color: var(--text-color);
   font-size: 15px;
 }
 
 .login-container input:focus {
   outline: none;
   border-color: var(--action-color);
+  box-shadow: 0 0 0 3px rgba(59, 156, 255, 0.18);
 }
 
 .login-container button {
-  margin-top: 10px;
+  margin-top: 6px;
   font-size: 16px;
+  padding: 12px 16px;
+}
+
+.login-container button:disabled {
+  cursor: progress;
 }
 
 .login-container p.error {
   color: var(--error-color);
   font-weight: 500;
-  margin-top: 12px;
+  margin-top: 14px;
+  margin-bottom: 0;
   text-align: center;
+  font-size: 14px;
 }
 
 /* Toggle Register/Login */
@@ -53,8 +69,15 @@
   cursor: pointer;
   color: var(--action-color);
   text-align: center;
-  margin-top: 16px;
+  margin-top: 18px;
+  margin-bottom: 0;
   font-size: 14px;
+  transition: opacity var(--transition-fast);
+}
+
+.login-container .toggle-auth:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 /* Optional: mimic placeholder for empty date */
@@ -63,27 +86,26 @@ input[type="date"].empty-date::-webkit-datetime-edit {
 }
 input[type="date"].empty-date:before {
   content: "DOB";
-  color: #888;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 480px) {
   .login-container {
-    width: 90%;
-    padding: 20px;
-    margin: 60px auto;
+    margin-top: 32px;
   }
 
-  .login-container h2 {
-    font-size: 20px;
-  }
-
-  .login-container input {
-    font-size: 16px;
-  }
-
+  .login-container input,
   .login-container button {
-    font-size: 16px;
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+}
+
+/* Large displays: keep the card from feeling lost in empty space by
+   nudging it slightly larger rather than changing layout */
+@media (min-width: 1800px) {
+  .login-container {
+    width: 440px;
   }
 }

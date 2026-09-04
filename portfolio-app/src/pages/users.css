@@ -38,14 +38,14 @@
 
 /* ==========================================================================
    Base layout
+   Note: body background/color/font come from the shared tokens in
+   index.css (--bg-color / --text-color) so every page agrees on the base
+   theme. This file previously redefined `body` here too — since that
+   selector isn't scoped to a route, whichever page's CSS happened to be
+   loaded last would silently win, causing the background to depend on
+   navigation order instead of being consistent. .users-container below
+   still gets its own distinct card look via the --up-* tokens.
    ========================================================================== */
-body {
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
-  background: radial-gradient(circle at top, #17181b 0%, #0b0c0d 65%);
-  color: var(--up-text);
-  margin: 0;
-  padding: 0;
-}
 
 .users-container {
   margin: clamp(16px, 4vw, 40px) auto;
@@ -431,9 +431,6 @@ form input:focus {
   .users-container {
     max-width: 1080px;
     padding: 48px;
-  }
-
-  body {
     font-size: 18px;
   }
 

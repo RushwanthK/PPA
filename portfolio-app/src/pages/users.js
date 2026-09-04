@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getUsers,
   updateUser,
@@ -26,17 +26,19 @@ const allCategoriesSelected = () =>
     return selection;
   }, {});
 
+const EMPTY_UPDATED_USER = {
+  id: '',
+  name: '',
+  dob: '',
+  place: '',
+  password: '',
+  confirmPassword: ''
+};
+
 const Users = () => {
   const [users, setUsers] = useState([]);
 
-  const [updatedUser, setUpdatedUser] = useState({
-    id: '',
-    name: '',
-    dob: '',
-    place: '',
-    password: '',
-    confirmPassword: ''
-  });
+  const [updatedUser, setUpdatedUser] = useState(EMPTY_UPDATED_USER);
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -70,13 +72,29 @@ const Users = () => {
   // keeps working without the user needing to touch anything.
   const [selectedCategories, setSelectedCategories] = useState(allCategoriesSelected());
 
-  const showNotification = (message, type = 'success') => {
+  // Guards against setState after unmount, and lets a new notification
+  // cancel a previous one's pending "hide" timeout instead of both
+  // fighting over the same state.
+  const isMounted = useRef(true);
+  const notificationTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
+    };
+  }, []);
+
+  const showNotification = useCallback((message, type = 'success') => {
+    if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current);
+
     setNotification({ show: true, message, type });
 
-    setTimeout(() => {
-      setNotification({ show: false, message: '', type: '' });
+    notificationTimeoutRef.current = setTimeout(() => {
+      if (isMounted.current) setNotification({ show: false, message: '', type: '' });
     }, 3000);
-  };
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -84,26 +102,37 @@ const Users = () => {
         setLoading(true);
 
         const response = await getUsers();
-        console.log('API Response:', response);
 
-        setUsers(response);
-        setError(null);
+        if (isMounted.current) {
+          setUsers(response);
+          setError(null);
+        }
       } catch (err) {
         console.error('Failed to fetch users:', err);
 
-        setError('Failed to load users. Please try again.');
-        setUsers([]);
+        if (isMounted.current) {
+          setError('Failed to load users. Please try again.');
+          setUsers([]);
+        }
 
         showNotification('Failed to load users. Please try again.', 'error');
       } finally {
-        setLoading(false);
+        if (isMounted.current) setLoading(false);
       }
     };
 
     fetchUsers();
+  }, [showNotification]);
+
+  // Single handler for every text/date/password field in the edit form,
+  // matched by the input's `name` attribute. Replaces five separate inline
+  // arrow functions (one per field) that each spread the whole object.
+  const handleFieldChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setUpdatedUser(prev => ({ ...prev, [name]: value }));
   }, []);
 
-  const handleUpdateUser = async () => {
+  const handleUpdateUser = useCallback(async () => {
     if (updatedUser.password && updatedUser.password !== updatedUser.confirmPassword) {
       showNotification('Passwords do not match', 'error');
       return;
@@ -130,15 +159,7 @@ const Users = () => {
         )
       );
 
-      setUpdatedUser({
-        id: '',
-        name: '',
-        dob: '',
-        place: '',
-        password: '',
-        confirmPassword: ''
-      });
-
+      setUpdatedUser(EMPTY_UPDATED_USER);
       setIsEditing(false);
       showNotification('User updated successfully!');
     } catch (err) {
@@ -153,9 +174,9 @@ const Users = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [updatedUser, showNotification]);
 
-  const handleDeleteUser = async (id) => {
+  const handleDeleteUser = useCallback(async (id) => {
     if (isDeleting) {
       return;
     }
@@ -201,9 +222,9 @@ const Users = () => {
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [isDeleting]);
 
-  const closeDeleteModal = () => {
+  const closeDeleteModal = useCallback(() => {
     if (isDeleting || isDownloadingBackup) {
       return;
     }
@@ -213,9 +234,9 @@ const Users = () => {
     setDeletingUserId(null);
     setBackupDownloaded(false);
     setSelectedCategories(allCategoriesSelected());
-  };
+  }, [isDeleting, isDownloadingBackup]);
 
-  const toggleCategory = (key) => {
+  const toggleCategory = useCallback((key) => {
     setSelectedCategories(prev => ({
       ...prev,
       [key]: !prev[key]
@@ -224,14 +245,14 @@ const Users = () => {
     // Selection changed, so any previously downloaded backup no longer
     // reflects what's currently checked.
     setBackupDownloaded(false);
-  };
+  }, []);
 
-  const selectAllCategories = () => {
+  const selectAllCategories = useCallback(() => {
     setSelectedCategories(allCategoriesSelected());
     setBackupDownloaded(false);
-  };
+  }, []);
 
-  const clearAllCategories = () => {
+  const clearAllCategories = useCallback(() => {
     setSelectedCategories(
       EXPORT_CATEGORY_OPTIONS.reduce((selection, category) => {
         selection[category.key] = false;
@@ -239,14 +260,15 @@ const Users = () => {
       }, {})
     );
     setBackupDownloaded(false);
-  };
+  }, []);
 
-  const getSelectedCategoryKeys = () =>
+  const getSelectedCategoryKeys = useCallback(() =>
     EXPORT_CATEGORY_OPTIONS
       .filter(category => selectedCategories[category.key])
-      .map(category => category.key);
+      .map(category => category.key),
+  [selectedCategories]);
 
-  const downloadBlob = (blob, filename) => {
+  const downloadBlob = useCallback((blob, filename) => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
 
@@ -258,9 +280,9 @@ const Users = () => {
     link.remove();
 
     window.URL.revokeObjectURL(url);
-  };
+  }, []);
 
-  const handleDownloadExcel = async () => {
+  const handleDownloadExcel = useCallback(async () => {
     if (!deleteInfo || !deletingUserId) {
       return;
     }
@@ -292,9 +314,9 @@ const Users = () => {
     } finally {
       setIsDownloadingBackup(false);
     }
-  };
+  }, [deleteInfo, deletingUserId, getSelectedCategoryKeys, downloadBlob, showNotification]);
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = useCallback(async () => {
     if (!deleteInfo || !deletingUserId) {
       return;
     }
@@ -326,9 +348,9 @@ const Users = () => {
     } finally {
       setIsDownloadingBackup(false);
     }
-  };
+  }, [deleteInfo, deletingUserId, getSelectedCategoryKeys, downloadBlob, showNotification]);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!deleteInfo || !deletingUserId || isDeleting) {
       return;
     }
@@ -363,9 +385,9 @@ const Users = () => {
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [deleteInfo, deletingUserId, isDeleting, showNotification]);
 
-  const handleEditClick = (user) => {
+  const handleEditClick = useCallback((user) => {
     const formattedDob = user.dob.split('T')[0];
 
     setUpdatedUser({
@@ -378,7 +400,7 @@ const Users = () => {
     });
 
     setIsEditing(true);
-  };
+  }, []);
 
   if (loading && !isEditing) {
     return (
@@ -453,18 +475,20 @@ const Users = () => {
           }}>
             <input
               type="text"
+              name="name"
               placeholder="Name"
               value={updatedUser.name}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, name: e.target.value })}
+              onChange={handleFieldChange}
               required
               disabled={loading}
             />
 
             <input
               type="date"
+              name="dob"
               placeholder="Date of Birth"
               value={updatedUser.dob}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, dob: e.target.value })}
+              onChange={handleFieldChange}
               required
               disabled={loading}
               max={new Date().toISOString().split('T')[0]}
@@ -472,26 +496,29 @@ const Users = () => {
 
             <input
               type="text"
+              name="place"
               placeholder="Place"
               value={updatedUser.place}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, place: e.target.value })}
+              onChange={handleFieldChange}
               required
               disabled={loading}
             />
 
             <input
               type="password"
+              name="password"
               placeholder="New Password (optional)"
               value={updatedUser.password}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, password: e.target.value })}
+              onChange={handleFieldChange}
               disabled={loading}
             />
 
             <input
               type="password"
+              name="confirmPassword"
               placeholder="Confirm Password"
               value={updatedUser.confirmPassword}
-              onChange={(e) => setUpdatedUser({ ...updatedUser, confirmPassword: e.target.value })}
+              onChange={handleFieldChange}
               disabled={loading}
             />
 

@@ -1,5 +1,5 @@
-from io import BytesIO
 from html import escape
+from io import BytesIO
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -67,7 +67,9 @@ TRANSACTION_EXPORT_CONFIG = {
     },
 }
 
-CATEGORY_ORDER = tuple(TRANSACTION_EXPORT_CONFIG.keys())
+CATEGORY_ORDER = tuple(
+    TRANSACTION_EXPORT_CONFIG.keys()
+)
 
 CATEGORY_ALIASES = {
     "bank": "banks",
@@ -115,20 +117,15 @@ def normalize_export_categories(values=None):
     Validate and normalize selected transaction categories.
 
     Supported values:
+
         all
         banks
         savings
         assets
         credit_cards
 
-    The function also accepts comma-separated values and repeated
-    query parameters, for example:
-
-        categories=assets,savings
-
-    or:
-
-        categories=assets&categories=savings
+    The function accepts both comma-separated values and
+    repeated query parameters.
     """
 
     if not values:
@@ -147,7 +144,10 @@ def normalize_export_categories(values=None):
         return list(CATEGORY_ORDER)
 
     normalized = [
-        CATEGORY_ALIASES.get(token, token)
+        CATEGORY_ALIASES.get(
+            token,
+            token,
+        )
         for token in tokens
     ]
 
@@ -167,15 +167,18 @@ def normalize_export_categories(values=None):
 
     if unknown:
         allowed = ", ".join(
-            ["all", *CATEGORY_ORDER]
+            [
+                "all",
+                *CATEGORY_ORDER,
+            ]
         )
 
         raise ValueError(
-            f"Invalid transaction category: {unknown[0]}. "
+            f"Invalid transaction category: "
+            f"{unknown[0]}. "
             f"Allowed values: {allowed}"
         )
 
-    # Always return categories in a stable backend-defined order.
     return [
         category
         for category in CATEGORY_ORDER
@@ -194,8 +197,8 @@ def get_transaction_export_rows(
     """
     Return normalized transaction data grouped by category.
 
-    This function contains no Excel/PDF logic. It is the common
-    data layer used by all export formats.
+    This layer intentionally knows nothing about Excel or PDF.
+    Both export formats consume the same normalized data.
     """
 
     selected_categories = normalize_export_categories(
@@ -208,17 +211,26 @@ def get_transaction_export_rows(
     }
 
     for category in selected_categories:
-        config = TRANSACTION_EXPORT_CONFIG[category]
+        config = TRANSACTION_EXPORT_CONFIG[
+            category
+        ]
 
-        transaction_model = config["transaction_model"]
-        account_model = config["account_model"]
+        transaction_model = config[
+            "transaction_model"
+        ]
+
+        account_model = config[
+            "account_model"
+        ]
 
         account_id_column = getattr(
             transaction_model,
             config["account_id_field"],
         )
 
-        balance_field = config["balance_field"]
+        balance_field = config[
+            "balance_field"
+        ]
 
         records = (
             db.session
@@ -228,10 +240,18 @@ def get_transaction_export_rows(
             )
             .outerjoin(
                 account_model,
-                account_id_column == account_model.id,
+                (
+                    account_id_column
+                    == account_model.id
+                )
+                & (
+                    account_model.user_id
+                    == user_id
+                ),
             )
             .filter(
-                transaction_model.user_id == user_id
+                transaction_model.user_id
+                == user_id
             )
             .order_by(
                 transaction_model.date.asc(),
@@ -246,20 +266,30 @@ def get_transaction_export_rows(
                 "date": transaction.date,
                 "amount": transaction.amount,
                 "transaction_type": (
-                    transaction.transaction_type or ""
+                    transaction.transaction_type
+                    or ""
                 ),
                 "description": (
-                    transaction.description or ""
+                    transaction.description
+                    or ""
                 ),
-                "category": transaction.category or "",
-                "account_type": config["account_type"],
-                "account_name": account_name or "",
+                "category": (
+                    transaction.category
+                    or ""
+                ),
+                "account_type": (
+                    config["account_type"]
+                ),
+                "account_name": (
+                    account_name or ""
+                ),
                 "balance_after": getattr(
                     transaction,
                     balance_field,
                 ),
             }
-            for transaction, account_name in records
+            for transaction, account_name
+            in records
         ]
 
     return export_data
@@ -275,34 +305,61 @@ def _style_excel_sheet(sheet):
         fgColor="D9E1F2",
     )
 
-    header_font = Font(bold=True)
+    header_font = Font(
+        bold=True
+    )
 
     for cell in sheet[1]:
         cell.fill = header_fill
         cell.font = header_font
+
         cell.alignment = Alignment(
             horizontal="center",
             vertical="center",
         )
 
-    for row in sheet.iter_rows(min_row=2):
+    for row in sheet.iter_rows(
+        min_row=2
+    ):
         for cell in row:
             cell.alignment = Alignment(
                 vertical="top",
                 wrap_text=True,
             )
 
-    for cell in sheet["B"][1:]:
-        if cell.value is not None:
-            cell.number_format = "yyyy-mm-dd hh:mm:ss"
+    header_columns = {
+        cell.value: cell.column_letter
+        for cell in sheet[1]
+    }
 
-    for cell in sheet["C"][1:]:
-        if cell.value is not None:
-            cell.number_format = "0.00"
+    date_column = header_columns.get(
+        "Date"
+    )
 
-    for cell in sheet["I"][1:]:
-        if cell.value is not None:
-            cell.number_format = "0.00"
+    amount_column = header_columns.get(
+        "Amount"
+    )
+
+    balance_column = header_columns.get(
+        "Balance After"
+    )
+
+    if date_column:
+        for cell in sheet[date_column][1:]:
+            if cell.value is not None:
+                cell.number_format = (
+                    "yyyy-mm-dd hh:mm:ss"
+                )
+
+    if amount_column:
+        for cell in sheet[amount_column][1:]:
+            if cell.value is not None:
+                cell.number_format = "0.00"
+
+    if balance_column:
+        for cell in sheet[balance_column][1:]:
+            if cell.value is not None:
+                cell.number_format = "0.00"
 
     for column_cells in sheet.columns:
         max_length = max(
@@ -334,7 +391,9 @@ def _append_transaction_sheet(
 ):
     sheet = workbook.create_sheet(title)
 
-    sheet.append(TRANSACTION_HEADERS)
+    sheet.append(
+        TRANSACTION_HEADERS
+    )
 
     for row in rows:
         excel_date = row["date"]
@@ -364,10 +423,16 @@ def _append_transaction_sheet(
     return sheet
 
 
-def _append_empty_transfer_sheet(workbook):
-    sheet = workbook.create_sheet("Transfers")
+def _append_empty_transfer_sheet(
+    workbook,
+):
+    sheet = workbook.create_sheet(
+        "Transfers"
+    )
 
-    sheet.append(TRANSFER_HEADERS)
+    sheet.append(
+        TRANSFER_HEADERS
+    )
 
     _style_excel_sheet(sheet)
 
@@ -378,22 +443,31 @@ def create_transaction_excel(
     user_id,
     categories=None,
 ):
-    selected_categories = normalize_export_categories(
-        categories
+    selected_categories = (
+        normalize_export_categories(
+            categories
+        )
     )
 
-    export_data = get_transaction_export_rows(
-        user_id,
-        selected_categories,
+    export_data = (
+        get_transaction_export_rows(
+            user_id,
+            selected_categories,
+        )
     )
 
     workbook = Workbook()
 
-    # Remove the default Sheet.
-    workbook.remove(workbook.active)
+    workbook.remove(
+        workbook.active
+    )
 
     for category in selected_categories:
-        config = TRANSACTION_EXPORT_CONFIG[category]
+        config = (
+            TRANSACTION_EXPORT_CONFIG[
+                category
+            ]
+        )
 
         _append_transaction_sheet(
             workbook,
@@ -401,8 +475,10 @@ def create_transaction_excel(
             export_data[category],
         )
 
-    # Transfers deliberately remain empty for the current scope.
-    _append_empty_transfer_sheet(workbook)
+    # Transfers deliberately remain empty.
+    _append_empty_transfer_sheet(
+        workbook
+    )
 
     output = BytesIO()
 
@@ -417,8 +493,15 @@ def create_transaction_excel(
 # PDF
 # ============================================================
 
-def _pdf_cell(value, style):
-    text = "" if value is None else str(value)
+def _pdf_cell(
+    value,
+    style,
+):
+    text = (
+        ""
+        if value is None
+        else str(value)
+    )
 
     return Paragraph(
         escape(text),
@@ -435,7 +518,8 @@ def _build_pdf_transaction_table(
             header,
             styles["TableHeader"],
         )
-        for header in TRANSACTION_HEADERS
+        for header
+        in TRANSACTION_HEADERS
     ]]
 
     for row in rows:
@@ -488,18 +572,42 @@ def _build_pdf_transaction_table(
 
     if len(data) == 1:
         data.append([
-            _pdf_cell("", styles["TableCell"]),
-            _pdf_cell("", styles["TableCell"]),
-            _pdf_cell("", styles["TableCell"]),
-            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
             _pdf_cell(
                 "No transaction records",
                 styles["TableCell"],
             ),
-            _pdf_cell("", styles["TableCell"]),
-            _pdf_cell("", styles["TableCell"]),
-            _pdf_cell("", styles["TableCell"]),
-            _pdf_cell("", styles["TableCell"]),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
+            _pdf_cell(
+                "",
+                styles["TableCell"],
+            ),
         ])
 
     table = Table(
@@ -518,75 +626,104 @@ def _build_pdf_transaction_table(
         ],
     )
 
-    table.setStyle(TableStyle([
-        (
-            "BACKGROUND",
-            (0, 0),
-            (-1, 0),
-            colors.lightgrey,
-        ),
-        (
-            "GRID",
-            (0, 0),
-            (-1, -1),
-            0.5,
-            colors.grey,
-        ),
-        (
-            "VALIGN",
-            (0, 0),
-            (-1, -1),
-            "TOP",
-        ),
-        (
-            "LEFTPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-        (
-            "RIGHTPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-        (
-            "TOPPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-        (
-            "BOTTOMPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-    ]))
+    table.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.lightgrey,
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey,
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "TOP",
+            ),
+            (
+                "LEFTPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+            (
+                "RIGHTPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+        ])
+    )
 
     return table
 
 
-def _build_empty_transfer_table(styles):
+def _build_empty_transfer_table(
+    styles,
+):
     data = [[
         Paragraph(
             header,
             styles["TableHeader"],
         )
-        for header in TRANSFER_HEADERS
+        for header
+        in TRANSFER_HEADERS
     ], [
-        Paragraph("", styles["TableCell"]),
-        Paragraph("", styles["TableCell"]),
-        Paragraph("", styles["TableCell"]),
-        Paragraph("", styles["TableCell"]),
-        Paragraph("", styles["TableCell"]),
-        Paragraph("", styles["TableCell"]),
-        Paragraph("", styles["TableCell"]),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
         Paragraph(
             "No transfer records",
             styles["TableCell"],
         ),
-        Paragraph("", styles["TableCell"]),
+        Paragraph(
+            "",
+            styles["TableCell"],
+        ),
     ]]
 
     table = Table(
@@ -594,51 +731,53 @@ def _build_empty_transfer_table(styles):
         repeatRows=1,
     )
 
-    table.setStyle(TableStyle([
-        (
-            "BACKGROUND",
-            (0, 0),
-            (-1, 0),
-            colors.lightgrey,
-        ),
-        (
-            "GRID",
-            (0, 0),
-            (-1, -1),
-            0.5,
-            colors.grey,
-        ),
-        (
-            "VALIGN",
-            (0, 0),
-            (-1, -1),
-            "TOP",
-        ),
-        (
-            "LEFTPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-        (
-            "RIGHTPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-        (
-            "TOPPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-        (
-            "BOTTOMPADDING",
-            (0, 0),
-            (-1, -1),
-            3,
-        ),
-    ]))
+    table.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.lightgrey,
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.5,
+                colors.grey,
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "TOP",
+            ),
+            (
+                "LEFTPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+            (
+                "RIGHTPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+            (
+                "TOPPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+            (
+                "BOTTOMPADDING",
+                (0, 0),
+                (-1, -1),
+                3,
+            ),
+        ])
+    )
 
     return table
 
@@ -647,13 +786,17 @@ def create_transaction_pdf(
     user_id,
     categories=None,
 ):
-    selected_categories = normalize_export_categories(
-        categories
+    selected_categories = (
+        normalize_export_categories(
+            categories
+        )
     )
 
-    export_data = get_transaction_export_rows(
-        user_id,
-        selected_categories,
+    export_data = (
+        get_transaction_export_rows(
+            user_id,
+            selected_categories,
+        )
     )
 
     output = BytesIO()
@@ -693,13 +836,20 @@ def create_transaction_pdf(
             "PPA Transaction History Backup",
             styles["Title"],
         ),
-        Spacer(1, 4 * mm),
+        Spacer(
+            1,
+            4 * mm,
+        ),
     ]
 
     for index, category in enumerate(
         selected_categories
     ):
-        config = TRANSACTION_EXPORT_CONFIG[category]
+        config = (
+            TRANSACTION_EXPORT_CONFIG[
+                category
+            ]
+        )
 
         elements.append(
             Paragraph(
@@ -715,14 +865,22 @@ def create_transaction_pdf(
             )
         )
 
-        if index < len(selected_categories) - 1:
+        if index < (
+            len(selected_categories) - 1
+        ):
             elements.append(
-                Spacer(1, 6 * mm)
+                Spacer(
+                    1,
+                    6 * mm,
+                )
             )
 
-    # Transfers are deliberately empty.
+    # Transfers deliberately remain empty.
     elements.append(
-        Spacer(1, 6 * mm)
+        Spacer(
+            1,
+            6 * mm,
+        )
     )
 
     elements.append(

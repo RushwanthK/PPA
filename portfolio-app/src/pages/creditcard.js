@@ -1,5 +1,5 @@
 // src/pages/creditcard.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   getCreditCards, 
   createCreditCard, 
@@ -52,6 +52,12 @@ export default function CreditCard() {
   // These must not appear behind/below the dialog.
   const [deleteDialogError, setDeleteDialogError] = useState(null);
 
+  // Error specifically belonging to the "Add Transaction" form (e.g. no
+  // Payment/Expense type selected). Kept separate from the page-level
+  // `error` banner so it shows right next to the field that needs
+  // attention instead of behind the modal.
+  const [transactionFormError, setTransactionFormError] = useState(null);
+
   // Backup/download state.
   const [isDownloadingCardBackup, setIsDownloadingCardBackup] = useState(false);
   const [cardBackupDownloaded, setCardBackupDownloaded] = useState(false);
@@ -61,18 +67,35 @@ export default function CreditCard() {
   const [sortBy, setSortBy] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
 
+  // Guards against setState calls after this page has been navigated
+  // away from while a request (card list, card details, transactions,
+  // billing, backup export, delete) is still in flight. Important on a
+  // financial page where several of these actions are async and the
+  // user may click through quickly.
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const cardsResponse = await getCreditCards();
-        setCards(cardsResponse || []);
-        setError(null);
+        if (isMounted.current) {
+          setCards(cardsResponse || []);
+          setError(null);
+        }
       } catch (err) {
         console.error('Error fetching data:', err);
-        setError('Failed to load credit card data');
-        setCards([]);
+        if (isMounted.current) {
+          setError('Failed to load credit card data');
+          setCards([]);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted.current) setLoading(false);
       }
     };
 
@@ -80,50 +103,54 @@ export default function CreditCard() {
   }, []);
 
   // API + UI handlers (kept behavior from your original code)
-  const fetchCardDetails = async (cardId) => {
+  const fetchCardDetails = useCallback(async (cardId) => {
     try {
       setLoading(true);
       const card = await getCreditCard(cardId);
-      setSelectedCard(card);
-      setShowCardDetails(true);
-      setError(null);
+      if (isMounted.current) {
+        setSelectedCard(card);
+        setShowCardDetails(true);
+        setError(null);
+      }
     } catch (err) {
       console.error('Error fetching card details:', err);
-      setError('Failed to load card details');
+      if (isMounted.current) setError('Failed to load card details');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchTransactions = async (cardId) => {
+  const fetchTransactions = useCallback(async (cardId) => {
     try {
       setLoading(true);
       const txs = await getCreditCardTransactions(cardId);
-      setTransactions(txs);
-      setShowTransactions(true);
-      setError(null);
+      if (isMounted.current) {
+        setTransactions(txs);
+        setShowTransactions(true);
+        setError(null);
+      }
     } catch (err) {
       console.error('Error fetching transactions:', err);
-      setError('Failed to load transactions');
+      if (isMounted.current) setError('Failed to load transactions');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
-  };
+  }, []);
 
-  const handleInputChange = (e) => {
+  const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
-  const handleTransactionChange = (e) => {
+  const handleTransactionChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     setTransactionData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-  };
+  }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     try {
       setLoading(true);
@@ -136,31 +163,36 @@ export default function CreditCard() {
       if (editMode && selectedCard) {
         const response = await updateCreditCard(selectedCard.id, cardData);
         const updatedCards = await getCreditCards();
-        setCards(updatedCards);
-        setSelectedCard(response.card || selectedCard);
-        setEditMode(false);
+        if (isMounted.current) {
+          setCards(updatedCards);
+          setSelectedCard(response.card || selectedCard);
+          setEditMode(false);
+        }
       } else {
         await createCreditCard(cardData);
         const updatedCards = await getCreditCards();
-        setCards(updatedCards);
+        if (isMounted.current) setCards(updatedCards);
       }
 
-      resetForm();
+      if (isMounted.current) resetForm();
     } catch (error) {
       console.error('Error saving card:', error);
-      setError(error.message || 'Failed to save credit card');
+      if (isMounted.current) setError(error.message || 'Failed to save credit card');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, editMode, selectedCard]);
 
-  const handleTransactionSubmit = async (e) => {
+  const handleTransactionSubmit = useCallback(async (e) => {
     e.preventDefault();
 
     if (transactionData.isPayment === '') {
-      alert('Please select whether this is a Payment or Expense.');
+      setTransactionFormError('Please select whether this is a Payment or Expense.');
       return;
     }
+
+    setTransactionFormError(null);
 
     try {
       setLoading(true);
@@ -177,52 +209,58 @@ export default function CreditCard() {
 
       // Refresh
       const updatedCards = await getCreditCards();
-      setCards(updatedCards);
 
-      if (selectedCard) {
-        const refreshedCard = updatedCards.find(c => c.id === selectedCard.id);
-        setSelectedCard(refreshedCard || null);
+      if (isMounted.current) {
+        setCards(updatedCards);
+
+        if (selectedCard) {
+          const refreshedCard = updatedCards.find(c => c.id === selectedCard.id);
+          setSelectedCard(refreshedCard || null);
+        }
+
+        resetTransactionForm();
       }
-
-      resetTransactionForm();
     } catch (error) {
       console.error('Error adding transaction:', error);
-      setError(error.message || 'Failed to add transaction');
+      if (isMounted.current) setTransactionFormError(error.message || 'Failed to add transaction');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionData, selectedCard]);
 
-  const handleProcessBilling = async (cardId) => {
+  const handleProcessBilling = useCallback(async (cardId) => {
     try {
       setLoading(true);
       const response = await processBilling(cardId);
       const updatedCard = await getCreditCard(cardId);
 
-      setCards(prevCards =>
-        prevCards.map(card =>
-          card.id === cardId ? updatedCard : card
-        )
-      );
+      if (isMounted.current) {
+        setCards(prevCards =>
+          prevCards.map(card =>
+            card.id === cardId ? updatedCard : card
+          )
+        );
 
-      setBillingDetails({
-        transactionsBilled: response.transactions_billed,
-        totalAmountBilled: response.total_amount_billed,
-        card: updatedCard
-      });
+        setBillingDetails({
+          transactionsBilled: response.transactions_billed,
+          totalAmountBilled: response.total_amount_billed,
+          card: updatedCard
+        });
 
-      setSelectedCard(updatedCard);
-      setShowBillingDetails(true);
-      setError(null);
+        setSelectedCard(updatedCard);
+        setShowBillingDetails(true);
+        setError(null);
+      }
     } catch (err) {
       console.error('Error processing billing:', err);
-      setError('Failed to process billing');
+      if (isMounted.current) setError('Failed to process billing');
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
-  };
+  }, []);
 
-  const handleDeleteCard = (cardId) => {
+  const handleDeleteCard = useCallback((cardId) => {
     if (isDeletingCard || isDownloadingCardBackup) {
       return;
     }
@@ -235,9 +273,9 @@ export default function CreditCard() {
     setDeletingCardId(cardId);
     setCardBackupDownloaded(false);
     setShowDeleteModal(true);
-  };
+  }, [isDeletingCard, isDownloadingCardBackup]);
 
-  const closeDeleteModal = () => {
+  const closeDeleteModal = useCallback(() => {
     if (isDeletingCard || isDownloadingCardBackup) {
       return;
     }
@@ -246,9 +284,9 @@ export default function CreditCard() {
     setDeletingCardId(null);
     setDeleteDialogError(null);
     setCardBackupDownloaded(false);
-  };
+  }, [isDeletingCard, isDownloadingCardBackup]);
 
-  const downloadBlob = (blob, filename) => {
+  const downloadBlob = useCallback((blob, filename) => {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
 
@@ -260,9 +298,9 @@ export default function CreditCard() {
 
     link.remove();
     window.URL.revokeObjectURL(url);
-  };
+  }, []);
 
-  const getCurrentUserIdForBackup = async () => {
+  const getCurrentUserIdForBackup = useCallback(async () => {
     const usersResponse = await getUsers();
 
     const users = Array.isArray(usersResponse)
@@ -282,9 +320,9 @@ export default function CreditCard() {
     }
 
     return userId;
-  };
+  }, []);
 
-  const handleDownloadCardBackupExcel = async () => {
+  const handleDownloadCardBackupExcel = useCallback(async () => {
     if (
       !deletingCardId ||
       isDeletingCard ||
@@ -313,23 +351,25 @@ export default function CreditCard() {
 
       downloadBlob(response.data, filename);
 
-      setCardBackupDownloaded(true);
+      if (isMounted.current) setCardBackupDownloaded(true);
     } catch (err) {
       console.error(
         'Failed to download credit-card Excel backup:',
         err
       );
 
-      setDeleteDialogError(
-        err.message ||
-        'Unable to download the Excel credit-card transaction backup. Your credit card has not been deleted.'
-      );
+      if (isMounted.current) {
+        setDeleteDialogError(
+          err.message ||
+          'Unable to download the Excel credit-card transaction backup. Your credit card has not been deleted.'
+        );
+      }
     } finally {
-      setIsDownloadingCardBackup(false);
+      if (isMounted.current) setIsDownloadingCardBackup(false);
     }
-  };
+  }, [deletingCardId, isDeletingCard, isDownloadingCardBackup, getCurrentUserIdForBackup, downloadBlob]);
 
-  const handleDownloadCardBackupPdf = async () => {
+  const handleDownloadCardBackupPdf = useCallback(async () => {
     if (
       !deletingCardId ||
       isDeletingCard ||
@@ -356,23 +396,25 @@ export default function CreditCard() {
 
       downloadBlob(response.data, filename);
 
-      setCardBackupDownloaded(true);
+      if (isMounted.current) setCardBackupDownloaded(true);
     } catch (err) {
       console.error(
         'Failed to download credit-card PDF backup:',
         err
       );
 
-      setDeleteDialogError(
-        err.message ||
-        'Unable to download the PDF credit-card transaction backup. Your credit card has not been deleted.'
-      );
+      if (isMounted.current) {
+        setDeleteDialogError(
+          err.message ||
+          'Unable to download the PDF credit-card transaction backup. Your credit card has not been deleted.'
+        );
+      }
     } finally {
-      setIsDownloadingCardBackup(false);
+      if (isMounted.current) setIsDownloadingCardBackup(false);
     }
-  };
+  }, [deletingCardId, isDeletingCard, isDownloadingCardBackup, getCurrentUserIdForBackup, downloadBlob]);
 
-  const handleConfirmDeleteCard = async () => {
+  const handleConfirmDeleteCard = useCallback(async () => {
     if (
       !deletingCardId ||
       isDeletingCard ||
@@ -394,45 +436,50 @@ export default function CreditCard() {
 
       const updatedCards = await getCreditCards();
 
-      setCards(updatedCards);
+      if (isMounted.current) {
+        setCards(updatedCards);
 
-      // Keep the existing behavior after deletion.
-      setSelectedCard(null);
-      setShowCardDetails(false);
+        // Keep the existing behavior after deletion.
+        setSelectedCard(null);
+        setShowCardDetails(false);
 
-      setShowDeleteModal(false);
-      setDeletingCardId(null);
-      setCardBackupDownloaded(false);
-      setDeleteDialogError(null);
+        setShowDeleteModal(false);
+        setDeletingCardId(null);
+        setCardBackupDownloaded(false);
+        setDeleteDialogError(null);
 
-      setError(null);
+        setError(null);
+      }
     } catch (err) {
       console.error('Error deleting credit card:', err);
 
       // IMPORTANT:
       // Keep this error inside the dialog.
       // Do not use setError() here.
-      setDeleteDialogError(
-        err.message ||
-        `Failed to delete credit card "${card?.name || ''}".`
-      );
+      if (isMounted.current) {
+        setDeleteDialogError(
+          err.message ||
+          `Failed to delete credit card "${card?.name || ''}".`
+        );
+      }
     } finally {
-      setIsDeletingCard(false);
+      if (isMounted.current) setIsDeletingCard(false);
     }
-  };
+  }, [deletingCardId, isDeletingCard, isDownloadingCardBackup, cards]);
 
-  const handleAddTransaction = (cardId) => {
+  const handleAddTransaction = useCallback((cardId) => {
     setTransactionData(prev => ({ 
       ...prev, 
       cardId,
       date: format(new Date(), 'yyyy-MM-dd')
     }));
+    setTransactionFormError(null);
     setShowCardDetails(false);
     setShowTransactions(false);
     setShowTransactionForm(true);
-  };
+  }, []);
 
-  const handleEditCard = (card) => {
+  const handleEditCard = useCallback((card) => {
     setFormData({
       name: card.name,
       limit: card.limit.toString(),
@@ -443,9 +490,9 @@ export default function CreditCard() {
     setEditMode(true);
     setShowForm(true);
     setShowCardDetails(false);
-  };
+  }, []);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData({
       name: '',
       limit: '',
@@ -454,9 +501,9 @@ export default function CreditCard() {
     setShowForm(false);
     setEditMode(false);
     setSelectedCard(null);
-  };
+  }, []);
 
-  const resetTransactionForm = () => {
+  const resetTransactionForm = useCallback(() => {
     setTransactionData({
       cardId: '',
       amount: '',
@@ -465,33 +512,34 @@ export default function CreditCard() {
       category: '',
       isPayment: ''
     });
+    setTransactionFormError(null);
     setShowTransactionForm(false);
-  };
+  }, []);
 
-  const closeCardDetails = () => {
+  const closeCardDetails = useCallback(() => {
     setShowCardDetails(false);
     setSelectedCard(null);
-  };
+  }, []);
 
-  const closeTransactions = () => {
+  const closeTransactions = useCallback(() => {
     setShowTransactions(false);
     setTransactions([]);
-  };
+  }, []);
 
   // Sorting/filter helpers
-  const handleSortClick = (columnKey) => {
+  const handleSortClick = useCallback((columnKey) => {
     if (sortBy === columnKey) {
       setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortBy(columnKey);
       setSortDir('asc');
     }
-  };
+  }, [sortBy]);
 
-  const safeNumber = (val) => {
+  const safeNumber = useCallback((val) => {
     const n = Number(val);
     return Number.isNaN(n) ? 0 : n;
-  };
+  }, []);
 
   const visibleCards = useMemo(() => {
     const text = (searchText || '').trim().toLowerCase();
@@ -519,7 +567,7 @@ export default function CreditCard() {
     });
 
     return sorted;
-  }, [cards, searchText, sortBy, sortDir]);
+  }, [cards, searchText, sortBy, sortDir, safeNumber]);
 
   const totals = useMemo(() => {
     const t = visibleCards.reduce((acc, c) => {
@@ -529,10 +577,17 @@ export default function CreditCard() {
       return acc;
     }, { used: 0, billed_unpaid: 0, unbilled_spends: 0 });
     return t;
-  }, [visibleCards]);
+  }, [visibleCards, safeNumber]);
 
   if (loading) {
-    return <div className="loading">Loading credit cards...</div>;
+    return (
+      <div className="credit-card-container">
+        <div className="loading">
+          <div className="cc-loading-spinner" />
+          Loading credit cards...
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -545,16 +600,16 @@ export default function CreditCard() {
         </div>
       )}
 
-      <div className="actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+      <div className="actions">
         <button type="button" className="primary" onClick={() => setShowForm(true)}>Add Credit Card</button>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="search-wrap">
           <input
             type="text"
+            className="search-input"
             placeholder="Search by name..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ padding: '8px 10px', borderRadius: 4, border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
           />
         </div>
       </div>
@@ -619,7 +674,15 @@ export default function CreditCard() {
       {showTransactionForm && (
         <div className="modal">
           <div className="modal-content">
-            <h2>Add Transaction - <span style={{ color: '#007bff' }}>{cards.find(c => c.id === transactionData.cardId)?.name || 'Credit Card'}</span></h2>
+            <h2>Add Transaction - <span className="tx-card-name">{cards.find(c => c.id === transactionData.cardId)?.name || 'Credit Card'}</span></h2>
+
+            {transactionFormError && (
+              <div className="creditcard-error-with-close tx-form-error">
+                <span>{transactionFormError}</span>
+                <button type="button" className="error-dismiss" onClick={() => setTransactionFormError(null)} aria-label="Dismiss error">&times;</button>
+              </div>
+            )}
+
             <form onSubmit={handleTransactionSubmit}>
               <div className="form-group">
                 <label>Amount</label>
@@ -668,7 +731,7 @@ export default function CreditCard() {
                 />
               </div>
 
-              <div className="form-group radio-group">
+              <div className={`form-group radio-group ${transactionFormError ? 'has-error' : ''}`}>
                 <label>Transaction Type</label>
                 <div className="radio-options">
                   <label>
@@ -677,17 +740,17 @@ export default function CreditCard() {
                       name="isPayment"
                       value="true"
                       checked={transactionData.isPayment === true}
-                      onChange={() => setTransactionData(prev => ({ ...prev, isPayment: true }))}
+                      onChange={() => { setTransactionData(prev => ({ ...prev, isPayment: true })); setTransactionFormError(null); }}
                     />
                     Payment
                   </label>
-                  <label style={{ marginLeft: '20px' }}>
+                  <label>
                     <input
                       type="radio"
                       name="isPayment"
                       value="false"
                       checked={transactionData.isPayment === false && transactionData.isPayment !== ''}
-                      onChange={() => setTransactionData(prev => ({ ...prev, isPayment: false }))}
+                      onChange={() => { setTransactionData(prev => ({ ...prev, isPayment: false })); setTransactionFormError(null); }}
                     />
                     Expense
                   </label>
@@ -705,6 +768,7 @@ export default function CreditCard() {
 
       {/* Credit Cards Table */}
       <div className="cards-table">
+        <div className="cards-table-scroll">
         <table>
           <thead>
             <tr>
@@ -764,16 +828,17 @@ export default function CreditCard() {
 
           <tfoot>
             <tr className="totals-row">
-              <td style={{ fontWeight: 600 }}>Totals</td>
+              <td>Totals</td>
               <td></td>
-              <td style={{ fontWeight: 600 }}>{totals.used.toFixed(2)}</td>
+              <td>{totals.used.toFixed(2)}</td>
               <td></td>
-              <td style={{ fontWeight: 600 }}>{totals.billed_unpaid.toFixed(2)}</td>
-              <td style={{ fontWeight: 600 }}>{totals.unbilled_spends.toFixed(2)}</td>
+              <td>{totals.billed_unpaid.toFixed(2)}</td>
+              <td>{totals.unbilled_spends.toFixed(2)}</td>
               <td></td>
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
 
       {/* Credit Card Delete Confirmation Dialog */}

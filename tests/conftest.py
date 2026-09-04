@@ -4,12 +4,23 @@ import pytest
 from dotenv import load_dotenv
 from sqlalchemy import inspect
 from sqlalchemy.engine import make_url
-from datetime import date
+from datetime import date,datetime
 
 load_dotenv(".env.test", override=True)
 
 from app import create_app, db
-from app.models import User, Transaction
+from app.models import (
+    Asset,
+    AssetTransaction,
+    Bank,
+    BankTransaction,
+    CreditCard,
+    CreditCardTransaction,
+    Saving,
+    SavingTransaction,
+    Transaction,
+    User,
+)
 
 
 TEST_DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -223,3 +234,228 @@ def test_saving(db_session, test_user, test_bank):
     if existing_saving is not None:
         db_session.delete(existing_saving)
         db_session.commit()
+
+@pytest.fixture()
+def test_asset(
+    db_session,
+    test_user,
+):
+    asset = Asset(
+        name="Test Asset",
+        user_id=test_user.id,
+        platform="Test Platform",
+        category="Mutual Funds",
+        balance=10000,
+    )
+
+    db_session.add(asset)
+    db_session.commit()
+
+    yield asset
+
+    db_session.rollback()
+
+    db_session.query(
+        AssetTransaction
+    ).filter(
+        AssetTransaction.asset_id == asset.id
+    ).delete(
+        synchronize_session=False
+    )
+
+    db_session.commit()
+
+    existing_asset = db_session.get(
+        Asset,
+        asset.id,
+    )
+
+    if existing_asset is not None:
+        db_session.delete(
+            existing_asset
+        )
+
+        db_session.commit()
+
+@pytest.fixture()
+def export_test_data(
+    db_session,
+    test_user,
+):
+    """
+    Create one controlled transaction for each
+    supported export category.
+
+    This fixture intentionally creates data directly
+    through the models rather than through API routes.
+    Export tests are responsible for testing export
+    behavior, not account/transaction creation.
+    """
+
+    bank = Bank(
+        name="Export Test Bank",
+        user_id=test_user.id,
+        balance=1000,
+    )
+
+    saving = Saving(
+        name="Export Test Saving",
+        user_id=test_user.id,
+        bank_id=bank.id,
+        balance=2000,
+    )
+
+    asset = Asset(
+        name="Export Test Asset",
+        user_id=test_user.id,
+        platform="Export Test Platform",
+        category="Other",
+        balance=3000,
+    )
+
+    credit_card = CreditCard(
+        name="Export Test Credit Card",
+        user_id=test_user.id,
+        limit=10000,
+        billing_cycle_start=1,
+        used=1000,
+        billed_unpaid=0,
+        unbilled_spends=1000,
+    )
+
+    db_session.add_all([
+        bank,
+        saving,
+        asset,
+        credit_card,
+    ])
+
+    db_session.commit()
+
+    bank_transaction = BankTransaction(
+        bank_id=bank.id,
+        user_id=test_user.id,
+        amount=1000,
+        date=datetime(
+            2026,
+            1,
+            10,
+            10,
+            0,
+            0,
+        ),
+        description="BANK_EXPORT_TEST",
+        category="Income",
+        transaction_type="income",
+        bank_balance_after=2000,
+    )
+
+    saving_transaction = SavingTransaction(
+        saving_id=saving.id,
+        user_id=test_user.id,
+        amount=500,
+        date=datetime(
+            2026,
+            1,
+            11,
+            10,
+            0,
+            0,
+        ),
+        description="SAVING_EXPORT_TEST",
+        category="Savings",
+        transaction_type="deposit",
+        saving_balance_after=2500,
+    )
+
+    asset_transaction = AssetTransaction(
+        asset_id=asset.id,
+        user_id=test_user.id,
+        amount=750,
+        date=datetime(
+            2026,
+            1,
+            12,
+            10,
+            0,
+            0,
+        ),
+        description="ASSET_EXPORT_TEST",
+        category="Investment",
+        transaction_type="deposit",
+        asset_balance_after=3750,
+    )
+
+    credit_card_transaction = (
+        CreditCardTransaction(
+            credit_card_id=credit_card.id,
+            user_id=test_user.id,
+            amount=-250,
+            date=datetime(
+                2026,
+                1,
+                13,
+                10,
+                0,
+                0,
+            ),
+            description="CARD_EXPORT_TEST",
+            category="Shopping",
+            transaction_type="expense",
+            card_balance_after=1250,
+            is_payment=False,
+            is_billed=False,
+        )
+    )
+
+    db_session.add_all([
+        bank_transaction,
+        saving_transaction,
+        asset_transaction,
+        credit_card_transaction,
+    ])
+
+    db_session.commit()
+
+    yield {
+        "bank": bank,
+        "saving": saving,
+        "asset": asset,
+        "credit_card": credit_card,
+        "bank_transaction": bank_transaction,
+        "saving_transaction": saving_transaction,
+        "asset_transaction": asset_transaction,
+        "credit_card_transaction": (
+            credit_card_transaction
+        ),
+    }
+
+    db_session.rollback()
+
+    db_session.query(
+        Transaction
+    ).filter(
+        Transaction.user_id == test_user.id
+    ).delete(
+        synchronize_session=False
+    )
+
+    db_session.commit()
+
+    for model, object_id in [
+        (Saving, saving.id),
+        (CreditCard, credit_card.id),
+        (Asset, asset.id),
+        (Bank, bank.id),
+    ]:
+        existing_object = db_session.get(
+            model,
+            object_id,
+        )
+
+        if existing_object is not None:
+            db_session.delete(
+                existing_object
+            )
+
+    db_session.commit()
