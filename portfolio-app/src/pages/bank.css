@@ -463,13 +463,16 @@ button:disabled {
 /* ==========================================================================
    Transaction modal specifics
    ========================================================================== */
-.transaction-modal .table-container {
+
+
+.transaction-table-modal .table-container {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   margin-top: 0;
 }
 
-.transaction-modal .banks-table {
+.transaction-table-modal .banks-table {
   width: max-content;
 }
 

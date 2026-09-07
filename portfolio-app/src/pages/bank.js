@@ -1,19 +1,32 @@
 // src/pages/bank.js
 import React, { useState, useEffect, useMemo } from 'react';
+
 import {
   getBanks,
   createBank,
+  updateBank,
   deleteBank,
   addBankTransaction,
   getBankTransactions,
-  getUsers,
   exportUserTransactionsExcel,
   exportUserTransactionsPdf
 } from '../services/api';
+import { useAuth } from '../AuthContext';
+
+import Button from '../components/ui/Button';
+import SearchBar from '../components/ui/SearchBar';
+import DataTable from '../components/ui/DataTable';
+
+import EntityFormDialog from '../components/dialogs/EntityFormDialog';
+import TransactionFormDialog from '../components/dialogs/TransactionFormDialog';
+import TransactionTableDialog from '../components/dialogs/TransactionTableDialog';
+
 import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
+
 import './bank.css';
 
 export default function Bank() {
+  const { user } = useAuth();
   const [banks, setBanks] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [formData, setFormData] = useState({ id: '', name: '' });
@@ -86,23 +99,50 @@ export default function Bank() {
   // ---------- API actions ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     try {
       setError(null);
       setSuccess(null);
       setLoading(true);
 
-      if (!formData.name) throw new Error('Please enter a bank name');
+      const name = formData.name.trim();
+
+      if (!name) {
+        throw new Error('Please enter a bank name');
+      }
 
       if (formData.id) {
-        //const updatedBank = await updateBank(formData.id, { name: formData.name });
-        // refresh list (safer to re-fetch)
-        const banksResponse = await getBanks();
-        setBanks(banksResponse.data || banksResponse || []);
+        const response = await updateBank(formData.id, { name });
+
+        const updatedBank = response?.bank;
+
+        if (!updatedBank) {
+          throw new Error('Bank was updated, but no bank data was returned');
+        }
+
+        setBanks(prevBanks =>
+          prevBanks.map(bank =>
+            String(bank.id) === String(updatedBank.id)
+              ? updatedBank
+              : bank
+          )
+        );
+
         setSuccess('Bank updated successfully!');
       } else {
-        await createBank({ name: formData.name });
-        const banksResponse = await getBanks();
-        setBanks(banksResponse.data || banksResponse || []);
+        const response = await createBank({ name });
+
+        const createdBank = response?.bank;
+
+        if (!createdBank) {
+          throw new Error('Bank was created, but no bank data was returned');
+        }
+
+        setBanks(prevBanks => [
+          ...prevBanks,
+          createdBank
+        ]);
+
         setSuccess('Bank created successfully!');
       }
 
@@ -117,34 +157,78 @@ export default function Bank() {
 
   const handleTransactionSubmit = async (e) => {
     e.preventDefault();
+
     try {
       setError(null);
       setSuccess(null);
       setLoading(true);
 
-      if (!transactionData.amount || isNaN(transactionData.amount)) throw new Error('Please enter a valid amount');
-      if (parseFloat(transactionData.amount) <= 0) throw new Error('Amount must be greater than 0');
+      if (
+        !transactionData.amount ||
+        isNaN(transactionData.amount)
+      ) {
+        throw new Error('Please enter a valid amount');
+      }
 
-      await addBankTransaction(transactionData.bankId, {
-        amount: parseFloat(transactionData.amount),
-        type: transactionData.type,
-        description: transactionData.description,
-        category: transactionData.category
-      });
+      const amount = parseFloat(transactionData.amount);
 
-      // Refresh banks to reflect updated balance
-      const banksResponse = await getBanks();
-      setBanks(banksResponse.data || banksResponse || []);
+      if (amount <= 0) {
+        throw new Error('Amount must be greater than 0');
+      }
 
-      // Refresh transaction list if transaction modal is open
-      if (selectedBankId) {
-        const transactionResponse = await getBankTransactions(selectedBankId);
-        setTransactions(transactionResponse?.data || transactionResponse || []);
+      const response = await addBankTransaction(
+        transactionData.bankId,
+        {
+          amount,
+          type: transactionData.type,
+          description: transactionData.description,
+          category: transactionData.category
+        }
+      );
+
+      const newBalance = response?.balance;
+      const createdTransaction = response?.transaction;
+
+      if (newBalance === undefined || !createdTransaction) {
+        throw new Error(
+          'Transaction was added, but the server did not return the updated transaction data'
+        );
+      }
+
+      setBanks(prevBanks =>
+        prevBanks.map(bank =>
+          String(bank.id) === String(transactionData.bankId)
+            ? {
+                ...bank,
+                balance: newBalance
+              }
+            : bank
+        )
+      );
+
+      const normalizedTransaction = {
+        ...createdTransaction,
+        transaction_type:
+          createdTransaction.transaction_type ||
+          createdTransaction.type,
+        bank_balance_after:
+          createdTransaction.bank_balance_after ??
+          createdTransaction.balance_after
+      };
+
+      if (
+        selectedBankId &&
+        String(selectedBankId) ===
+          String(transactionData.bankId)
+      ) {
+        setTransactions(prevTransactions => [
+          normalizedTransaction,
+          ...prevTransactions
+        ]);
       }
 
       setSuccess('Transaction added successfully!');
 
-      // Reset and close transaction form
       setTransactionData({
         bankId: '',
         amount: '',
@@ -152,10 +236,14 @@ export default function Bank() {
         description: '',
         category: ''
       });
+
       setShowTransactionForm(false);
     } catch (err) {
       console.error('Error adding transaction:', err);
-      setError(err.message || 'Failed to add transaction');
+      setError(
+        err.message ||
+        'Failed to add transaction'
+      );
     } finally {
       setLoading(false);
     }
@@ -209,27 +297,6 @@ export default function Bank() {
     window.URL.revokeObjectURL(url);
   };
 
-  const getCurrentUserIdForBackup = async () => {
-    const usersResponse = await getUsers();
-
-    const users = Array.isArray(usersResponse)
-      ? usersResponse
-      : (
-          Array.isArray(usersResponse?.data)
-            ? usersResponse.data
-            : []
-        );
-
-    const userId = users[0]?.id;
-
-    if (!userId) {
-      throw new Error(
-        'Unable to determine the current user account for backup export.'
-      );
-    }
-
-    return userId;
-  };
 
   const handleDownloadBankBackupExcel = async () => {
     if (
@@ -244,11 +311,14 @@ export default function Bank() {
       setIsDownloadingBankBackup(true);
       setDeleteDialogError(null);
 
-      const userId = await getCurrentUserIdForBackup();
+      const userId = user?.id;
 
-      // IMPORTANT:
-      // This reuses your existing Users export endpoint.
-      // categories=['banks'] means export bank transactions only.
+      if (!userId) {
+        throw new Error(
+          'Unable to determine the current user account for backup export.'
+        );
+      }
+
       const response = await exportUserTransactionsExcel(
         userId,
         ['banks']
@@ -290,7 +360,13 @@ export default function Bank() {
       setIsDownloadingBankBackup(true);
       setDeleteDialogError(null);
 
-      const userId = await getCurrentUserIdForBackup();
+      const userId = user?.id;
+
+      if (!userId) {
+        throw new Error(
+          'Unable to determine the current user account for backup export.'
+        );
+      }
 
       const response = await exportUserTransactionsPdf(
         userId,
@@ -358,12 +434,11 @@ export default function Bank() {
 
       await deleteBank(deletingBankId);
 
-      const banksResponse = await getBanks();
-
-      setBanks(
-        banksResponse.data ||
-        banksResponse ||
-        []
+      setBanks(prevBanks =>
+        prevBanks.filter(
+          bank =>
+            String(bank.id) !== String(deletingBankId)
+        )
       );
 
       setShowDeleteModal(false);
@@ -499,215 +574,301 @@ export default function Bank() {
       )}
 
       <div className="bank-toolbar">
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={() => setShowForm(true)}
-          className="add-button"
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Bank'}
-        </button>
+        </Button>
 
         <div className="bank-toolbar-search">
-          <input
-            type="text"
-            placeholder="Search by name..."
+          <SearchBar
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            className="search-input"
-            aria-label="Search banks by name"
+            placeholder="Search by name..."
+            ariaLabel="Search banks by name"
+            disabled={loading}
           />
         </div>
       </div>
 
       {/* Bank Form Modal */}
-      {showForm && (
-        <div className="modal">
-          <div className="modal-content">
-            <h2>{formData.id ? 'Edit' : 'Add'} Bank</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label htmlFor="name">Bank Name:</label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  placeholder="Bank Name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  disabled={loading}
-                />
-              </div>
+      <EntityFormDialog
+        open={showForm}
+        mode={formData.id ? 'edit' : 'create'}
+        title={formData.id ? 'Edit Bank' : 'Add Bank'}
+        onClose={resetForm}
+        onSubmit={handleSubmit}
+        submitting={loading}
+        submitLabel={formData.id ? 'Update' : 'Save'}
+      >
+        <div className="form-group">
+          <label htmlFor="name">
+            Bank Name:
+          </label>
 
-              <div className="form-actions">
-                <button type="submit" className="save-button" disabled={loading}>
-                  {loading ? 'Saving...' : 'Save'}
-                </button>
-                <button type="button" onClick={resetForm} className="cancel-button" disabled={loading}>Cancel</button>
-              </div>
-            </form>
-          </div>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            placeholder="Bank Name"
+            value={formData.name}
+            onChange={handleInputChange}
+            required
+            disabled={loading}
+          />
         </div>
-      )}
+      </EntityFormDialog>
 
       {/* Transaction Form Modal */}
-      {showTransactionForm && (
-        <div className="modal transaction-form-modal">
-          <div className="modal-content">
-            <h2>Add Transaction - <span className="accent-text">{banks.find(b => String(b.id) === String(transactionData.bankId))?.name || 'Bank'}</span></h2>
-            <form onSubmit={handleTransactionSubmit}>
-              <div className="form-group">
-                <label htmlFor="type">Transaction Type:</label>
-                <select id="type" name="type" value={transactionData.type} onChange={handleTransactionChange} required disabled={loading}>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                </select>
-              </div>
+      <TransactionFormDialog
+        open={showTransactionForm}
+        title={
+          <>
+            Add Transaction -{' '}
+            <span className="accent-text">
+              {
+                banks.find(
+                  b =>
+                    String(b.id) ===
+                    String(transactionData.bankId)
+                )?.name || 'Bank'
+              }
+            </span>
+          </>
+        }
+        onClose={() => setShowTransactionForm(false)}
+        onSubmit={handleTransactionSubmit}
+        submitting={loading}
+        submitLabel="Submit"
+      >
+        <div className="form-group">
+          <label htmlFor="type">
+            Transaction Type:
+          </label>
 
-              <div className="form-group">
-                <label htmlFor="amount">Amount:</label>
-                <input
-                  type="number"
-                  id="amount"
-                  name="amount"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="Amount"
-                  value={transactionData.amount}
-                  onChange={handleTransactionChange}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="description">Description:</label>
-                <input type="text" id="description" name="description" placeholder="Description" value={transactionData.description} onChange={handleTransactionChange} disabled={loading} />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="category">Category:</label>
-                <input type="text" id="category" name="category" placeholder="Category" value={transactionData.category} onChange={handleTransactionChange} disabled={loading} />
-              </div>
-
-              <div className="form-actions">
-                <button type="submit" className="save-button" disabled={loading}>{loading ? 'Processing...' : 'Submit'}</button>
-                <button type="button" className="cancel-button" onClick={() => setShowTransactionForm(false)} disabled={loading}>Cancel</button>
-              </div>
-            </form>
-          </div>
+          <select
+            id="type"
+            name="type"
+            value={transactionData.type}
+            onChange={handleTransactionChange}
+            required
+            disabled={loading}
+          >
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+          </select>
         </div>
-      )}
+
+        <div className="form-group">
+          <label htmlFor="amount">
+            Amount:
+          </label>
+
+          <input
+            type="number"
+            id="amount"
+            name="amount"
+            step="0.01"
+            min="0.01"
+            placeholder="Amount"
+            value={transactionData.amount}
+            onChange={handleTransactionChange}
+            required
+            disabled={loading}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="description">
+            Description:
+          </label>
+
+          <input
+            type="text"
+            id="description"
+            name="description"
+            placeholder="Description"
+            value={transactionData.description}
+            onChange={handleTransactionChange}
+            disabled={loading}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="category">
+            Category:
+          </label>
+
+          <input
+            type="text"
+            id="category"
+            name="category"
+            placeholder="Category"
+            value={transactionData.category}
+            onChange={handleTransactionChange}
+            disabled={loading}
+          />
+        </div>
+      </TransactionFormDialog>
 
       {/* Transactions Modal */}
-      {showTransactions && (
-        <div className="modal">
-          <div className="modal-content transaction-modal">
-            <div className="transaction-modal-header">
-              <h2 className="transaction-modal-title">
-                Transactions for {banks.find(b => b.id === selectedBankId)?.name || 'Bank'}
-              </h2>
-
-              <div className="transaction-modal-actions">
-                <button
-                  type="button"
-                  className="transaction-button"
-                  onClick={() => handleAddTransaction(selectedBankId)}
-                >
-                  Add Transaction
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowTransactions(false)}
-                  className="close-button"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            <div className="table-container" style={{ marginTop: 20 }}>
-              <table className="banks-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Balance After</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.length > 0 ? (
-                    transactions.map(tx => (
-                      <tr key={tx.id}>
-                        <td>{tx.date}</td>
-                        <td className={tx.transaction_type === 'income' ? 'income' : 'expense'}>{tx.transaction_type}</td>
-                        <td>Rs. {parseFloat(tx.amount).toFixed(2)}</td>
-                        <td>{tx.description || '-'}</td>
-                        <td>{tx.category || '-'}</td>
-                        <td>Rs. {parseFloat(tx.bank_balance_after).toFixed(2)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="6" className="no-data">No transactions found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      <TransactionTableDialog
+        open={showTransactions}
+        title={
+          <>
+            Transactions for{' '}
+            {
+              banks.find(
+                b => b.id === selectedBankId
+              )?.name || 'Bank'
+            }
+          </>
+        }
+        transactions={transactions}
+        loading={loading}
+        onClose={() => setShowTransactions(false)}
+        onAddTransaction={() =>
+          handleAddTransaction(selectedBankId)
+        }
+        columns={[
+          {
+            key: 'date',
+            label: 'Date',
+          },
+          {
+            key: 'transaction_type',
+            label: 'Type',
+            render: tx => (
+              <span
+                className={
+                  tx.transaction_type === 'income'
+                    ? 'income'
+                    : 'expense'
+                }
+              >
+                {tx.transaction_type}
+              </span>
+            ),
+          },
+          {
+            key: 'amount',
+            label: 'Amount',
+            render: tx =>
+              `Rs. ${parseFloat(tx.amount || 0).toFixed(2)}`,
+          },
+          {
+            key: 'description',
+            label: 'Description',
+            render: tx =>
+              tx.description || '-',
+          },
+          {
+            key: 'category',
+            label: 'Category',
+            render: tx =>
+              tx.category || '-',
+          },
+          {
+            key: 'bank_balance_after',
+            label: 'Balance After',
+            render: tx =>
+              `Rs. ${
+                parseFloat(
+                  tx.bank_balance_after || 0
+                ).toFixed(2)
+              }`,
+          },
+        ]}
+      />
 
       {/* Banks Table */}
       <div className="table-container" style={{ marginTop: 20 }}>
-        <table className="banks-table">
-          <thead>
-            <tr>
-              <th className="sortable" onClick={() => handleSortClick('name')}>
-                Name {sortBy === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th className="sortable" onClick={() => handleSortClick('balance')}>
-                Balance {sortBy === 'balance' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+        <DataTable
+          columns={[
+            {
+              key: 'name',
+              label: 'Name',
+              sortable: true,
+            },
+            {
+              key: 'balance',
+              label: 'Balance',
+              sortable: true,
+              render: bank =>
+                `Rs. ${safeNumber(bank.balance).toFixed(2)}`,
+            },
+          ]}
+          data={visibleBanks}
+          rowKey="id"
+          loading={loading && banks.length === 0}
+          emptyMessage="No banks found"
+          sortBy={sortBy}
+          sortDirection={sortDir}
+          onSort={handleSortClick}
+          renderActions={bank => (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handleEdit(bank)}
+                disabled={loading}
+              >
+                Edit
+              </Button>
 
-          <tbody>
-            {visibleBanks.length > 0 ? (
-              visibleBanks.map(bank => (
-                <tr key={bank.id}>
-                  <td>{bank.name}</td>
-                  <td>Rs. {safeNumber(bank.balance).toFixed(2)}</td>
-                  <td className="actions-cell">
-                    <button type="button" onClick={() => handleEdit(bank)} className="edit-button" disabled={loading}>Edit</button>
-                    <button type="button" onClick={() => handleAddTransaction(bank.id)} className="transaction-button" disabled={loading}>Add Transaction</button>
-                    <button type="button" onClick={() => handleViewTransactions(bank.id)} className="view-button" disabled={loading}>View Transactions</button>
-                    <button type="button" onClick={() => handleDeleteBank(bank.id)} className="delete-button" disabled={loading || isDeletingBank}>Delete</button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="3" className="no-data">No banks found</td>
-              </tr>
-            )}
-          </tbody>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() =>
+                  handleAddTransaction(bank.id)
+                }
+                disabled={loading}
+              >
+                Add Transaction
+              </Button>
 
-          <tfoot>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  handleViewTransactions(bank.id)
+                }
+                disabled={loading}
+              >
+                View Transactions
+              </Button>
+
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() =>
+                  handleDeleteBank(bank.id)
+                }
+                disabled={
+                  loading || isDeletingBank
+                }
+              >
+                Delete
+              </Button>
+            </>
+          )}
+          renderFooter={() => (
             <tr className="totals-row">
-              <td style={{ fontWeight: 600 }}>Totals</td>
-              <td style={{ fontWeight: 600 }}>Rs. {totals.balance.toFixed(2)}</td>
-              <td></td>
+              <td style={{ fontWeight: 600 }}>
+                Totals
+              </td>
+
+              <td style={{ fontWeight: 600 }}>
+                Rs. {totals.balance.toFixed(2)}
+              </td>
+
+              <td />
             </tr>
-          </tfoot>
-        </table>
+          )}
+        />
       </div>
 
       {deletingBankId && (

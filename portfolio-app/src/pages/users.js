@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../AuthContext';
 import {
   getUsers,
   updateUser,
@@ -36,6 +38,9 @@ const EMPTY_UPDATED_USER = {
 };
 
 const Users = () => {
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
   const [users, setUsers] = useState([]);
 
   const [updatedUser, setUpdatedUser] = useState(EMPTY_UPDATED_USER);
@@ -371,8 +376,8 @@ const Users = () => {
 
       showNotification(response.data?.message || 'User deleted successfully!');
 
-      localStorage.removeItem('token');
-      window.location.href = '/';
+      logout();
+      navigate('/', { replace: true });
     } catch (err) {
       console.error('Failed to delete user:', err);
 
@@ -385,7 +390,14 @@ const Users = () => {
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteInfo, deletingUserId, isDeleting, showNotification]);
+  }, [
+      deleteInfo,
+      deletingUserId,
+      isDeleting,
+      showNotification,
+      logout,
+      navigate
+    ]);
 
   const handleEditClick = useCallback((user) => {
     const formattedDob = user.dob.split('T')[0];

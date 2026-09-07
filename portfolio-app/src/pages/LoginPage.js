@@ -3,85 +3,122 @@ import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
 const API_URL = process.env.REACT_APP_API_URL;
-const EMPTY_FORM = { name: '', password: '', dob: '', place: '' };
+
+const EMPTY_FORM = {
+  name: '',
+  password: '',
+  dob: '',
+  place: '',
+};
 
 function LoginPage({ setUser }) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
   const navigate = useNavigate();
   const abortRef = useRef(null);
   const nameInputRef = useRef(null);
 
-  // Autofocus the first field on mount so keyboard users / desktop visitors
-  // can start typing immediately without an extra click.
   useEffect(() => {
     nameInputRef.current?.focus();
-  }, []);
+  }, [isRegistering]);
 
-  // Cancel any in-flight login/register request if the component unmounts
-  // mid-request (e.g. user navigates away quickly), so we never try to
-  // setState on an unmounted component.
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
     };
   }, []);
 
-  // useCallback keeps these handler references stable across renders,
-  // which avoids handing every <input> a brand-new onChange function on
-  // each keystroke (cheap here, but it's the correct pattern and matches
-  // what the rest of the app is being moved to).
   const handleChange = useCallback(e => {
     const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+
+    setForm(prev => ({
+      ...prev,
+      [name]: value,
+    }));
   }, []);
 
   const handleToggleMode = useCallback(() => {
     setError('');
+    setMessage('');
+    setForm(EMPTY_FORM);
+
     setIsRegistering(prev => !prev);
   }, []);
 
-  const handleSubmit = useCallback(async e => {
-    e.preventDefault();
-    if (submitting) return; // guards against double-submit on slow taps/connections
-    setError('');
-    setSubmitting(true);
+  const handleSubmit = useCallback(
+    async e => {
+      e.preventDefault();
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const endpoint = isRegistering ? '/register' : '/login';
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-        signal: controller.signal,
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        setError(data.error || 'Something went wrong');
+      if (submitting) {
         return;
       }
 
-      localStorage.setItem('token', data.token);
-      setUser(data.user); // set current user
-      navigate('/dashboard');
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        setError('Network error');
+      setError('');
+      setMessage('');
+      setSubmitting(true);
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const endpoint = isRegistering ? '/register' : '/login';
+
+        const response = await fetch(`${API_URL}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(form),
+          signal: controller.signal,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.error || 'Something went wrong');
+          return;
+        }
+
+        // Registration and login have different backend responses.
+        if (isRegistering) {
+          setForm(prev => ({
+            ...EMPTY_FORM,
+            name: prev.name,
+          }));
+
+          setIsRegistering(false);
+          setMessage('Account created successfully. Please log in.');
+
+          return;
+        }
+
+        // Login response contains the token and authenticated user.
+        localStorage.setItem('token', data.token);
+        setUser(data.user);
+
+        // Replace login route so browser Back does not return to it.
+        navigate('/dashboard', { replace: true });
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError('Network error. Please try again.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setSubmitting(false);
+        }
       }
-    } finally {
-      if (!controller.signal.aborted) setSubmitting(false);
-    }
-  }, [form, isRegistering, navigate, setUser, submitting]);
+    },
+    [form, isRegistering, navigate, setUser, submitting]
+  );
 
   return (
     <div className="login-container">
       <h2>{isRegistering ? 'Register' : 'Login'}</h2>
+
       <form onSubmit={handleSubmit}>
         <input
           ref={nameInputRef}
@@ -92,13 +129,16 @@ function LoginPage({ setUser }) {
           autoComplete="username"
           required
         />
+
         <input
           name="password"
           type="password"
           value={form.password}
           onChange={handleChange}
           placeholder="Password"
-          autoComplete={isRegistering ? 'new-password' : 'current-password'}
+          autoComplete={
+            isRegistering ? 'new-password' : 'current-password'
+          }
           required
         />
 
@@ -112,6 +152,7 @@ function LoginPage({ setUser }) {
               required
               className={!form.dob ? 'empty-date' : ''}
             />
+
             <input
               name="place"
               value={form.place}
@@ -123,16 +164,40 @@ function LoginPage({ setUser }) {
           </>
         )}
 
-        <button type="submit" className={isRegistering ? 'green' : 'blue'} disabled={submitting}>
-          {submitting ? 'Please wait…' : (isRegistering ? 'Create Account' : 'Login')}
+        <button
+          type="submit"
+          className={isRegistering ? 'green' : 'blue'}
+          disabled={submitting}
+        >
+          {submitting
+            ? 'Please wait…'
+            : isRegistering
+              ? 'Create Account'
+              : 'Login'}
         </button>
       </form>
 
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
 
-      <p onClick={handleToggleMode} className="toggle-auth">
-        {isRegistering ? 'Already have an account? Login' : 'New user? Register'}
-      </p>
+      {message && (
+        <p className="success" role="status">
+          {message}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={handleToggleMode}
+        className="toggle-auth"
+      >
+        {isRegistering
+          ? 'Already have an account? Login'
+          : 'New user? Register'}
+      </button>
     </div>
   );
 }
