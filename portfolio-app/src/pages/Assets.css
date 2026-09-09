@@ -1,295 +1,163 @@
-/* Assets.css */
+/* ========================================================================
+   Assets Page
+   Asset-specific layout, text hooks and table footer only.
+   Shared buttons, inputs, tables, forms, transaction dialogs and modals
+   are styled by their reusable components.
+   ======================================================================== */
+
+/* ------------------------------------------------------------------------
+   Page shell
+   ------------------------------------------------------------------------ */
 
 .assets-container {
-  background-color: #121212;
-  color: #ffffff;
-  padding: 20px;
-  padding-top: 80px;
+  width: 100%;
   max-width: 1200px;
+
+  min-height: 100vh;
+
   margin: 0 auto;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 20px;
+
+  color: var(--text-color);
 }
 
 .assets-container h1 {
-  font-size: 1.8rem;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: #ffffff;
+  margin: 0 0 20px;
+
+  color: var(--text-color);
+
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-/* Buttons */
-.add-asset-btn,
-.add-transaction-btn,
-.view-transactions-btn,
-.delete-asset-btn,
-.modal-submit-btn,
-.update-asset-btn,
-.modal-cancel-btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  margin: 2px;
-  color: white;
+/* ------------------------------------------------------------------------
+   Asset-specific text hooks
+   ------------------------------------------------------------------------ */
+
+.assets-container .accent-text {
+  color: var(--action-color);
 }
 
-.add-asset-btn,
-.modal-submit-btn,
-.update-asset-btn {
-  background-color: #4caf50;
-}
-
-.add-transaction-btn {
-  background-color: #2196f3;
-}
-
-.view-transactions-btn {
-  background-color: #2196f3;
-}
-
-.delete-asset-btn,
-.modal-cancel-btn {
-  background-color: #dc3545;
-}
-
-button:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Table */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-  margin-top: 10px;
-}
-
-th, td {
-  padding: 12px 15px;
-  border-bottom: 1px solid #444;
-}
-
-th {
-  background-color: #2d2d2d;
-  color: white;
+.assets-container .transaction-deposit {
+  color: var(--success-color);
   font-weight: 600;
 }
 
-td {
-  background-color: #1e1e1e;
+.assets-container .transaction-withdraw {
+  color: var(--error-color);
+  font-weight: 600;
 }
 
-tr:hover td {
-  background-color: #2d2d2d;
-}
+/* ------------------------------------------------------------------------
+   Toolbar
+   ------------------------------------------------------------------------ */
 
-.transactions {
-  background-color: #2d2d2d;
-  padding: 15px;
-  border-radius: 6px;
-  margin-top: 10px;
-}
-
-.transactions h3 {
-  margin-top: 0;
-  font-size: 1.1rem;
-  color: #ffffff;
-}
-
-.transactions table {
-  font-size: 0.85rem;
-}
-
-/* Form */
-form {
+.assets-toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-input, select {
-  padding: 10px 12px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  border: 1px solid #444;
-  background-color: #2d2d2d;
-  color: #ffffff;
-  width: 100%;
-}
-
-input:focus, select:focus {
-  outline: none;
-  border-color: #4caf50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
-}
-
-input::placeholder {
-  color: #cccccc;
-  opacity: 0.7;
-}
-
-/* Modal */
-.modal {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background-color: rgba(0,0,0,0.7);
-  display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000;
+  gap: 12px;
+
+  flex-wrap: wrap;
 }
 
-.modal-content {
-  background-color: #1e1e1e;
-  padding: 25px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
+.assets-toolbar-search {
+  display: flex;
+  align-items: center;
+
+  margin-left: auto;
+
+  width: min(420px, 100%);
 }
 
-.modal-content h2 {
-  margin-top: 0;
-  font-size: 1.3rem;
-  color: #ffffff;
+/* ------------------------------------------------------------------------
+   Main assets table
+   ------------------------------------------------------------------------ */
+
+.assets-table-section {
+  margin-top: 20px;
 }
 
-/* Loading & Error */
-.loading, .error {
-  padding: 20px;
-  text-align: center;
-  margin: 20px 0;
-  border-radius: 6px;
+.assets-table-section .totals-row td {
+  padding-top: 12px;
+
+  background-color: var(--surface-elevated);
+
+  border-top: 2px solid var(--border-color);
+
+  color: var(--text-color);
+
   font-size: 14px;
+  font-weight: 600;
 }
 
-.loading {
-  background-color: #1e1e1e;
-  color: white;
-}
+/* ------------------------------------------------------------------------
+   Page-level errors
+   ------------------------------------------------------------------------ */
 
-.error-with-close {
-  background-color: rgba(220, 53, 69, 0.15);
-  border: 1px solid #ff4c4c;
-  color: #ff4c4c;
+.assets-error-with-close {
+  position: relative;
+
+  margin: 20px 0;
   padding: 14px 44px 14px 16px;
-  border-radius: 6px;
+
+  background: var(--danger-soft);
+
+  border: 1px solid rgba(255, 92, 92, 0.4);
+  border-radius: var(--radius-sm);
+
+  color: var(--error-color);
+
   font-size: 14px;
-  margin: 20px 0;
-  position: relative;
   text-align: left;
 }
 
-.error-with-close button.error-dismiss {
+.assets-error-with-close .error-dismiss {
   position: absolute;
+
   top: 50%;
   right: 12px;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #ff4c4c;
-  font-size: 20px;
-  font-weight: bold;
-  cursor: pointer;
-  line-height: 1;
+
+  width: auto;
+
+  margin: 0;
   padding: 0;
-}
 
-.error-with-close button.error-dismiss:hover {
-  color: #e74c3c;
-}
+  transform: translateY(-50%);
 
-.error-dismiss:hover {
-  color: #575555;
-}
+  background: transparent;
+  color: var(--error-color);
 
-/* Responsive */
-@media (max-width: 768px) {
-  th, td {
-    padding: 8px 10px;
-    font-size: 0.8rem;
-  }
+  border: none;
 
-  .modal-content {
-    width: 95%;
-    padding: 15px;
-  }
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
 
-  .btn, .modal-submit-btn, .modal-cancel-btn {
-    width: 100%;
-  }
-}
-
-/* Make headers look clickable */
-.assets-table th.sortable {
   cursor: pointer;
-  user-select: none;
 }
 
-/* totals row */
-.assets-table tfoot .totals-row td {
-  background-color: rgba(255,255,255,0.03);
-  border-top: 2px solid #444;
-  padding-top: 12px;
-  font-size: 0.95rem;
+.assets-error-with-close .error-dismiss:hover {
+  color: #ffb1b8;
 }
 
-/* inner transactions table number alignment */
-.inner-transactions-table th, .inner-transactions-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #444;
+/* ------------------------------------------------------------------------
+   Responsive
+   ------------------------------------------------------------------------ */
+
+@media (max-width: 768px) {
+  .assets-container {
+    padding: 16px;
+  }
+
+  .assets-toolbar-search {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
-/* =========================================================
-   Delete Confirmation Dialog - Assets Theme
-   ========================================================= */
-
-.dcd-modal .dcd-backup-options {
-  background-color: #2d2d2d;
-  border: 1px solid #444;
-  border-radius: 6px;
-}
-
-.dcd-modal .dcd-backup-options h4 {
-  color: #ffffff;
-}
-
-.dcd-modal .dcd-backup-btn {
-  background-color: #2196f3;
-  color: #ffffff;
-}
-
-.dcd-modal .dcd-backup-btn:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-.dcd-modal .dcd-confirm-btn {
-  background-color: #dc3545;
-  color: #ffffff;
-}
-
-.dcd-modal .dcd-cancel-btn {
-  background-color: #2d2d2d;
-  color: #ffffff;
-  border: 1px solid #444;
-}
-
-.dcd-modal .dcd-backup-confirmed {
-  color: #4caf50;
-}
-
-.dcd-modal .dcd-category-warning {
-  color: #ff9800;
+@media (max-width: 420px) {
+  .assets-container {
+    padding: 12px;
+  }
 }

@@ -14,6 +14,7 @@ from flask_jwt_extended import (
     jwt_required,
 )
 
+from sqlalchemy import String, cast, or_
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
@@ -498,44 +499,87 @@ def get_asset_transactions(asset_id):
             "error": "Asset not found"
         }), 404
 
+    # Pagination is deliberately handled by the backend so the browser never
+    # has to load the asset's entire transaction history at once.
+    try:
+        page = max(int(request.args.get("page", 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = int(request.args.get("page_size", 25))
+    except (TypeError, ValueError):
+        page_size = 25
+
+    page_size = min(max(page_size, 1), 100)
+
+    search = (request.args.get("search") or "").strip()
+    transaction_type = (request.args.get("type") or "").strip().lower()
+
+    query = AssetTransaction.query.filter(
+        AssetTransaction.asset_id == asset_id,
+        AssetTransaction.user_id == user_id,
+    )
+
+    if transaction_type:
+        if transaction_type not in ("deposit", "withdraw"):
+            return jsonify({
+                "error": "Invalid transaction type filter"
+            }), 400
+
+        query = query.filter(
+            AssetTransaction.transaction_type == transaction_type
+        )
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(or_(
+            AssetTransaction.description.ilike(search_pattern),
+            AssetTransaction.category.ilike(search_pattern),
+            AssetTransaction.transaction_type.ilike(search_pattern),
+            cast(AssetTransaction.amount, String).ilike(search_pattern),
+            cast(AssetTransaction.date, String).ilike(search_pattern),
+            cast(AssetTransaction.asset_balance_after, String).ilike(search_pattern),
+        ))
+
+    query = query.order_by(
+        AssetTransaction.date.desc(),
+        AssetTransaction.id.desc(),
+    )
+
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+
+    if total_pages and page > total_pages:
+        page = total_pages
+
     transactions = (
-        AssetTransaction.query
-        .filter_by(
-            asset_id=asset_id
-        )
-        .order_by(
-            AssetTransaction.date.asc(),
-            AssetTransaction.id.asc(),
-        )
+        query
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
 
-    return jsonify([
-        {
-            "id": tx.id,
-            "amount": tx.amount,
-            "description": (
-                tx.description
-                or ""
-            ),
-            "category": (
-                tx.category
-                or ""
-            ),
-            "transaction_type": (
-                tx.transaction_type
-            ),
-            "date": tx.date.astimezone(
-                IST
-            ).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            ),
-            "asset_balance_after": (
-                tx.asset_balance_after
-            ),
-        }
-        for tx in transactions
-    ])
+    return jsonify({
+        "transactions": [
+            {
+                "id": tx.id,
+                "amount": tx.amount,
+                "description": tx.description or "",
+                "category": tx.category or "",
+                "transaction_type": tx.transaction_type,
+                "date": tx.date.astimezone(IST).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "asset_balance_after": tx.asset_balance_after,
+            }
+            for tx in transactions
+        ],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    })
 
 
 @assets_routes.route(

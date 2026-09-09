@@ -218,11 +218,40 @@ export const deleteAsset = async (id) => {
 };
 
 export const createAssetTransaction = async (assetId, transactionData) => {
-  return api.post(`/assets/${assetId}/transactions`, transactionData);
+  try {
+    const response = await api.post(
+      `/assets/${assetId}/transactions`,
+      transactionData
+    );
+
+    return response.data;
+  } catch (error) {
+    const errorMsg =
+      error.response?.data?.error ||
+      'Failed to add asset transaction';
+
+    console.error(
+      'Error adding asset transaction:',
+      errorMsg
+    );
+
+    throw new Error(errorMsg);
+  }
 };
 
-export const getAssetTransactions = async (assetId) => {
-  return api.get(`/assets/${assetId}/transactions`);
+export const getAssetTransactions = async (assetId, params = {}) => {
+  try {
+    const response = await api.get(`/assets/${assetId}/transactions`, {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    const errorMsg =
+      error.response?.data?.error ||
+      'Failed to fetch asset transactions';
+    console.error('Error fetching asset transactions:', errorMsg);
+    throw new Error(errorMsg);
+  }
 };
 
 // Credit Card API calls

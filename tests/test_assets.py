@@ -1480,7 +1480,11 @@ def test_get_asset_transactions_empty(
 
     data = response.get_json()
 
-    assert data == []
+    assert data["transactions"] == []
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total"] == 0
+    assert data["total_pages"] == 0
 
 
 def test_get_asset_transactions_returns_history(
@@ -1507,10 +1511,14 @@ def test_get_asset_transactions_returns_history(
 
     data = response.get_json()
 
-    assert isinstance(data, list)
-    assert len(data) == 1
+    assert isinstance(data["transactions"], list)
+    assert len(data["transactions"]) == 1
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total"] == 1
+    assert data["total_pages"] == 1
 
-    transaction = data[0]
+    transaction = data["transactions"][0]
 
     assert transaction["amount"] == 1000
 
@@ -1556,12 +1564,86 @@ def test_get_asset_transactions_uses_empty_strings_for_missing_optional_fields(
 
     data = response.get_json()
 
-    assert len(data) == 1
+    assert len(data["transactions"]) == 1
 
-    transaction = data[0]
+    transaction = data["transactions"][0]
 
     assert transaction["description"] == ""
     assert transaction["category"] == ""
+
+
+def test_get_asset_transactions_supports_pagination_and_type_filter(
+    authenticated_client,
+    test_asset,
+):
+    for index in range(3):
+        response = authenticated_client.post(
+            f"/assets/{test_asset.id}/transactions",
+            json={
+                "amount": 100 + index,
+                "type": "deposit" if index < 2 else "withdraw",
+                "description": f"Asset transaction {index}",
+                "category": "Investments",
+            },
+        )
+
+        assert response.status_code == 201
+
+    response = authenticated_client.get(
+        f"/assets/{test_asset.id}/transactions?page=2&page_size=2"
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["page"] == 2
+    assert data["page_size"] == 2
+    assert data["total"] == 3
+    assert data["total_pages"] == 2
+    assert len(data["transactions"]) == 1
+
+    filtered_response = authenticated_client.get(
+        f"/assets/{test_asset.id}/transactions?type=withdraw&page_size=100"
+    )
+
+    assert filtered_response.status_code == 200
+
+    filtered_data = filtered_response.get_json()
+
+    assert filtered_data["total"] == 1
+    assert filtered_data["total_pages"] == 1
+    assert len(filtered_data["transactions"]) == 1
+    assert filtered_data["transactions"][0]["transaction_type"] == "withdraw"
+
+
+def test_get_asset_transactions_supports_search_across_history(
+    authenticated_client,
+    test_asset,
+):
+    response = authenticated_client.post(
+        f"/assets/{test_asset.id}/transactions",
+        json={
+            "amount": 750,
+            "type": "deposit",
+            "description": "Retirement SIP",
+            "category": "Mutual Funds",
+        },
+    )
+
+    assert response.status_code == 201
+
+    response = authenticated_client.get(
+        f"/assets/{test_asset.id}/transactions?search=Retirement"
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["total"] == 1
+    assert len(data["transactions"]) == 1
+    assert data["transactions"][0]["description"] == "Retirement SIP"
 
 
 def test_get_asset_transactions_requires_authentication(

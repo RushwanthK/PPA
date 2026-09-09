@@ -19,6 +19,10 @@ function TransactionTableDialog({
   onSearchChange,
   transactionType = '',
   onTransactionTypeChange,
+  transactionTypeOptions = [
+    { value: 'income', label: 'Income' },
+    { value: 'expense', label: 'Expense' },
+  ],
   page = 1,
   totalPages = 1,
   totalTransactions = 0,
@@ -59,8 +63,11 @@ function TransactionTableDialog({
                 className="transaction-type-filter"
               >
                 <option value="">All types</option>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
+                {transactionTypeOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             )}
           </div>
