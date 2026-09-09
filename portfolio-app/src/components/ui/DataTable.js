@@ -1,4 +1,5 @@
 import React from 'react';
+import './DataTable.css';
 
 function DataTable({
   columns = [],

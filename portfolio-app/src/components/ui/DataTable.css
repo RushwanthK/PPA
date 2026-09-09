@@ -1,0 +1,107 @@
+/* ==========================================================================
+   Shared DataTable
+   All reusable application tables inherit this structure.
+   ========================================================================== */
+
+.table-container {
+  width: 100%;
+
+  overflow-x: auto;
+  overflow-y: auto;
+
+  margin-top: 20px;
+
+  background: var(--surface-color);
+
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+
+  box-shadow: var(--shadow-sm);
+}
+
+.data-table {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  font-size: 14px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px 15px;
+
+  text-align: left;
+
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.data-table th {
+  background: var(--surface-elevated);
+
+  color: var(--text-color);
+
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.data-table td {
+  color: var(--text-muted);
+}
+
+.data-table tbody tr:hover td {
+  background-color: var(--surface-hover);
+  color: var(--text-color);
+}
+
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.data-table th.sortable:hover {
+  color: var(--action-color);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.actions-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.table-loading {
+  padding: 20px;
+
+  color: var(--text-muted);
+
+  text-align: center;
+}
+
+/* Empty state */
+.data-table tbody td[colspan] {
+  padding: 28px;
+
+  color: var(--text-dim);
+
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .data-table th,
+  .data-table td {
+    padding: 9px 10px;
+    font-size: 13px;
+  }
+
+  .actions-cell {
+    flex-direction: column;
+  }
+}

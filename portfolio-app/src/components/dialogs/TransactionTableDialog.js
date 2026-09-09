@@ -3,6 +3,7 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import SearchBar from '../ui/SearchBar';
 import DataTable from '../ui/DataTable';
+import './TransactionTableDialog.css';
 
 function TransactionTableDialog({
   open,

@@ -1,0 +1,41 @@
+/* ==========================================================================
+   Shared SearchBar
+   ========================================================================== */
+
+.search-input {
+  width: 100%;
+  min-height: 38px;
+
+  margin: 0;
+  padding: 8px 12px;
+
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+
+  background-color: var(--surface-alt);
+  color: var(--text-color);
+
+  font: inherit;
+  font-size: 14px;
+
+  outline: none;
+
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.search-input::placeholder {
+  color: var(--text-dim);
+}
+
+.search-input:focus {
+  border-color: var(--action-color);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.search-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -119,7 +119,7 @@ function LoginPage({ setUser }) {
     <div className="login-container">
       <h2>{isRegistering ? 'Register' : 'Login'}</h2>
 
-      <form onSubmit={handleSubmit}>
+      <form className="login-form" onSubmit={handleSubmit}>
         <input
           ref={nameInputRef}
           name="name"
@@ -128,6 +128,7 @@ function LoginPage({ setUser }) {
           placeholder="Name"
           autoComplete="username"
           required
+          className="login-input"
         />
 
         <input
@@ -140,6 +141,7 @@ function LoginPage({ setUser }) {
             isRegistering ? 'new-password' : 'current-password'
           }
           required
+          className="login-input"
         />
 
         {isRegistering && (
@@ -150,7 +152,7 @@ function LoginPage({ setUser }) {
               value={form.dob}
               onChange={handleChange}
               required
-              className={!form.dob ? 'empty-date' : ''}
+              className={`login-input ${!form.dob ? 'empty-date' : ''}`}
             />
 
             <input
@@ -160,13 +162,14 @@ function LoginPage({ setUser }) {
               placeholder="Place"
               autoComplete="address-level2"
               required
+              className="login-input"
             />
           </>
         )}
 
         <button
           type="submit"
-          className={isRegistering ? 'green' : 'blue'}
+          className={`login-submit ${isRegistering ? 'register-mode' : 'login-mode'}`}
           disabled={submitting}
         >
           {submitting
@@ -178,13 +181,13 @@ function LoginPage({ setUser }) {
       </form>
 
       {error && (
-        <p className="error" role="alert">
+        <p className="login-message login-error" role="alert">
           {error}
         </p>
       )}
 
       {message && (
-        <p className="success" role="status">
+        <p className="login-message login-success" role="status">
           {message}
         </p>
       )}

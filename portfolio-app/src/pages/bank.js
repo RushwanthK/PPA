@@ -887,7 +887,7 @@ export default function Bank() {
       />
 
       {/* Banks Table */}
-      <div className="table-container" style={{ marginTop: 20 }}>
+      <div className="bank-table-section">
         <DataTable
           columns={[
             {
@@ -959,11 +959,11 @@ export default function Bank() {
           )}
           renderFooter={() => (
             <tr className="totals-row">
-              <td style={{ fontWeight: 600 }}>
+              <td>
                 Totals
               </td>
 
-              <td style={{ fontWeight: 600 }}>
+              <td>
                 Rs. {totals.balance.toFixed(2)}
               </td>
 

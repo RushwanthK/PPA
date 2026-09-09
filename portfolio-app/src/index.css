@@ -28,6 +28,18 @@
   --transition-fast: 0.15s ease;
   --transition-base: 0.25s ease;
 
+    /* Shared semantic tokens for reusable components */
+  --surface-elevated: #1e2026;
+  --border-soft: #262a33;
+  --primary-hover: #2f86df;
+  --success-hover: #379f69;
+  --danger-hover: #d94b4b;
+  --primary-soft: rgba(59, 156, 255, 0.14);
+  --success-soft: rgba(67, 192, 127, 0.12);
+  --danger-soft: rgba(255, 92, 92, 0.12);
+  --text-dim: #6f7682;
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+
   color-scheme: dark;
 }
 
