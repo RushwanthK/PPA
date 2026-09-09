@@ -29,6 +29,15 @@ export default function Bank() {
   const { user } = useAuth();
   const [banks, setBanks] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionPageSize, setTransactionPageSize] = useState(25);
+  const [transactionSearchInput, setTransactionSearchInput] = useState('');
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionType, setTransactionType] = useState('');
+  const [transactionTotal, setTransactionTotal] = useState(0);
+  const [transactionTotalPages, setTransactionTotalPages] = useState(0);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionRefreshKey, setTransactionRefreshKey] = useState(0);
   const [formData, setFormData] = useState({ id: '', name: '' });
   const [transactionData, setTransactionData] = useState({
     bankId: '',
@@ -79,6 +88,80 @@ export default function Bank() {
 
     fetchData();
   }, []);
+
+  // Debounce transaction search so typing does not issue one request per keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setTransactionSearch(transactionSearchInput.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [transactionSearchInput]);
+
+  // Transaction history is server-paginated and server-filtered. Only the
+  // current page is kept in React state.
+  useEffect(() => {
+    if (!showTransactions || !selectedBankId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const fetchTransactions = async () => {
+      try {
+        setTransactionsLoading(true);
+        setError(null);
+
+        const response = await getBankTransactions(
+          selectedBankId,
+          {
+            page: transactionPage,
+            page_size: transactionPageSize,
+            search: transactionSearch,
+            type: transactionType,
+          }
+        );
+
+        if (cancelled) return;
+
+        setTransactions(Array.isArray(response?.transactions) ? response.transactions : []);
+        setTransactionTotal(Number(response?.total) || 0);
+        setTransactionTotalPages(Number(response?.total_pages) || 0);
+
+        // The API can move a request back to the last valid page after a
+        // filter reduces the result set. Keep the UI state in sync.
+        if (response?.page && response.page !== transactionPage) {
+          setTransactionPage(response.page);
+        }
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error('Error fetching transactions:', err);
+        setError(err.message || 'Failed to fetch transactions');
+        setTransactions([]);
+        setTransactionTotal(0);
+        setTransactionTotalPages(0);
+      } finally {
+        if (!cancelled) {
+          setTransactionsLoading(false);
+        }
+      }
+    };
+
+    fetchTransactions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showTransactions,
+    selectedBankId,
+    transactionPage,
+    transactionPageSize,
+    transactionSearch,
+    transactionType,
+    transactionRefreshKey,
+  ]);
 
   // ---------- helpers ----------
   const safeNumber = (v) => {
@@ -206,25 +289,14 @@ export default function Bank() {
         )
       );
 
-      const normalizedTransaction = {
-        ...createdTransaction,
-        transaction_type:
-          createdTransaction.transaction_type ||
-          createdTransaction.type,
-        bank_balance_after:
-          createdTransaction.bank_balance_after ??
-          createdTransaction.balance_after
-      };
-
+      // The transaction table is server-paginated, so do not mutate a partial
+      // client-side page manually. Refresh page 1 to include the newest row.
       if (
         selectedBankId &&
-        String(selectedBankId) ===
-          String(transactionData.bankId)
+        String(selectedBankId) === String(transactionData.bankId)
       ) {
-        setTransactions(prevTransactions => [
-          normalizedTransaction,
-          ...prevTransactions
-        ]);
+        setTransactionPage(1);
+        setTransactionRefreshKey(prev => prev + 1);
       }
 
       setSuccess('Transaction added successfully!');
@@ -482,21 +554,40 @@ export default function Bank() {
     setShowTransactionForm(true);
   };
 
-  const handleViewTransactions = async (bankId) => {
-    try {
-      setError(null);
-      setLoading(true);
-      const response = await getBankTransactions(bankId);
-      const txs = response?.data || response || [];
-      setTransactions(txs);
-      setSelectedBankId(bankId);
-      setShowTransactions(true);
-    } catch (err) {
-      console.error('Error fetching transactions:', err);
-      setError(err.message || 'Failed to fetch transactions');
-    } finally {
-      setLoading(false);
+  const handleViewTransactions = (bankId) => {
+    setError(null);
+    setSelectedBankId(bankId);
+    setTransactionPage(1);
+    setTransactionPageSize(25);
+    setTransactionSearchInput('');
+    setTransactionSearch('');
+    setTransactionType('');
+    setTransactionTotal(0);
+    setTransactionTotalPages(0);
+    setTransactions([]);
+    setShowTransactions(true);
+  };
+
+  const handleTransactionSearchChange = (e) => {
+    setTransactionSearchInput(e.target.value);
+    setTransactionPage(1);
+  };
+
+  const handleTransactionTypeChange = (e) => {
+    setTransactionType(e.target.value);
+    setTransactionPage(1);
+  };
+
+  const handleTransactionPageChange = (page) => {
+    if (page < 1 || (transactionTotalPages > 0 && page > transactionTotalPages)) {
+      return;
     }
+    setTransactionPage(page);
+  };
+
+  const handleTransactionPageSizeChange = (e) => {
+    setTransactionPageSize(Number(e.target.value));
+    setTransactionPage(1);
   };
 
   const resetForm = () => {
@@ -728,11 +819,22 @@ export default function Bank() {
           </>
         }
         transactions={transactions}
-        loading={loading}
+        loading={transactionsLoading}
         onClose={() => setShowTransactions(false)}
+        searchText={transactionSearchInput}
+        onSearchChange={handleTransactionSearchChange}
+        transactionType={transactionType}
+        onTransactionTypeChange={handleTransactionTypeChange}
+        page={transactionPage}
+        totalPages={transactionTotalPages}
+        totalTransactions={transactionTotal}
+        pageSize={transactionPageSize}
+        onPageChange={handleTransactionPageChange}
+        onPageSizeChange={handleTransactionPageSizeChange}
         onAddTransaction={() =>
           handleAddTransaction(selectedBankId)
         }
+        addTransactionDisabled={loading}
         columns={[
           {
             key: 'date',

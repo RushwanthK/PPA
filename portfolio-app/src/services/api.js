@@ -146,10 +146,12 @@ export const addBankTransaction = async (bankId, transactionData) => {
   }
 };
 
-export const getBankTransactions = async (bankId) => {
+export const getBankTransactions = async (bankId, params = {}) => {
   try {
-    const response = await api.get(`/banks/${bankId}/transactions`);
-    return { data: response.data };
+    const response = await api.get(`/banks/${bankId}/transactions`, {
+      params,
+    });
+    return response.data;
   } catch (error) {
     const errorMsg = error.response?.data?.error || 'Failed to fetch bank transactions';
     console.error('Error fetching bank transactions:', errorMsg);

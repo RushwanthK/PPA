@@ -816,10 +816,13 @@ def test_get_bank_transactions(
 
     data = response.get_json()
 
-    assert isinstance(data, list)
-    assert len(data) == 1
+    assert data["total"] == 1
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total_pages"] == 1
+    assert len(data["transactions"]) == 1
 
-    transaction = data[0]
+    transaction = data["transactions"][0]
 
     assert transaction["amount"] == 1000
     assert transaction["transaction_type"] == "income"
@@ -840,7 +843,73 @@ def test_get_bank_transactions_empty_bank(
 
     data = response.get_json()
 
-    assert data == []
+    assert data["transactions"] == []
+    assert data["page"] == 1
+    assert data["page_size"] == 25
+    assert data["total"] == 0
+    assert data["total_pages"] == 0
+
+
+def test_get_bank_transactions_supports_pagination_and_search(
+    authenticated_client,
+    test_bank,
+):
+    for index in range(30):
+        response = authenticated_client.post(
+            f"/banks/{test_bank.id}/transactions",
+            json={
+                "amount": 100 + index,
+                "type": "expense" if index % 2 else "income",
+                "description": f"Transaction {index}",
+                "category": "Groceries" if index == 23 else "Other",
+            },
+        )
+        assert response.status_code == 201
+
+    response = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions?page=2&page_size=10"
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["page"] == 2
+    assert data["page_size"] == 10
+    assert data["total"] == 30
+    assert data["total_pages"] == 3
+    assert len(data["transactions"]) == 10
+
+    response = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions?search=Groceries&page_size=25"
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["total"] == 1
+    assert data["transactions"][0]["category"] == "Groceries"
+
+    response = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions?type=income&page_size=100"
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["total"] == 15
+    assert all(
+        transaction["transaction_type"] == "income"
+        for transaction in data["transactions"]
+    )
+
+
+def test_get_bank_transactions_rejects_invalid_type_filter(
+    authenticated_client,
+    test_bank,
+):
+    response = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions?type=transfer"
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Invalid transaction type filter"
 
 
 def test_get_bank_transactions_requires_authentication(

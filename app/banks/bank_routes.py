@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_, cast, String
 from datetime import datetime, timezone
 import pytz
 
@@ -287,16 +288,83 @@ def get_bank_transactions(bank_id):
     if not bank:
         return jsonify({"error": "Bank not found"}), 404
 
-    transactions = BankTransaction.query.filter_by(bank_id=bank_id).order_by(BankTransaction.date.desc()).all()
-    return jsonify([{
-        "id": tx.id,
-        "amount": tx.amount,
-        "description": tx.description or '',
-        "category": tx.category or '',
-        "transaction_type": tx.transaction_type,
-        "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
-        "bank_balance_after": tx.bank_balance_after
-    } for tx in transactions])
+    # Pagination is deliberately handled by the backend so the browser never
+    # has to load the bank's entire transaction history at once.
+    try:
+        page = max(int(request.args.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = int(request.args.get('page_size', 25))
+    except (TypeError, ValueError):
+        page_size = 25
+
+    # Keep the API bounded even if a client sends an excessively large value.
+    page_size = min(max(page_size, 1), 100)
+
+    search = (request.args.get('search') or '').strip()
+    transaction_type = (request.args.get('type') or '').strip().lower()
+
+    query = BankTransaction.query.filter(
+        BankTransaction.bank_id == bank_id,
+        BankTransaction.user_id == user_id,
+    )
+
+    if transaction_type:
+        if transaction_type not in ('income', 'expense'):
+            return jsonify({
+                "error": "Invalid transaction type filter"
+            }), 400
+        query = query.filter(BankTransaction.transaction_type == transaction_type)
+
+    if search:
+        # The global search intentionally covers the fields a user can see
+        # in the bank transaction table. This means search applies to the
+        # complete bank history in the database, not only the current page.
+        search_pattern = f"%{search}%"
+        query = query.filter(or_(
+            BankTransaction.description.ilike(search_pattern),
+            BankTransaction.category.ilike(search_pattern),
+            BankTransaction.transaction_type.ilike(search_pattern),
+            cast(BankTransaction.amount, String).ilike(search_pattern),
+            cast(BankTransaction.date, String).ilike(search_pattern),
+            cast(BankTransaction.bank_balance_after, String).ilike(search_pattern),
+        ))
+
+    # id makes ordering deterministic when two transactions have the same
+    # timestamp. The composite DB index added for this endpoint supports
+    # this common bank-history access pattern efficiently.
+    query = query.order_by(
+        BankTransaction.date.desc(),
+        BankTransaction.id.desc(),
+    )
+
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+
+    # A filtered result can shrink while the user is on a later page. Move
+    # that request back to the last valid page instead of returning nothing.
+    if total_pages and page > total_pages:
+        page = total_pages
+
+    transactions = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    return jsonify({
+        "transactions": [{
+            "id": tx.id,
+            "amount": tx.amount,
+            "description": tx.description or '',
+            "category": tx.category or '',
+            "transaction_type": tx.transaction_type,
+            "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
+            "bank_balance_after": tx.bank_balance_after
+        } for tx in transactions],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    })
 
 @bank_routes.route('/banks/dropdown', methods=['GET'])
 @jwt_required()
