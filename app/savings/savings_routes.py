@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import String, cast, or_
 from datetime import datetime, timezone
 import math
 import pytz
@@ -371,19 +372,116 @@ def get_saving_transactions(saving_id):
     if not saving:
         return jsonify({"error": "Saving account not found"}), 404
 
-    transactions = SavingTransaction.query.filter_by(saving_id=saving_id).all()
-    return jsonify([
-        {
-            "id": tx.id,
-            "amount": tx.amount,
-            "description": tx.description or '',
-            "category": tx.category or '',
-            "transaction_type": tx.transaction_type,
-            "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
-            "saving_balance_after": tx.saving_balance_after
-        }
-        for tx in transactions
-    ])
+    # Keep the original list response when no pagination/filter parameters are
+    # supplied. This preserves backward compatibility for existing API users
+    # while allowing the refactored frontend to opt into server-side paging.
+    uses_pagination = any(
+        key in request.args
+        for key in ('page', 'page_size', 'search', 'type')
+    )
+
+    if not uses_pagination:
+        transactions = SavingTransaction.query.filter_by(
+            saving_id=saving_id,
+            user_id=user_id,
+        ).order_by(
+            SavingTransaction.date.desc(),
+            SavingTransaction.id.desc(),
+        ).all()
+
+        return jsonify([
+            {
+                "id": tx.id,
+                "amount": tx.amount,
+                "description": tx.description or '',
+                "category": tx.category or '',
+                "transaction_type": tx.transaction_type,
+                "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
+                "saving_balance_after": tx.saving_balance_after
+            }
+            for tx in transactions
+        ])
+
+    try:
+        page = max(int(request.args.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = int(request.args.get('page_size', 25))
+    except (TypeError, ValueError):
+        page_size = 25
+
+    page_size = min(max(page_size, 1), 100)
+
+    search = (request.args.get('search') or '').strip()
+    transaction_type = (request.args.get('type') or '').strip().lower()
+
+    query = SavingTransaction.query.filter(
+        SavingTransaction.saving_id == saving_id,
+        SavingTransaction.user_id == user_id,
+    )
+
+    if transaction_type:
+        if transaction_type not in ('deposit', 'withdrawal'):
+            return jsonify({
+                "error": "Invalid transaction type filter"
+            }), 400
+
+        query = query.filter(
+            SavingTransaction.transaction_type == transaction_type
+        )
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(or_(
+            SavingTransaction.description.ilike(search_pattern),
+            SavingTransaction.category.ilike(search_pattern),
+            SavingTransaction.transaction_type.ilike(search_pattern),
+            cast(SavingTransaction.amount, String).ilike(search_pattern),
+            cast(SavingTransaction.date, String).ilike(search_pattern),
+            cast(
+                SavingTransaction.saving_balance_after,
+                String,
+            ).ilike(search_pattern),
+        ))
+
+    query = query.order_by(
+        SavingTransaction.date.desc(),
+        SavingTransaction.id.desc(),
+    )
+
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+
+    if total_pages and page > total_pages:
+        page = total_pages
+
+    transactions = (
+        query
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    return jsonify({
+        "transactions": [
+            {
+                "id": tx.id,
+                "amount": tx.amount,
+                "description": tx.description or '',
+                "category": tx.category or '',
+                "transaction_type": tx.transaction_type,
+                "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
+                "saving_balance_after": tx.saving_balance_after,
+            }
+            for tx in transactions
+        ],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    })
 
 @savings_routes.route('/savings/<int:saving_id>', methods=['DELETE'])
 @jwt_required()

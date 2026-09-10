@@ -413,9 +413,11 @@ export const deleteSaving = async (savingId) => {
   }
 };
 
-export const getSavingTransactions = async (savingId) => {
+export const getSavingTransactions = async (savingId, params = {}) => {
   try {
-    const response = await api.get(`/savings/${savingId}/transactions`);
+    const response = await api.get(`/savings/${savingId}/transactions`, {
+      params,
+    });
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;

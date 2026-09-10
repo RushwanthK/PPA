@@ -1615,6 +1615,95 @@ def test_get_saving_transactions_returns_history(
     assert transaction["date"] is not None
 
 
+def test_get_saving_transactions_supports_server_pagination(
+    authenticated_client,
+    test_saving,
+):
+    for amount in (100, 200, 300):
+        response = authenticated_client.post(
+            f"/savings/{test_saving.id}/transactions",
+            json={
+                "amount": amount,
+                "type": "deposit",
+            },
+        )
+        assert response.status_code == 201
+
+    response = authenticated_client.get(
+        f"/savings/{test_saving.id}/transactions",
+        query_string={
+            "page": 1,
+            "page_size": 2,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert isinstance(data, dict)
+    assert len(data["transactions"]) == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 2
+    assert data["total"] == 3
+    assert data["total_pages"] == 2
+
+
+def test_get_saving_transactions_supports_server_search_and_type_filter(
+    authenticated_client,
+    test_saving,
+):
+    transactions = [
+        ("Monthly Saving", "deposit", 1000),
+        ("Emergency Fund", "deposit", 2000),
+        ("Emergency Withdrawal", "withdrawal", 500),
+    ]
+
+    for description, transaction_type, amount in transactions:
+        response = authenticated_client.post(
+            f"/savings/{test_saving.id}/transactions",
+            json={
+                "amount": amount,
+                "type": transaction_type,
+                "description": description,
+            },
+        )
+        assert response.status_code == 201
+
+    response = authenticated_client.get(
+        f"/savings/{test_saving.id}/transactions",
+        query_string={
+            "search": "Emergency",
+            "type": "deposit",
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["total"] == 1
+    assert len(data["transactions"]) == 1
+    assert data["transactions"][0]["description"] == "Emergency Fund"
+    assert data["transactions"][0]["transaction_type"] == "deposit"
+
+
+def test_get_saving_transactions_rejects_invalid_type_filter(
+    authenticated_client,
+    test_saving,
+):
+    response = authenticated_client.get(
+        f"/savings/{test_saving.id}/transactions",
+        query_string={"type": "income"},
+    )
+
+    assert response.status_code == 400
+
+    data = response.get_json()
+
+    assert data["error"] == "Invalid transaction type filter"
+
+
 def test_get_saving_transactions_requires_authentication(
     client,
     test_saving,
