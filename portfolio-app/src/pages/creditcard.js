@@ -1,194 +1,315 @@
-// src/pages/creditcard.js
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { 
-  getCreditCards, 
-  createCreditCard, 
-  getCreditCard,
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { format, isValid, parse } from 'date-fns';
+
+import {
+  getCreditCards,
+  createCreditCard,
   updateCreditCard,
   deleteCreditCard,
   getCreditCardTransactions,
   addCreditCardTransaction,
   processBilling,
-  getUsers,
   exportUserTransactionsExcel,
-  exportUserTransactionsPdf
+  exportUserTransactionsPdf,
 } from '../services/api';
-import './creditcard.css';
+import { useAuth } from '../AuthContext';
+
+import Button from '../components/ui/Button';
+import SearchBar from '../components/ui/SearchBar';
+import DataTable from '../components/ui/DataTable';
+
+import EntityFormDialog from '../components/dialogs/EntityFormDialog';
+import TransactionFormDialog from '../components/dialogs/TransactionFormDialog';
+import TransactionTableDialog from '../components/dialogs/TransactionTableDialog';
 import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
-import { format, parse } from 'date-fns';
+import Modal from '../components/ui/Modal';
+
+import './creditcard.css';
+
+const getTodayInputDate = () => format(new Date(), 'yyyy-MM-dd');
+
+const getEmptyTransactionForm = () => ({
+  cardId: '',
+  amount: '',
+  date: getTodayInputDate(),
+  description: '',
+  category: '',
+  isPayment: '',
+});
+
+const safeNumber = value => {
+  const number = Number(value);
+  return Number.isNaN(number) ? 0 : number;
+};
+
+const formatLastPaymentDate = value => {
+  if (!value) return null;
+
+  try {
+    const parsed = parse(value, 'ddMMyyyy', new Date());
+    return isValid(parsed) ? format(parsed, 'MMM dd, yyyy') : value;
+  } catch {
+    return value;
+  }
+};
 
 export default function CreditCard() {
+  const { user } = useAuth();
+
   const [cards, setCards] = useState([]);
   const [selectedCard, setSelectedCard] = useState(null);
   const [transactions, setTransactions] = useState([]);
-  const [billingDetails, setBillingDetails] = useState(null);
-  const [showBillingDetails, setShowBillingDetails] = useState(false);
+
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionPageSize, setTransactionPageSize] = useState(25);
+  const [transactionSearchInput, setTransactionSearchInput] = useState('');
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionType, setTransactionType] = useState('');
+  const [transactionTotal, setTransactionTotal] = useState(0);
+  const [transactionTotalPages, setTransactionTotalPages] = useState(0);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionRefreshKey, setTransactionRefreshKey] = useState(0);
+
   const [formData, setFormData] = useState({
+    id: '',
     name: '',
     limit: '',
-    billing_cycle_start: '1'
+    billing_cycle_start: '1',
   });
-  const [transactionData, setTransactionData] = useState({
-    cardId: '',
-    amount: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
-    description: '',
-    category: '',
-    isPayment: ''
-  });
+
+  const [transactionData, setTransactionData] = useState(getEmptyTransactionForm());
+
   const [showForm, setShowForm] = useState(false);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [showCardDetails, setShowCardDetails] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
+  const [showBillingDetails, setShowBillingDetails] = useState(false);
+  const [billingDetails, setBillingDetails] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  // Credit-card delete dialog state
+  const [success, setSuccess] = useState(null);
+  const [transactionFormError, setTransactionFormError] = useState(null);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState(null);
   const [isDeletingCard, setIsDeletingCard] = useState(false);
-
-  // Errors specifically belonging to the delete dialog.
-  // These must not appear behind/below the dialog.
   const [deleteDialogError, setDeleteDialogError] = useState(null);
-
-  // Error specifically belonging to the "Add Transaction" form (e.g. no
-  // Payment/Expense type selected). Kept separate from the page-level
-  // `error` banner so it shows right next to the field that needs
-  // attention instead of behind the modal.
-  const [transactionFormError, setTransactionFormError] = useState(null);
-
-  // Backup/download state.
   const [isDownloadingCardBackup, setIsDownloadingCardBackup] = useState(false);
   const [cardBackupDownloaded, setCardBackupDownloaded] = useState(false);
 
-  // Sorting / filtering state
   const [searchText, setSearchText] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
 
-  // Guards against setState calls after this page has been navigated
-  // away from while a request (card list, card details, transactions,
-  // billing, backup export, delete) is still in flight. Important on a
-  // financial page where several of these actions are async and the
-  // user may click through quickly.
-  const isMounted = useRef(true);
   useEffect(() => {
-    isMounted.current = true;
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
     const fetchData = async () => {
       try {
-        const cardsResponse = await getCreditCards();
-        if (isMounted.current) {
-          setCards(cardsResponse || []);
-          setError(null);
+        setLoading(true);
+        setError(null);
+
+        const response = await getCreditCards();
+
+        if (!cancelled) {
+          setCards(Array.isArray(response) ? response : []);
         }
       } catch (err) {
-        console.error('Error fetching data:', err);
-        if (isMounted.current) {
-          setError('Failed to load credit card data');
+        if (!cancelled) {
+          console.error('Error fetching credit cards:', err);
+          setError(err.message || 'Failed to load credit card data');
           setCards([]);
         }
       } finally {
-        if (isMounted.current) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchData();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // API + UI handlers (kept behavior from your original code)
-  const fetchCardDetails = useCallback(async (cardId) => {
-    try {
-      setLoading(true);
-      const card = await getCreditCard(cardId);
-      if (isMounted.current) {
-        setSelectedCard(card);
-        setShowCardDetails(true);
-        setError(null);
-      }
-    } catch (err) {
-      console.error('Error fetching card details:', err);
-      if (isMounted.current) setError('Failed to load card details');
-    } finally {
-      if (isMounted.current) setLoading(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setTransactionSearch(transactionSearchInput.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [transactionSearchInput]);
+
+  useEffect(() => {
+    if (!showTransactions || !selectedCard?.id) {
+      return undefined;
     }
-  }, []);
 
-  const fetchTransactions = useCallback(async (cardId) => {
-    try {
-      setLoading(true);
-      const txs = await getCreditCardTransactions(cardId);
-      if (isMounted.current) {
-        setTransactions(txs);
-        setShowTransactions(true);
+    let cancelled = false;
+
+    const fetchTransactions = async () => {
+      try {
+        setTransactionsLoading(true);
         setError(null);
+
+        const response = await getCreditCardTransactions(selectedCard.id, {
+          page: transactionPage,
+          page_size: transactionPageSize,
+          search: transactionSearch,
+          type: transactionType,
+        });
+
+        if (cancelled) return;
+
+        setTransactions(
+          Array.isArray(response?.transactions)
+            ? response.transactions
+            : []
+        );
+        setTransactionTotal(Number(response?.total) || 0);
+        setTransactionTotalPages(Number(response?.total_pages) || 0);
+
+        if (
+          response?.page &&
+          Number(response.page) !== transactionPage
+        ) {
+          setTransactionPage(Number(response.page));
+        }
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error('Error fetching credit card transactions:', err);
+        setError(err.message || 'Failed to load transactions');
+        setTransactions([]);
+        setTransactionTotal(0);
+        setTransactionTotalPages(0);
+      } finally {
+        if (!cancelled) {
+          setTransactionsLoading(false);
+        }
       }
-    } catch (err) {
-      console.error('Error fetching transactions:', err);
-      if (isMounted.current) setError('Failed to load transactions');
-    } finally {
-      if (isMounted.current) setLoading(false);
-    }
+    };
+
+    fetchTransactions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showTransactions,
+    selectedCard?.id,
+    transactionPage,
+    transactionPageSize,
+    transactionSearch,
+    transactionType,
+    transactionRefreshKey,
+  ]);
+
+  const handleInputChange = useCallback(event => {
+    const { name, value } = event.target;
+    setFormData(previous => ({ ...previous, [name]: value }));
   }, []);
 
-  const handleInputChange = useCallback((e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const handleTransactionChange = useCallback(event => {
+    const { name, value } = event.target;
+    setTransactionData(previous => ({ ...previous, [name]: value }));
   }, []);
 
-  const handleTransactionChange = useCallback((e) => {
-    const { name, value, type, checked } = e.target;
-    setTransactionData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+  const resetForm = useCallback(() => {
+    setFormData({
+      id: '',
+      name: '',
+      limit: '',
+      billing_cycle_start: '1',
+    });
+    setShowForm(false);
   }, []);
 
-  const handleSubmit = useCallback(async (e) => {
-    e.preventDefault();
+  const resetTransactionForm = useCallback(() => {
+    setTransactionData(getEmptyTransactionForm());
+    setTransactionFormError(null);
+    setShowTransactionForm(false);
+  }, []);
+
+  const updateLocalCard = useCallback(updatedCard => {
+    if (!updatedCard?.id) return;
+
+    setCards(previousCards =>
+      previousCards.map(card =>
+        String(card.id) === String(updatedCard.id)
+          ? { ...card, ...updatedCard }
+          : card
+      )
+    );
+
+    setSelectedCard(previousCard => {
+      if (!previousCard || String(previousCard.id) !== String(updatedCard.id)) {
+        return previousCard;
+      }
+
+      return { ...previousCard, ...updatedCard };
+    });
+  }, []);
+
+  const handleSubmit = useCallback(async event => {
+    event.preventDefault();
+
     try {
       setLoading(true);
+      setError(null);
+      setSuccess(null);
+
       const cardData = {
         name: formData.name,
         limit: parseFloat(formData.limit),
-        billing_cycle_start: parseInt(formData.billing_cycle_start)
+        billing_cycle_start: parseInt(formData.billing_cycle_start, 10),
       };
 
-      if (editMode && selectedCard) {
-        const response = await updateCreditCard(selectedCard.id, cardData);
-        const updatedCards = await getCreditCards();
-        if (isMounted.current) {
-          setCards(updatedCards);
-          setSelectedCard(response.card || selectedCard);
-          setEditMode(false);
+      if (formData.id) {
+        const response = await updateCreditCard(formData.id, cardData);
+        const updatedCard = response?.card;
+
+        if (!updatedCard) {
+          throw new Error(
+            'Credit card was updated, but the server did not return the updated card.'
+          );
         }
+
+        updateLocalCard(updatedCard);
+        setSuccess('Credit card updated successfully.');
       } else {
-        await createCreditCard(cardData);
-        const updatedCards = await getCreditCards();
-        if (isMounted.current) setCards(updatedCards);
+        const response = await createCreditCard(cardData);
+        const createdCard = response?.card;
+
+        if (!createdCard) {
+          throw new Error(
+            'Credit card was created, but the server did not return the created card.'
+          );
+        }
+
+        setCards(previousCards => [...previousCards, createdCard]);
+        setSuccess('Credit card created successfully.');
       }
 
-      if (isMounted.current) resetForm();
-    } catch (error) {
-      console.error('Error saving card:', error);
-      if (isMounted.current) setError(error.message || 'Failed to save credit card');
+      resetForm();
+    } catch (err) {
+      console.error('Error saving credit card:', err);
+      setError(err.message || 'Failed to save credit card');
     } finally {
-      if (isMounted.current) setLoading(false);
+      setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData, editMode, selectedCard]);
+  }, [formData, resetForm, updateLocalCard]);
 
-  const handleTransactionSubmit = useCallback(async (e) => {
-    e.preventDefault();
+  const handleTransactionSubmit = useCallback(async event => {
+    event.preventDefault();
 
     if (transactionData.isPayment === '') {
-      setTransactionFormError('Please select whether this is a Payment or Expense.');
+      setTransactionFormError(
+        'Please select whether this is a Payment or Expense.'
+      );
       return;
     }
 
@@ -196,79 +317,185 @@ export default function CreditCard() {
 
     try {
       setLoading(true);
+      setError(null);
+      setSuccess(null);
 
-      await addCreditCardTransaction(transactionData.cardId, {
-        amount: parseFloat(transactionData.isPayment ? 
-          Math.abs(transactionData.amount) : 
-          -Math.abs(transactionData.amount)),
-        date: transactionData.date,
-        description: transactionData.description,
-        category: transactionData.category,
-        is_payment: transactionData.isPayment
-      });
+      const amount = parseFloat(transactionData.amount);
+      const signedAmount = transactionData.isPayment
+        ? Math.abs(amount)
+        : -Math.abs(amount);
 
-      // Refresh
-      const updatedCards = await getCreditCards();
-
-      if (isMounted.current) {
-        setCards(updatedCards);
-
-        if (selectedCard) {
-          const refreshedCard = updatedCards.find(c => c.id === selectedCard.id);
-          setSelectedCard(refreshedCard || null);
+      const response = await addCreditCardTransaction(
+        transactionData.cardId,
+        {
+          amount: signedAmount,
+          date: transactionData.date,
+          description: transactionData.description,
+          category: transactionData.category,
+          is_payment: transactionData.isPayment,
         }
+      );
 
-        resetTransactionForm();
+      if (!response?.card) {
+        throw new Error(
+          'Transaction was added, but the server did not return the updated credit card balances.'
+        );
       }
-    } catch (error) {
-      console.error('Error adding transaction:', error);
-      if (isMounted.current) setTransactionFormError(error.message || 'Failed to add transaction');
-    } finally {
-      if (isMounted.current) setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionData, selectedCard]);
 
-  const handleProcessBilling = useCallback(async (cardId) => {
+      updateLocalCard(response.card);
+
+      if (
+        selectedCard?.id &&
+        String(selectedCard.id) === String(transactionData.cardId)
+      ) {
+        setTransactionPage(1);
+        setTransactionRefreshKey(previous => previous + 1);
+      }
+
+      setSuccess('Transaction added successfully.');
+      resetTransactionForm();
+    } catch (err) {
+      console.error('Error adding credit card transaction:', err);
+      setTransactionFormError(err.message || 'Failed to add transaction');
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    resetTransactionForm,
+    selectedCard?.id,
+    transactionData,
+    updateLocalCard,
+  ]);
+
+  const handleProcessBilling = useCallback(async cardId => {
     try {
       setLoading(true);
+      setError(null);
+      setSuccess(null);
+
       const response = await processBilling(cardId);
-      const updatedCard = await getCreditCard(cardId);
+      const card = cards.find(item => String(item.id) === String(cardId));
 
-      if (isMounted.current) {
-        setCards(prevCards =>
-          prevCards.map(card =>
-            card.id === cardId ? updatedCard : card
-          )
+      if (!response?.card) {
+        throw new Error(
+          'Billing was processed, but the server did not return updated card balances.'
         );
-
-        setBillingDetails({
-          transactionsBilled: response.transactions_billed,
-          totalAmountBilled: response.total_amount_billed,
-          card: updatedCard
-        });
-
-        setSelectedCard(updatedCard);
-        setShowBillingDetails(true);
-        setError(null);
       }
+
+      const updatedCard = card
+        ? { ...card, ...response.card }
+        : response.card;
+
+      updateLocalCard(updatedCard);
+
+      setBillingDetails({
+        transactionsBilled: response.transactions_billed,
+        totalAmountBilled: response.total_amount_billed,
+        card: updatedCard,
+      });
+      setShowBillingDetails(true);
+      setTransactionPage(1);
+      setTransactionRefreshKey(previous => previous + 1);
+      setSuccess('Billing processed successfully.');
     } catch (err) {
       console.error('Error processing billing:', err);
-      if (isMounted.current) setError('Failed to process billing');
+      setError(err.message || 'Failed to process billing');
     } finally {
-      if (isMounted.current) setLoading(false);
+      setLoading(false);
     }
+  }, [cards, updateLocalCard]);
+
+  const handleAddTransaction = useCallback(cardId => {
+    setTransactionData(previous => ({
+      ...previous,
+      cardId,
+      date: getTodayInputDate(),
+    }));
+    setTransactionFormError(null);
+    setShowCardDetails(false);
+    setShowTransactions(false);
+    setShowTransactionForm(true);
   }, []);
 
-  const handleDeleteCard = useCallback((cardId) => {
-    if (isDeletingCard || isDownloadingCardBackup) {
+  const handleEditCard = useCallback(card => {
+    setFormData({
+      id: card.id,
+      name: card.name,
+      limit: String(card.limit ?? ''),
+      billing_cycle_start: String(card.billing_cycle_start ?? 1),
+    });
+    setSelectedCard(card);
+    setShowCardDetails(false);
+    setShowForm(true);
+  }, []);
+
+  const handleViewCardDetails = useCallback(card => {
+    setSelectedCard(card);
+    setShowCardDetails(true);
+    setError(null);
+  }, []);
+
+  const handleViewTransactions = useCallback(card => {
+    setSelectedCard(card);
+    setTransactionPage(1);
+    setTransactionSearchInput('');
+    setTransactionSearch('');
+    setTransactionType('');
+    setShowCardDetails(false);
+    setShowTransactions(true);
+  }, []);
+
+  const closeCardDetails = useCallback(() => {
+    setShowCardDetails(false);
+  }, []);
+
+  const closeTransactions = useCallback(() => {
+    setShowTransactions(false);
+    setTransactions([]);
+    setTransactionSearchInput('');
+    setTransactionSearch('');
+    setTransactionType('');
+    setTransactionPage(1);
+    setTransactionTotal(0);
+    setTransactionTotalPages(0);
+  }, []);
+
+  const handleTransactionSearchChange = useCallback(event => {
+    setTransactionSearchInput(event.target.value);
+    setTransactionPage(1);
+  }, []);
+
+  const handleTransactionTypeChange = useCallback(event => {
+    setTransactionType(event.target.value);
+    setTransactionPage(1);
+  }, []);
+
+  const handleTransactionPageChange = useCallback(page => {
+    if (page < 1 || (transactionTotalPages > 0 && page > transactionTotalPages)) {
+      return;
+    }
+    setTransactionPage(page);
+  }, [transactionTotalPages]);
+
+  const handleTransactionPageSizeChange = useCallback(event => {
+    setTransactionPageSize(Number(event.target.value));
+    setTransactionPage(1);
+  }, []);
+
+  const handleSortClick = useCallback(columnKey => {
+    if (sortBy === columnKey) {
+      setSortDir(previous => (previous === 'asc' ? 'desc' : 'asc'));
       return;
     }
 
-    // Clear normal page errors. Delete-specific errors belong
-    // inside the confirmation dialog.
-    setError(null);
+    setSortBy(columnKey);
+    setSortDir('asc');
+  }, [sortBy]);
 
+  const handleDeleteCard = useCallback(cardId => {
+    if (isDeletingCard || isDownloadingCardBackup) return;
+
+    setError(null);
     setDeleteDialogError(null);
     setDeletingCardId(cardId);
     setCardBackupDownloaded(false);
@@ -276,9 +503,7 @@ export default function CreditCard() {
   }, [isDeletingCard, isDownloadingCardBackup]);
 
   const closeDeleteModal = useCallback(() => {
-    if (isDeletingCard || isDownloadingCardBackup) {
-      return;
-    }
+    if (isDeletingCard || isDownloadingCardBackup) return;
 
     setShowDeleteModal(false);
     setDeletingCardId(null);
@@ -295,137 +520,96 @@ export default function CreditCard() {
 
     document.body.appendChild(link);
     link.click();
-
     link.remove();
     window.URL.revokeObjectURL(url);
   }, []);
 
-  const getCurrentUserIdForBackup = useCallback(async () => {
-    const usersResponse = await getUsers();
-
-    const users = Array.isArray(usersResponse)
-      ? usersResponse
-      : (
-          Array.isArray(usersResponse?.data)
-            ? usersResponse.data
-            : []
-        );
-
-    const userId = users[0]?.id;
-
-    if (!userId) {
-      throw new Error(
-        'Unable to determine the current user account for backup export.'
-      );
-    }
-
-    return userId;
-  }, []);
-
   const handleDownloadCardBackupExcel = useCallback(async () => {
-    if (
-      !deletingCardId ||
-      isDeletingCard ||
-      isDownloadingCardBackup
-    ) {
-      return;
-    }
+    if (!deletingCardId || isDeletingCard || isDownloadingCardBackup) return;
 
     try {
       setIsDownloadingCardBackup(true);
       setDeleteDialogError(null);
 
-      const userId = await getCurrentUserIdForBackup();
+      if (!user?.id) {
+        throw new Error(
+          'Unable to determine the current user account for backup export.'
+        );
+      }
 
-      // Reuse the existing user transaction export API.
-      // "credit_cards" means only credit-card transactions.
       const response = await exportUserTransactionsExcel(
-        userId,
+        user.id,
         ['credit_cards']
       );
 
-      const filename =
-        `credit_card_transactions_backup_${new Date()
-          .toISOString()
-          .slice(0, 10)}.xlsx`;
-
-      downloadBlob(response.data, filename);
-
-      if (isMounted.current) setCardBackupDownloaded(true);
-    } catch (err) {
-      console.error(
-        'Failed to download credit-card Excel backup:',
-        err
+      downloadBlob(
+        response.data,
+        `credit_card_transactions_backup_${getTodayInputDate()}.xlsx`
       );
 
-      if (isMounted.current) {
-        setDeleteDialogError(
-          err.message ||
-          'Unable to download the Excel credit-card transaction backup. Your credit card has not been deleted.'
-        );
-      }
+      setCardBackupDownloaded(true);
+    } catch (err) {
+      console.error('Failed to download credit-card Excel backup:', err);
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the Excel credit-card transaction backup. Your credit card has not been deleted.'
+      );
     } finally {
-      if (isMounted.current) setIsDownloadingCardBackup(false);
+      setIsDownloadingCardBackup(false);
     }
-  }, [deletingCardId, isDeletingCard, isDownloadingCardBackup, getCurrentUserIdForBackup, downloadBlob]);
+  }, [
+    deletingCardId,
+    downloadBlob,
+    isDeletingCard,
+    isDownloadingCardBackup,
+    user?.id,
+  ]);
 
   const handleDownloadCardBackupPdf = useCallback(async () => {
-    if (
-      !deletingCardId ||
-      isDeletingCard ||
-      isDownloadingCardBackup
-    ) {
-      return;
-    }
+    if (!deletingCardId || isDeletingCard || isDownloadingCardBackup) return;
 
     try {
       setIsDownloadingCardBackup(true);
       setDeleteDialogError(null);
 
-      const userId = await getCurrentUserIdForBackup();
+      if (!user?.id) {
+        throw new Error(
+          'Unable to determine the current user account for backup export.'
+        );
+      }
 
       const response = await exportUserTransactionsPdf(
-        userId,
+        user.id,
         ['credit_cards']
       );
 
-      const filename =
-        `credit_card_transactions_backup_${new Date()
-          .toISOString()
-          .slice(0, 10)}.pdf`;
-
-      downloadBlob(response.data, filename);
-
-      if (isMounted.current) setCardBackupDownloaded(true);
-    } catch (err) {
-      console.error(
-        'Failed to download credit-card PDF backup:',
-        err
+      downloadBlob(
+        response.data,
+        `credit_card_transactions_backup_${getTodayInputDate()}.pdf`
       );
 
-      if (isMounted.current) {
-        setDeleteDialogError(
-          err.message ||
-          'Unable to download the PDF credit-card transaction backup. Your credit card has not been deleted.'
-        );
-      }
+      setCardBackupDownloaded(true);
+    } catch (err) {
+      console.error('Failed to download credit-card PDF backup:', err);
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the PDF credit-card transaction backup. Your credit card has not been deleted.'
+      );
     } finally {
-      if (isMounted.current) setIsDownloadingCardBackup(false);
+      setIsDownloadingCardBackup(false);
     }
-  }, [deletingCardId, isDeletingCard, isDownloadingCardBackup, getCurrentUserIdForBackup, downloadBlob]);
+  }, [
+    deletingCardId,
+    downloadBlob,
+    isDeletingCard,
+    isDownloadingCardBackup,
+    user?.id,
+  ]);
 
   const handleConfirmDeleteCard = useCallback(async () => {
-    if (
-      !deletingCardId ||
-      isDeletingCard ||
-      isDownloadingCardBackup
-    ) {
-      return;
-    }
+    if (!deletingCardId || isDeletingCard || isDownloadingCardBackup) return;
 
-    const card = cards.find(
-      c => String(c.id) === String(deletingCardId)
-    );
+    const card = cards.find(item => String(item.id) === String(deletingCardId));
 
     try {
       setIsDeletingCard(true);
@@ -434,156 +618,100 @@ export default function CreditCard() {
 
       await deleteCreditCard(deletingCardId);
 
-      const updatedCards = await getCreditCards();
+      setCards(previousCards =>
+        previousCards.filter(
+          item => String(item.id) !== String(deletingCardId)
+        )
+      );
 
-      if (isMounted.current) {
-        setCards(updatedCards);
-
-        // Keep the existing behavior after deletion.
+      if (
+        selectedCard?.id &&
+        String(selectedCard.id) === String(deletingCardId)
+      ) {
         setSelectedCard(null);
         setShowCardDetails(false);
-
-        setShowDeleteModal(false);
-        setDeletingCardId(null);
-        setCardBackupDownloaded(false);
-        setDeleteDialogError(null);
-
-        setError(null);
+        setShowTransactions(false);
+        setTransactions([]);
       }
+
+      setShowDeleteModal(false);
+      setDeletingCardId(null);
+      setCardBackupDownloaded(false);
+      setDeleteDialogError(null);
+      setSuccess('Credit card deleted successfully.');
     } catch (err) {
       console.error('Error deleting credit card:', err);
-
-      // IMPORTANT:
-      // Keep this error inside the dialog.
-      // Do not use setError() here.
-      if (isMounted.current) {
-        setDeleteDialogError(
-          err.message ||
-          `Failed to delete credit card "${card?.name || ''}".`
-        );
-      }
+      setDeleteDialogError(
+        err.message ||
+        `Failed to delete credit card "${card?.name || ''}".`
+      );
     } finally {
-      if (isMounted.current) setIsDeletingCard(false);
+      setIsDeletingCard(false);
     }
-  }, [deletingCardId, isDeletingCard, isDownloadingCardBackup, cards]);
-
-  const handleAddTransaction = useCallback((cardId) => {
-    setTransactionData(prev => ({ 
-      ...prev, 
-      cardId,
-      date: format(new Date(), 'yyyy-MM-dd')
-    }));
-    setTransactionFormError(null);
-    setShowCardDetails(false);
-    setShowTransactions(false);
-    setShowTransactionForm(true);
-  }, []);
-
-  const handleEditCard = useCallback((card) => {
-    setFormData({
-      name: card.name,
-      limit: card.limit.toString(),
-      billing_cycle_start: card.billing_cycle_start.toString()
-    });
-
-    setSelectedCard(card);
-    setEditMode(true);
-    setShowForm(true);
-    setShowCardDetails(false);
-  }, []);
-
-  const resetForm = useCallback(() => {
-    setFormData({
-      name: '',
-      limit: '',
-      billing_cycle_start: '1'
-    });
-    setShowForm(false);
-    setEditMode(false);
-    setSelectedCard(null);
-  }, []);
-
-  const resetTransactionForm = useCallback(() => {
-    setTransactionData({
-      cardId: '',
-      amount: '',
-      date: format(new Date(), 'yyyy-MM-dd'),
-      description: '',
-      category: '',
-      isPayment: ''
-    });
-    setTransactionFormError(null);
-    setShowTransactionForm(false);
-  }, []);
-
-  const closeCardDetails = useCallback(() => {
-    setShowCardDetails(false);
-    setSelectedCard(null);
-  }, []);
-
-  const closeTransactions = useCallback(() => {
-    setShowTransactions(false);
-    setTransactions([]);
-  }, []);
-
-  // Sorting/filter helpers
-  const handleSortClick = useCallback((columnKey) => {
-    if (sortBy === columnKey) {
-      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortBy(columnKey);
-      setSortDir('asc');
-    }
-  }, [sortBy]);
-
-  const safeNumber = useCallback((val) => {
-    const n = Number(val);
-    return Number.isNaN(n) ? 0 : n;
-  }, []);
+  }, [
+    cards,
+    deletingCardId,
+    isDeletingCard,
+    isDownloadingCardBackup,
+    selectedCard?.id,
+  ]);
 
   const visibleCards = useMemo(() => {
-    const text = (searchText || '').trim().toLowerCase();
-    const filtered = (cards || []).filter(c => {
-      if (!text) return true;
-      return (c.name || '').toLowerCase().includes(text);
-    });
+    const text = searchText.trim().toLowerCase();
+    const numericKeys = [
+      'limit',
+      'used',
+      'available_limit',
+      'billed_unpaid',
+      'unbilled_spends',
+    ];
 
-    const numericKeys = ['limit', 'used', 'available_limit', 'billed_unpaid', 'unbilled_spends'];
-    const sorted = filtered.sort((a, b) => {
-      let va = a[sortBy];
-      let vb = b[sortBy];
+    return cards
+      .filter(card => !text || (card.name || '').toLowerCase().includes(text))
+      .slice()
+      .sort((a, b) => {
+        let first = a[sortBy];
+        let second = b[sortBy];
 
-      if (numericKeys.includes(sortBy)) {
-        va = safeNumber(va);
-        vb = safeNumber(vb);
-      } else {
-        va = (va || '').toString().toLowerCase();
-        vb = (vb || '').toString().toLowerCase();
-      }
+        if (numericKeys.includes(sortBy)) {
+          first = safeNumber(first);
+          second = safeNumber(second);
+        } else {
+          first = String(first ?? '').toLowerCase();
+          second = String(second ?? '').toLowerCase();
+        }
 
-      if (va < vb) return sortDir === 'asc' ? -1 : 1;
-      if (va > vb) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return sorted;
-  }, [cards, searchText, sortBy, sortDir, safeNumber]);
+        if (first < second) return sortDir === 'asc' ? -1 : 1;
+        if (first > second) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+  }, [cards, searchText, sortBy, sortDir]);
 
   const totals = useMemo(() => {
-    const t = visibleCards.reduce((acc, c) => {
-      acc.used += safeNumber(c.used);
-      acc.billed_unpaid += safeNumber(c.billed_unpaid);
-      acc.unbilled_spends += safeNumber(c.unbilled_spends);
-      return acc;
-    }, { used: 0, billed_unpaid: 0, unbilled_spends: 0 });
-    return t;
-  }, [visibleCards, safeNumber]);
+    return visibleCards.reduce(
+      (accumulator, card) => ({
+        used: accumulator.used + safeNumber(card.used),
+        billed_unpaid:
+          accumulator.billed_unpaid + safeNumber(card.billed_unpaid),
+        unbilled_spends:
+          accumulator.unbilled_spends + safeNumber(card.unbilled_spends),
+      }),
+      { used: 0, billed_unpaid: 0, unbilled_spends: 0 }
+    );
+  }, [visibleCards]);
 
-  if (loading) {
+  const deletingCard = cards.find(
+    card => String(card.id) === String(deletingCardId)
+  );
+
+  const transactionCardName = cards.find(
+    card => String(card.id) === String(transactionData.cardId)
+  )?.name;
+
+  if (loading && cards.length === 0) {
     return (
       <div className="credit-card-container">
-        <div className="loading">
-          <div className="cc-loading-spinner" />
+        <div className="cc-loading" role="status">
           Loading credit cards...
         </div>
       </div>
@@ -593,473 +721,583 @@ export default function CreditCard() {
   return (
     <div className="credit-card-container">
       <h1>Credit Cards</h1>
+
       {error && (
-        <div className="creditcard-error-with-close">
+        <div className="creditcard-error-with-close" role="alert">
           <span>{error}</span>
-          <button type="button" className="error-dismiss" onClick={() => setError(null)} aria-label="Dismiss error">&times;</button>
+          <button
+            type="button"
+            className="creditcard-error-dismiss"
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
         </div>
       )}
 
-      <div className="actions">
-        <button type="button" className="primary" onClick={() => setShowForm(true)}>Add Credit Card</button>
+      {success && (
+        <div className="creditcard-success-with-close" role="status">
+          <span>{success}</span>
+          <button
+            type="button"
+            className="creditcard-success-dismiss"
+            onClick={() => setSuccess(null)}
+            aria-label="Dismiss success message"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
-        <div className="search-wrap">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search by name..."
+      <div className="credit-card-toolbar">
+        <Button
+          type="button"
+          variant="primary"
+          onClick={() => {
+            setError(null);
+            setSuccess(null);
+            setFormData({
+              id: '',
+              name: '',
+              limit: '',
+              billing_cycle_start: '1',
+            });
+            setShowForm(true);
+          }}
+          disabled={loading}
+        >
+          Add Credit Card
+        </Button>
+
+        <div className="credit-card-search">
+          <SearchBar
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={event => setSearchText(event.target.value)}
+            placeholder="Search by name..."
+            ariaLabel="Search credit cards by name"
+            disabled={loading}
           />
         </div>
       </div>
 
-      {/* ADD / EDIT CREDIT CARD FORM (restored) */}
-      {showForm && (
-        <div className="modal">
-          <div className="modal-content">
-            <h2>{editMode ? 'Edit Credit Card' : 'Add Credit Card'}</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Card Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="Card Name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+      <EntityFormDialog
+        open={showForm}
+        mode={formData.id ? 'edit' : 'create'}
+        title={formData.id ? 'Edit Credit Card' : 'Add Credit Card'}
+        onClose={resetForm}
+        onSubmit={handleSubmit}
+        submitting={loading}
+        submitLabel={formData.id ? 'Update' : 'Save'}
+      >
+        <div className="form-group">
+          <label htmlFor="credit-card-name">Card Name</label>
+          <input
+            id="credit-card-name"
+            type="text"
+            name="name"
+            placeholder="Card Name"
+            value={formData.name}
+            onChange={handleInputChange}
+            required
+            disabled={loading}
+          />
+        </div>
 
-              <div className="form-group">
-                <label>Credit Limit</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  name="limit"
-                  placeholder="Credit Limit"
-                  value={formData.limit}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+        <div className="form-group">
+          <label htmlFor="credit-card-limit">Credit Limit</label>
+          <input
+            id="credit-card-limit"
+            type="number"
+            step="0.01"
+            min="0"
+            name="limit"
+            placeholder="Credit Limit"
+            value={formData.limit}
+            onChange={handleInputChange}
+            required
+            disabled={loading}
+          />
+        </div>
 
-              <div className="form-group">
-                <label>Billing Cycle Start Day (1-31)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  name="billing_cycle_start"
-                  value={formData.billing_cycle_start}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
+        <div className="form-group">
+          <label htmlFor="credit-card-billing-cycle">
+            Billing Cycle Start Day (1-31)
+          </label>
+          <input
+            id="credit-card-billing-cycle"
+            type="number"
+            min="1"
+            max="31"
+            name="billing_cycle_start"
+            value={formData.billing_cycle_start}
+            onChange={handleInputChange}
+            required
+            disabled={loading}
+          />
+        </div>
+      </EntityFormDialog>
 
-              <div className="form-actions">
-                <button type="submit" className="primary">
-                  {editMode ? 'Update' : 'Save'}
-                </button>
-                <button type="button" className="danger" onClick={resetForm}>Cancel</button>
-              </div>
-            </form>
+      <TransactionFormDialog
+        open={showTransactionForm}
+        title={
+          <>
+            Add Transaction -{' '}
+            <span className="creditcard-accent-text">
+              {transactionCardName || 'Credit Card'}
+            </span>
+          </>
+        }
+        onClose={resetTransactionForm}
+        onSubmit={handleTransactionSubmit}
+        submitting={loading}
+        submitLabel="Submit"
+      >
+        {transactionFormError && (
+          <div className="creditcard-error-with-close tx-form-error" role="alert">
+            <span>{transactionFormError}</span>
+            <button
+              type="button"
+              className="creditcard-error-dismiss"
+              onClick={() => setTransactionFormError(null)}
+              aria-label="Dismiss transaction form error"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        <div className="form-group">
+          <label htmlFor="credit-card-transaction-amount">Amount</label>
+          <input
+            id="credit-card-transaction-amount"
+            type="number"
+            step="0.01"
+            min="0.01"
+            name="amount"
+            placeholder="Amount"
+            value={transactionData.amount}
+            onChange={handleTransactionChange}
+            required
+            disabled={loading}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="credit-card-transaction-date">Date</label>
+          <input
+            id="credit-card-transaction-date"
+            type="date"
+            name="date"
+            value={transactionData.date}
+            onChange={handleTransactionChange}
+            required
+            disabled={loading}
+          />
+          <small className="creditcard-date-note">
+            Enter the calendar date only. The backend applies the existing IST
+            transaction-time rules.
+          </small>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="credit-card-transaction-description">Description</label>
+          <input
+            id="credit-card-transaction-description"
+            type="text"
+            name="description"
+            placeholder="Description"
+            value={transactionData.description}
+            onChange={handleTransactionChange}
+            disabled={loading}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="credit-card-transaction-category">Category</label>
+          <input
+            id="credit-card-transaction-category"
+            type="text"
+            name="category"
+            placeholder="Category"
+            value={transactionData.category}
+            onChange={handleTransactionChange}
+            disabled={loading}
+          />
+        </div>
+
+        <div
+          className={`creditcard-radio-group ${transactionFormError ? 'has-error' : ''}`}
+        >
+          <span className="creditcard-radio-label">Transaction Type</span>
+          <div className="creditcard-radio-options">
+            <label>
+              <input
+                type="radio"
+                name="isPayment"
+                value="true"
+                checked={transactionData.isPayment === true}
+                onChange={() => {
+                  setTransactionData(previous => ({
+                    ...previous,
+                    isPayment: true,
+                  }));
+                  setTransactionFormError(null);
+                }}
+                disabled={loading}
+              />
+              Payment
+            </label>
+
+            <label>
+              <input
+                type="radio"
+                name="isPayment"
+                value="false"
+                checked={
+                  transactionData.isPayment === false &&
+                  transactionData.isPayment !== ''
+                }
+                onChange={() => {
+                  setTransactionData(previous => ({
+                    ...previous,
+                    isPayment: false,
+                  }));
+                  setTransactionFormError(null);
+                }}
+                disabled={loading}
+              />
+              Expense
+            </label>
           </div>
         </div>
-      )}
+      </TransactionFormDialog>
 
-      {/* TRANSACTION FORM (restored) */}
-      {showTransactionForm && (
-        <div className="modal">
-          <div className="modal-content">
-            <h2>Add Transaction - <span className="tx-card-name">{cards.find(c => c.id === transactionData.cardId)?.name || 'Credit Card'}</span></h2>
+      <DataTable
+        columns={[
+          { key: 'name', label: 'Name', sortable: true },
+          {
+            key: 'limit',
+            label: 'Limit',
+            sortable: true,
+            render: card => safeNumber(card.limit).toFixed(2),
+          },
+          {
+            key: 'used',
+            label: 'Used',
+            sortable: true,
+            render: card => safeNumber(card.used).toFixed(2),
+          },
+          {
+            key: 'available_limit',
+            label: 'Available',
+            sortable: true,
+            render: card => safeNumber(card.available_limit).toFixed(2),
+          },
+          {
+            key: 'billed_unpaid',
+            label: 'Billed Unpaid',
+            sortable: true,
+            render: card => safeNumber(card.billed_unpaid).toFixed(2),
+          },
+          {
+            key: 'unbilled_spends',
+            label: 'Unbilled Spends',
+            sortable: true,
+            render: card => safeNumber(card.unbilled_spends).toFixed(2),
+          },
+        ]}
+        data={visibleCards}
+        rowKey="id"
+        loading={loading}
+        emptyMessage="No credit cards found"
+        sortBy={sortBy}
+        sortDirection={sortDir}
+        onSort={handleSortClick}
+        renderActions={card => (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => handleViewCardDetails(card)}
+              disabled={loading}
+            >
+              Details
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => handleAddTransaction(card.id)}
+              disabled={loading}
+            >
+              Add Tx
+            </Button>
+          </>
+        )}
+        renderFooter={() => (
+          <tr className="creditcard-totals-row">
+            <td>Totals</td>
+            <td />
+            <td>{totals.used.toFixed(2)}</td>
+            <td />
+            <td>{totals.billed_unpaid.toFixed(2)}</td>
+            <td>{totals.unbilled_spends.toFixed(2)}</td>
+            <td />
+          </tr>
+        )}
+      />
 
-            {transactionFormError && (
-              <div className="creditcard-error-with-close tx-form-error">
-                <span>{transactionFormError}</span>
-                <button type="button" className="error-dismiss" onClick={() => setTransactionFormError(null)} aria-label="Dismiss error">&times;</button>
-              </div>
-            )}
-
-            <form onSubmit={handleTransactionSubmit}>
-              <div className="form-group">
-                <label>Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  name="amount"
-                  placeholder="Amount"
-                  value={transactionData.amount}
-                  onChange={handleTransactionChange}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Date</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={transactionData.date}
-                  onChange={handleTransactionChange}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Description</label>
-                <input
-                  type="text"
-                  name="description"
-                  placeholder="Description"
-                  value={transactionData.description}
-                  onChange={handleTransactionChange}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Category</label>
-                <input
-                  type="text"
-                  name="category"
-                  placeholder="Category"
-                  value={transactionData.category}
-                  onChange={handleTransactionChange}
-                />
-              </div>
-
-              <div className={`form-group radio-group ${transactionFormError ? 'has-error' : ''}`}>
-                <label>Transaction Type</label>
-                <div className="radio-options">
-                  <label>
-                    <input
-                      type="radio"
-                      name="isPayment"
-                      value="true"
-                      checked={transactionData.isPayment === true}
-                      onChange={() => { setTransactionData(prev => ({ ...prev, isPayment: true })); setTransactionFormError(null); }}
-                    />
-                    Payment
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      name="isPayment"
-                      value="false"
-                      checked={transactionData.isPayment === false && transactionData.isPayment !== ''}
-                      onChange={() => { setTransactionData(prev => ({ ...prev, isPayment: false })); setTransactionFormError(null); }}
-                    />
-                    Expense
-                  </label>
-                </div>
-              </div>
-
-              <div className="form-actions">
-                <button type="submit" className="primary">Submit</button>
-                <button type="button" className="danger" onClick={resetTransactionForm}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Credit Cards Table */}
-      <div className="cards-table">
-        <div className="cards-table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th className="sortable" onClick={() => handleSortClick('name')}>
-                Name {sortBy === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th className="sortable" onClick={() => handleSortClick('limit')}>
-                Limit {sortBy === 'limit' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th className="sortable" onClick={() => handleSortClick('used')}>
-                Used {sortBy === 'used' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th className="sortable" onClick={() => handleSortClick('available_limit')}>
-                Available {sortBy === 'available_limit' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th className="sortable" onClick={() => handleSortClick('billed_unpaid')}>
-                Billed Unpaid {sortBy === 'billed_unpaid' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th className="sortable" onClick={() => handleSortClick('unbilled_spends')}>
-                Unbilled Spends {sortBy === 'unbilled_spends' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleCards && visibleCards.length > 0 ? (
-              visibleCards.map(card => (
-                <tr key={card.id}>
-                  <td>{card.name}</td>
-                  <td>{safeNumber(card.limit).toFixed(2)}</td>
-                  <td>{safeNumber(card.used).toFixed(2)}</td>
-                  <td>{safeNumber(card.available_limit).toFixed(2)}</td>
-                  <td>{safeNumber(card.billed_unpaid).toFixed(2)}</td>
-                  <td>{safeNumber(card.unbilled_spends).toFixed(2)}</td>
-                  <td className="actions-cell">
-                    <button type="button"
-                      onClick={() => fetchCardDetails(card.id)}
-                      className="info"
-                    >
-                      Details
-                    </button>
-                    <button type="button"
-                      onClick={() => handleAddTransaction(card.id)}
-                      className="primary"
-                    >
-                      Add Tx
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7">No credit cards found</td>
-              </tr>
-            )}
-          </tbody>
-
-          <tfoot>
-            <tr className="totals-row">
-              <td>Totals</td>
-              <td></td>
-              <td>{totals.used.toFixed(2)}</td>
-              <td></td>
-              <td>{totals.billed_unpaid.toFixed(2)}</td>
-              <td>{totals.unbilled_spends.toFixed(2)}</td>
-              <td></td>
-            </tr>
-          </tfoot>
-        </table>
-        </div>
-      </div>
-
-      {/* Credit Card Delete Confirmation Dialog */}
       {deletingCardId && (
         <DeleteConfirmationDialog
           isOpen={showDeleteModal}
           onClose={closeDeleteModal}
           onConfirm={handleConfirmDeleteCard}
-
           title="Delete Credit Card"
-
-          headline={`Delete "${
-            cards.find(c => String(c.id) === String(deletingCardId))?.name
-            || 'this credit card'
-          }"?`}
-
-          description={`Current total payable: Rs.${
-            safeNumber(
-              cards.find(
-                c => String(c.id) === String(deletingCardId)
-              )?.total_payable
-            ).toFixed(2)
-          }`}
-
+          headline={`Delete "${deletingCard?.name || 'this credit card'}"?`}
+          description={`Current total payable: Rs.${safeNumber(
+            deletingCard?.total_payable
+          ).toFixed(2)}`}
           detailLines={[
             'This action cannot be undone.',
             'Any transaction history associated with this credit card may be permanently deleted.',
-            'You may download a backup of your credit card transactions before deleting the card.'
+            'You may download a backup of your credit card transactions before deleting the card.',
           ]}
-
           isDeleting={isDeletingCard}
-
           confirmLabel="Delete Credit Card"
           confirmWithoutBackupLabel="Delete Without Backup"
-
           cancelLabel="Cancel"
-
-          /* Backup */
-          showBackupSection={true}
+          showBackupSection
           backupSectionTitle="Backup Credit Card Transactions"
-
           onDownloadExcel={handleDownloadCardBackupExcel}
           onDownloadPdf={handleDownloadCardBackupPdf}
-
           isDownloading={isDownloadingCardBackup}
           backupDownloaded={cardBackupDownloaded}
-
-          backupConfirmedMessage={
-            'Credit card transaction backup downloaded successfully.'
-          }
-
+          backupConfirmedMessage="Credit card transaction backup downloaded successfully."
           excelDownloadLabel="Download Excel"
           pdfDownloadLabel="Download PDF"
-
-          /* Error */
           dialogError={deleteDialogError}
           onDismissDialogError={() => setDeleteDialogError(null)}
         />
       )}
 
-      {/* Card Details Modal */}
-      {showCardDetails && selectedCard && (
-        <div className="modal">
-          <div className="modal-content large">
-            <div className="modal-header">
-              <h2>Card Details: {selectedCard.name}</h2>
-              <button type="button" onClick={closeCardDetails} className="close-button">&times;</button>
-            </div>
-
-            <div className="card-details">
-              <div className="detail-row">
-                <span className="detail-label">Limit:</span>
-                <span>Rs.{selectedCard.limit?.toFixed(2)}</span>
+      <Modal
+        open={showCardDetails && Boolean(selectedCard)}
+        title={`Card Details: ${selectedCard?.name || ''}`}
+        onClose={closeCardDetails}
+        className="creditcard-details-modal"
+      >
+        {selectedCard && (
+          <>
+            <div className="creditcard-details-panel">
+              <div className="creditcard-detail-row">
+                <span>Limit:</span>
+                <strong>Rs.{safeNumber(selectedCard.limit).toFixed(2)}</strong>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Used:</span>
-                <span>Rs.{selectedCard.used?.toFixed(2)}</span>
+              <div className="creditcard-detail-row">
+                <span>Used:</span>
+                <strong>Rs.{safeNumber(selectedCard.used).toFixed(2)}</strong>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Available:</span>
-                <span>Rs.{selectedCard.available_limit?.toFixed(2)}</span>
+              <div className="creditcard-detail-row">
+                <span>Available:</span>
+                <strong>
+                  Rs.{safeNumber(selectedCard.available_limit).toFixed(2)}
+                </strong>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Billed Unpaid:</span>
-                <span>Rs.{selectedCard.billed_unpaid?.toFixed(2)}</span>
+              <div className="creditcard-detail-row">
+                <span>Billed Unpaid:</span>
+                <strong>
+                  Rs.{safeNumber(selectedCard.billed_unpaid).toFixed(2)}
+                </strong>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Unbilled Spends:</span>
-                <span>Rs.{selectedCard.unbilled_spends?.toFixed(2)}</span>
+              <div className="creditcard-detail-row">
+                <span>Unbilled Spends:</span>
+                <strong>
+                  Rs.{safeNumber(selectedCard.unbilled_spends).toFixed(2)}
+                </strong>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Billing Cycle Start:</span>
-                <span>{selectedCard.billing_cycle_start} of month</span>
+              <div className="creditcard-detail-row">
+                <span>Billing Cycle Start:</span>
+                <strong>{selectedCard.billing_cycle_start} of month</strong>
               </div>
-              <div className="detail-row">
-                <span className="detail-label">Total Payable:</span>
-                <span>Rs.{selectedCard.total_payable?.toFixed(2)}</span>
+              <div className="creditcard-detail-row">
+                <span>Total Payable:</span>
+                <strong>
+                  Rs.{safeNumber(selectedCard.total_payable).toFixed(2)}
+                </strong>
               </div>
               {selectedCard.last_payment_date && (
-                <div className="detail-row">
-                  <span className="detail-label">Last Payment:</span>
-                  <span>
-                    Rs.{selectedCard.last_payment_amount?.toFixed(2)} on{' '}
-                    {format(
-                      parse(selectedCard.last_payment_date, 'ddMMyyyy', new Date()),
-                      'MMM dd, yyyy'
-                    )}
-                  </span>
+                <div className="creditcard-detail-row">
+                  <span>Last Payment:</span>
+                  <strong>
+                    Rs.{safeNumber(selectedCard.last_payment_amount).toFixed(2)}{' '}
+                    on {formatLastPaymentDate(selectedCard.last_payment_date)}
+                  </strong>
                 </div>
               )}
             </div>
 
-            <div className="modal-actions">
-              <button type="button"
-                onClick={() => fetchTransactions(selectedCard.id)}
-                className="info"
+            <div className="creditcard-modal-actions">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handleViewTransactions(selectedCard)}
+                disabled={loading}
               >
                 View Transactions
-              </button>
-              <button type="button"
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
                 onClick={() => handleProcessBilling(selectedCard.id)}
-                className="secondary"
+                disabled={loading}
               >
                 Process Billing
-              </button>
-              <button type="button"
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
                 onClick={() => handleEditCard(selectedCard)}
-                className="primary"
+                disabled={loading}
               >
                 Edit Card
-              </button>
-              <button type="button"
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
                 onClick={() => handleDeleteCard(selectedCard.id)}
-                className="danger"
+                disabled={loading || isDeletingCard}
               >
                 Delete Card
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
-      {/* Transactions Modal */}
-      {showTransactions && (
-        <div className="modal">
-          <div className="modal-content x-large">
-            <div className="modal-header">
-              <h2>Transactions for {selectedCard?.name || 'Card'}</h2>
-              <div className="transaction-header-actions"><button type="button" onClick={() => handleAddTransaction(selectedCard.id)} className="primary">Add Transaction</button>
-                <button type="button" onClick={closeTransactions} className="close-button">&times;</button>
-              </div>
+      <TransactionTableDialog
+        open={showTransactions && Boolean(selectedCard)}
+        title={
+          <>
+            Transactions for{' '}
+            <span className="creditcard-accent-text">
+              {selectedCard?.name || 'Card'}
+            </span>
+          </>
+        }
+        transactions={transactions}
+        loading={transactionsLoading}
+        onClose={closeTransactions}
+        searchText={transactionSearchInput}
+        onSearchChange={handleTransactionSearchChange}
+        transactionType={transactionType}
+        onTransactionTypeChange={handleTransactionTypeChange}
+        transactionTypeOptions={[
+          { value: 'expense', label: 'Expense' },
+          { value: 'payment', label: 'Payment' },
+        ]}
+        page={transactionPage}
+        totalPages={transactionTotalPages}
+        totalTransactions={transactionTotal}
+        pageSize={transactionPageSize}
+        onPageChange={handleTransactionPageChange}
+        onPageSizeChange={handleTransactionPageSizeChange}
+        onAddTransaction={() => {
+          if (selectedCard) {
+            handleAddTransaction(selectedCard.id);
+          }
+        }}
+        addTransactionDisabled={loading || !selectedCard}
+        columns={[
+          {
+            key: 'date',
+            label: 'Date',
+          },
+          {
+            key: 'amount',
+            label: 'Amount',
+            render: transaction =>
+              `${transaction.amount > 0 ? '+' : ''}${safeNumber(
+                transaction.amount
+              ).toFixed(2)}`,
+          },
+          {
+            key: 'description',
+            label: 'Description',
+            render: transaction => transaction.description || '-',
+          },
+          {
+            key: 'category',
+            label: 'Category',
+            render: transaction => transaction.category || '-',
+          },
+          {
+            key: 'transaction_type',
+            label: 'Type',
+            render: transaction => (
+              <span className={`creditcard-transaction-${transaction.transaction_type}`}>
+                {transaction.transaction_type}
+              </span>
+            ),
+          },
+          {
+            key: 'is_billed',
+            label: 'Billed',
+            render: transaction => (transaction.is_billed ? '✓' : ''),
+          },
+        ]}
+        emptyMessage="No transactions found."
+      />
+
+      <Modal
+        open={showBillingDetails && Boolean(billingDetails)}
+        title="Billing Processed Successfully"
+        onClose={() => setShowBillingDetails(false)}
+      >
+        {billingDetails && (
+          <>
+            <div className="creditcard-billing-details">
+              <p>
+                <strong>Transactions Billed:</strong>{' '}
+                {billingDetails.transactionsBilled ?? '—'}
+              </p>
+              <p>
+                <strong>Total Amount Billed:</strong>{' '}
+                {billingDetails.totalAmountBilled == null
+                  ? '—'
+                  : `Rs.${safeNumber(
+                      billingDetails.totalAmountBilled
+                    ).toFixed(2)}`}
+              </p>
+              <p>
+                <strong>New Billed Unpaid:</strong>{' '}
+                Rs.{safeNumber(
+                  billingDetails.card.billed_unpaid
+                ).toFixed(2)}
+              </p>
+              <p>
+                <strong>New Unbilled Spends:</strong>{' '}
+                Rs.{safeNumber(
+                  billingDetails.card.unbilled_spends
+                ).toFixed(2)}
+              </p>
             </div>
 
-            <div className="transactions-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Type</th>
-                    <th>Billed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions && transactions.length > 0 ? (
-                    transactions.map(tx => (
-                      <tr key={tx.id} className={tx.is_payment ? 'payment' : 'expense'}>
-                        <td>{tx.date}</td>
-                        <td>{tx.amount > 0 ? '+' : ''}{tx.amount?.toFixed(2)}</td>
-                        <td>{tx.description}</td>
-                        <td>{tx.category}</td>
-                        <td>{tx.transaction_type}</td>
-                        <td>{tx.is_billed ? '✓' : ''}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="6">No transactions found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            
-          </div>
-        </div>
-      )}
-
-      {/* Billing modal */}
-      {showBillingDetails && billingDetails && (
-        <div className="modal">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h2>Billing Processed Successfully</h2>
-              <button type="button" onClick={() => setShowBillingDetails(false)} className="close-button">&times;</button>
-            </div>
-
-            <div className="billing-details">
-              <p><strong>Transactions Billed:</strong> {billingDetails.transactionsBilled}</p>
-              <p><strong>Total Amount Billed:</strong> Rs.{billingDetails.totalAmountBilled?.toFixed(2)}</p>
-              <p><strong>New Billed Unpaid:</strong> Rs.{billingDetails.card.billed_unpaid?.toFixed(2)}</p>
-              <p><strong>New Unbilled Spends:</strong> Rs.{billingDetails.card.unbilled_spends?.toFixed(2)}</p>
-            </div>
-
-            <div className="modal-actions">
-              <button type="button"
+            <div className="creditcard-modal-actions">
+              <Button
+                type="button"
+                variant="secondary"
                 onClick={() => {
                   setShowBillingDetails(false);
-                  fetchTransactions(billingDetails.card.id);
+                  handleViewTransactions(billingDetails.card);
                 }}
-                className="info"
+                disabled={transactionsLoading}
               >
                 View Updated Transactions
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

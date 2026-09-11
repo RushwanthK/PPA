@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
+from sqlalchemy import func, or_, cast, String
 from datetime import datetime, timezone
 import pytz
 
@@ -276,19 +276,117 @@ def get_credit_card_transactions(card_id):
     card = CreditCard.query.filter_by(id=card_id, user_id=user_id).first()
     if not card:
         return jsonify({"error": "Credit card not found"}), 404
-        
-    transactions = CreditCardTransaction.query.filter_by(credit_card_id=card_id).order_by(CreditCardTransaction.date.desc()).all()
-    
-    return jsonify([{
-        "id": t.id,
-        "amount": t.amount,
-        "date": t.date.astimezone(IST).strftime('%d-%m-%Y %H:%M:%S'),
-        "description": t.description,
-        "category": t.category,
-        "type": t.transaction_type,
-        "is_payment": t.is_payment,
-        "is_billed": t.is_billed
-    } for t in transactions])
+
+    # Keep the original list response when no paging/filter arguments are
+    # supplied. Existing API consumers therefore keep the exact legacy
+    # response shape, while the refactored frontend opts into bounded,
+    # server-side history queries.
+    uses_pagination = any(
+        key in request.args
+        for key in ('page', 'page_size', 'search', 'type')
+    )
+
+    query = CreditCardTransaction.query.filter(
+        CreditCardTransaction.credit_card_id == card_id,
+        CreditCardTransaction.user_id == user_id,
+    )
+
+    if not uses_pagination:
+        transactions = query.order_by(
+            CreditCardTransaction.date.desc(),
+            CreditCardTransaction.id.desc(),
+        ).all()
+
+        return jsonify([{
+            "id": t.id,
+            "amount": t.amount,
+            "date": t.date.astimezone(IST).strftime('%d-%m-%Y %H:%M:%S'),
+            "description": t.description,
+            "category": t.category,
+            "type": t.transaction_type,
+            "is_payment": t.is_payment,
+            "is_billed": t.is_billed
+        } for t in transactions])
+
+    try:
+        page = max(int(request.args.get('page', 1)), 1)
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = int(request.args.get('page_size', 25))
+    except (TypeError, ValueError):
+        page_size = 25
+
+    # Keep result size bounded even if a client asks for an excessively large
+    # page. This mirrors the other transaction endpoints.
+    page_size = min(max(page_size, 1), 100)
+
+    search = (request.args.get('search') or '').strip()
+    transaction_type = (request.args.get('type') or '').strip().lower()
+
+    if transaction_type:
+        if transaction_type not in ('expense', 'payment'):
+            return jsonify({
+                "error": "Invalid transaction type filter"
+            }), 400
+
+        query = query.filter(
+            CreditCardTransaction.transaction_type == transaction_type
+        )
+
+    if search:
+        # Search applies to the complete stored history, not only the rows in
+        # the current page. The searchable fields intentionally match what the
+        # shared transaction table exposes to the user.
+        search_pattern = f"%{search}%"
+        query = query.filter(or_(
+            CreditCardTransaction.description.ilike(search_pattern),
+            CreditCardTransaction.category.ilike(search_pattern),
+            CreditCardTransaction.transaction_type.ilike(search_pattern),
+            cast(CreditCardTransaction.amount, String).ilike(search_pattern),
+            cast(CreditCardTransaction.date, String).ilike(search_pattern),
+            cast(CreditCardTransaction.is_billed, String).ilike(search_pattern),
+        ))
+
+    # ID makes same-timestamp ordering deterministic and matches the composite
+    # credit-card transaction index added in the pagination migration.
+    query = query.order_by(
+        CreditCardTransaction.date.desc(),
+        CreditCardTransaction.id.desc(),
+    )
+
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size
+
+    # A filter can shrink the result set while the user is on a later page.
+    # Return the last valid page instead of an empty out-of-range page.
+    if total_pages and page > total_pages:
+        page = total_pages
+
+    transactions = (
+        query
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    return jsonify({
+        "transactions": [{
+            "id": tx.id,
+            "amount": tx.amount,
+            "description": tx.description or '',
+            "category": tx.category or '',
+            "transaction_type": tx.transaction_type,
+            "is_payment": tx.is_payment,
+            "is_billed": tx.is_billed,
+            "date": tx.date.astimezone(IST).strftime('%Y-%m-%d %H:%M:%S'),
+        } for tx in transactions],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    })
 
 @credit_card_routes.route('/credit_cards/<int:card_id>/transactions', methods=['POST'])
 @jwt_required()
@@ -443,7 +541,12 @@ def add_credit_card_transaction(card_id):
                 "available_limit": card.available_limit,
                 "billed_unpaid": card.billed_unpaid,
                 "unbilled_spends": card.unbilled_spends,
-                "total_payable": card.total_payable
+                "total_payable": card.total_payable,
+                "last_payment_date": (
+                    card.last_payment_date.astimezone(IST).strftime('%d%m%Y')
+                    if card.last_payment_date else None
+                ),
+                "last_payment_amount": card.last_payment_amount,
             }
         }), 201
 
@@ -537,7 +640,12 @@ def process_billing(card_id):
                 "unbilled_spends": card.unbilled_spends,
                 "used": card.used,
                 "available_limit": card.available_limit,
-                "total_payable": card.total_payable
+                "total_payable": card.total_payable,
+                "last_payment_date": (
+                    card.last_payment_date.astimezone(IST).strftime('%d%m%Y')
+                    if card.last_payment_date else None
+                ),
+                "last_payment_amount": card.last_payment_amount,
             }
         })
 

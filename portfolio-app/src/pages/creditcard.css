@@ -1,719 +1,266 @@
-/* src/pages/creditcard.css — retheme pass */
-/*
- * Retextured to match the shared visual language used on Users and Banks
- * (see pages/users.css and pages/bank.css): the --up-* soft blue/green/
- * pink-red palette, 8/12/18px radius scale, gradient buttons, blurred
- * glass modals with a pop-in animation, and the same card/table look.
- *
- * Nothing here changes selector names, JSX structure, or behavior — this
- * file only changes color/spacing/animation values so this page matches
- * the rest of the app. All className hooks are identical to before.
- */
+/* src/pages/creditcard.css */
 
-/* ==========================================================================
-   Design tokens
-   Duplicated (not just imported) from users.css/bank.css on purpose, same
-   as bank.css does — keeps this page visually correct even if it's ever
-   loaded on its own. Scoped to .credit-card-container (not :root) so it
-   can never leak into other pages, which is stricter than the :root
-   approach those two files use, and was the actual bug fixed last stage.
-   ========================================================================== */
 .credit-card-container {
-  --up-bg: #0e0f11;
-  --up-surface: #161719;
-  --up-surface-elevated: #1e2023;
-  --up-border: #2c2e33;
-  --up-border-soft: #26282c;
-
-  --up-text: #f3f4f6;
-  --up-text-muted: #9ca0a8;
-  --up-text-dim: #6b6f76;
-
-  --up-primary: #5b8cff;
-  --up-primary-hover: #4574e6;
-  --up-primary-soft: rgba(91, 140, 255, 0.14);
-
-  --up-success: #22c55e;
-  --up-success-hover: #16a34a;
-  --up-success-soft: rgba(34, 197, 94, 0.12);
-
-  --up-danger: #f0475a;
-  --up-danger-hover: #d63a4c;
-  --up-danger-soft: rgba(240, 71, 90, 0.12);
-
-  /* Not part of the shared palette (Users/Banks don't use a warning
-     accent anywhere) — added locally so button.warning and the pending/
-     warning indicators below still have something coherent to use. */
-  --up-warning: #f2a93b;
-  --up-warning-hover: #d98f22;
-  --up-warning-soft: rgba(242, 169, 59, 0.14);
-
-  --up-radius-sm: 8px;
-  --up-radius-md: 12px;
-  --up-radius-lg: 18px;
-
-  --up-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
-  --up-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --up-shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
-
-  --up-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
-
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
-  color: var(--up-text);
-  background: radial-gradient(circle at top, #17181b 0%, #0b0c0d 65%);
-  padding: clamp(16px, 3vw, 20px);
+  width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  box-sizing: border-box;
-}
-
-.credit-card-container * {
-  box-sizing: border-box;
+  padding: clamp(16px, 3vw, 20px);
 }
 
 .credit-card-container h1 {
+  margin: 0 0 20px;
+  color: var(--text-color);
   font-size: clamp(22px, 2.6vw, 30px);
   font-weight: 700;
   letter-spacing: -0.01em;
-  margin-bottom: 20px;
-  color: var(--up-text);
 }
 
-/* ==========================================================================
-   Toolbar (Add Credit Card + search)
-   ========================================================================== */
-.actions {
-  margin-bottom: 20px;
+.credit-card-toolbar {
   display: flex;
+  align-items: center;
   gap: 12px;
-  align-items: center;
   flex-wrap: wrap;
-}
-
-.search-wrap {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.search-input {
-  padding: 9px 12px;
-  border-radius: var(--up-radius-sm);
-  border: 1px solid var(--up-border);
-  background: var(--up-bg);
-  color: var(--up-text);
-  font-size: 14px;
-  outline: none;
-  transition: border-color var(--up-transition), box-shadow var(--up-transition);
-}
-
-.search-input::placeholder {
-  color: var(--up-text-dim);
-}
-
-.search-input:focus {
-  border-color: var(--up-primary);
-  box-shadow: 0 0 0 3px var(--up-primary-soft);
-}
-
-/* ==========================================================================
-   Buttons
-   Scoped to this page (not a bare `button` tag selector) so it can't
-   restyle buttons on other pages once this CSS chunk has loaded.
-   ========================================================================== */
-.credit-card-container button {
-  padding: 8px 16px;
-  border-radius: var(--up-radius-sm);
-  border: none;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: white;
-  transition: transform var(--up-transition), filter var(--up-transition);
-  margin: 2px;
-}
-
-.credit-card-container button.primary {
-  background: linear-gradient(135deg, var(--up-success), var(--up-success-hover));
-}
-
-.credit-card-container button.info,
-.credit-card-container button.secondary {
-  background: linear-gradient(135deg, var(--up-primary), var(--up-primary-hover));
-}
-
-.credit-card-container button.danger {
-  background: linear-gradient(135deg, var(--up-danger), var(--up-danger-hover));
-}
-
-.credit-card-container button.warning {
-  background: linear-gradient(135deg, var(--up-warning), var(--up-warning-hover));
-}
-
-.credit-card-container button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.08);
-}
-
-.credit-card-container button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* ==========================================================================
-   Credit cards table
-   ========================================================================== */
-.cards-table {
-  width: 100%;
-  margin-top: 20px;
-  background: linear-gradient(180deg, var(--up-surface) 0%, #131417 100%);
-  border: 1px solid var(--up-border-soft);
-  border-radius: var(--up-radius-md);
-  box-shadow: var(--up-shadow-sm);
-  overflow: hidden;
-}
-
-/* Horizontal-scroll wrapper: on narrow screens this table (7 columns of
-   financial data) can't shrink to fit without becoming unreadable, and
-   the app shell sets `overflow-x: hidden` on <body> globally — without
-   this wrapper, columns that don't fit would be clipped and completely
-   unreachable rather than just cramped. This gives the table its own
-   scroll container instead. */
-.cards-table-scroll {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-.cards-table table {
-  width: 100%;
-  min-width: 680px;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-.cards-table th,
-.cards-table td {
-  padding: 12px 15px;
-  border-bottom: 1px solid var(--up-border-soft);
-  text-align: left;
-}
-
-.cards-table th {
-  background: var(--up-surface-elevated);
-  color: var(--up-text);
-  font-weight: 600;
-}
-
-.cards-table td {
-  color: var(--up-text-muted);
-}
-
-.cards-table tr:hover td {
-  background: var(--up-surface-elevated);
-  color: var(--up-text);
-}
-
-.actions-cell {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-/* indicate sortable headers */
-.cards-table th.sortable {
-  cursor: pointer;
-  user-select: none;
-  transition: color var(--up-transition);
-}
-
-.cards-table th.sortable:hover {
-  color: var(--up-primary);
-}
-
-/* totals row */
-.cards-table tfoot .totals-row td {
-  background: var(--up-surface-elevated);
-  border-top: 2px solid var(--up-border);
-  padding-top: 12px;
-  font-weight: 600;
-  color: var(--up-text);
-}
-
-/* ==========================================================================
-   Modals
-   ========================================================================== */
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(6, 7, 8, 0.72);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  z-index: 1000;
-  animation: ccFadeInBackdrop 0.2s ease;
-}
-
-@keyframes ccFadeInBackdrop {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.modal-content {
-  background: linear-gradient(180deg, var(--up-surface-elevated) 0%, #17181b 100%);
-  border: 1px solid var(--up-border-soft);
-  padding: 25px;
-  border-radius: var(--up-radius-lg);
-  width: 90%;
-  max-width: 500px;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
-  box-shadow: var(--up-shadow-lg);
-  animation: ccPopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes ccPopIn {
-  from { transform: scale(0.94) translateY(8px); opacity: 0; }
-  to { transform: scale(1) translateY(0); opacity: 1; }
-}
-
-.modal-content.large {
-  max-width: 700px;
-}
-
-.modal-content.x-large {
-  max-width: 900px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid var(--up-border-soft);
 }
 
-.modal-header h2 {
-  margin: 0;
-  font-size: 1.3rem;
+.credit-card-search {
+  width: min(360px, 100%);
+  margin-left: auto;
+}
+
+.credit-card-container .table-container {
+  min-width: 0;
+}
+
+.credit-card-container .data-table {
+  min-width: 820px;
+}
+
+.creditcard-totals-row td {
+  background: var(--surface-elevated);
+  border-top: 2px solid var(--border-color);
+  color: var(--text-color);
   font-weight: 600;
-  color: var(--up-text);
 }
 
-.close-button {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: var(--up-text-dim);
-  cursor: pointer;
+.creditcard-error-with-close,
+.creditcard-success-with-close {
+  position: relative;
+  margin: 20px 0;
+  padding: 14px 44px 14px 16px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: 14px;
+}
+
+.creditcard-error-with-close {
+  background: var(--danger-soft);
+  border: 1px solid rgba(255, 92, 92, 0.4);
+  color: #ff8792;
+}
+
+.creditcard-success-with-close {
+  background: var(--success-soft);
+  border: 1px solid rgba(67, 192, 127, 0.35);
+  color: #78dca6;
+}
+
+.creditcard-error-dismiss,
+.creditcard-success-dismiss {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: auto;
+  min-height: 0;
   padding: 0;
+  margin: 0;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
-  transition: color var(--up-transition);
 }
 
-.close-button:hover {
-  color: var(--up-text);
+.creditcard-error-dismiss:hover,
+.creditcard-success-dismiss:hover {
+  transform: translateY(-50%);
+  background: transparent;
 }
 
-/* Scrollbar */
-.modal-content {
-  scrollbar-width: thin;
-  scrollbar-color: var(--up-primary) var(--up-surface);
+.creditcard-accent-text {
+  color: var(--action-color);
 }
 
-.modal-content::-webkit-scrollbar {
-  width: 8px;
+.creditcard-date-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
-.modal-content::-webkit-scrollbar-track {
-  background: var(--up-surface);
-  border-radius: 4px;
-}
-
-.modal-content::-webkit-scrollbar-thumb {
-  background-color: var(--up-primary);
-  border-radius: 4px;
-}
-
-/* ==========================================================================
-   Forms
-   ========================================================================== */
-.form-group {
+/* Credit-card-specific transaction-type controls. These are intentionally
+   uniquely named because shared Modal/TransactionFormDialog render through a
+   portal and therefore are not descendants of .credit-card-container. */
+.creditcard-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin-bottom: 15px;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--up-text-muted);
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  padding: 10px 12px;
-  border-radius: var(--up-radius-sm);
-  font-size: 0.9rem;
-  border: 1px solid var(--up-border);
-  background: var(--up-bg);
-  color: var(--up-text);
-  width: 100%;
-  outline: none;
-  transition: border-color var(--up-transition), box-shadow var(--up-transition);
-}
-
-.form-group input::placeholder {
-  color: var(--up-text-dim);
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  border-color: var(--up-primary);
-  box-shadow: 0 0 0 3px var(--up-primary-soft);
-}
-
-.form-group.checkbox {
-  display: flex;
-  align-items: center;
-}
-
-.form-group.checkbox input {
-  width: auto;
-  margin-right: 8px;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-/* ==========================================================================
-   Card details / billing details panels
-   ========================================================================== */
-.card-details,
-.billing-details {
-  background: var(--up-surface-elevated);
-  border: 1px solid var(--up-border-soft);
-  padding: 20px;
-  border-radius: var(--up-radius-md);
-  margin-bottom: 20px;
-}
-
-.detail-row {
-  display: flex;
-  margin-bottom: 10px;
-  align-items: center;
-}
-
-.detail-label {
-  font-weight: 600;
-  min-width: 150px;
-  color: var(--up-text-muted);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-  flex-wrap: wrap;
-}
-
-.billing-details p {
-  margin: 10px 0;
-  display: flex;
-  justify-content: space-between;
-}
-
-.billing-details strong {
-  color: var(--up-text-muted);
-}
-
-/* ==========================================================================
-   Transactions table (inside the Transactions modal)
-   ========================================================================== */
-.transactions-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-  margin-top: 10px;
-}
-
-.transactions-table th,
-.transactions-table td {
-  padding: 8px 12px;
-  border: 1px solid var(--up-border-soft);
-}
-
-.transactions-table th {
-  background: var(--up-surface-elevated);
-  color: var(--up-text);
-  font-weight: 600;
-}
-
-.transactions-table td {
-  color: var(--up-text-muted);
-}
-
-.transactions-table tr.payment td {
-  background: var(--up-success-soft);
-}
-
-.transactions-table tr.expense td {
-  background: var(--up-danger-soft);
-}
-
-.transaction-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-/* ==========================================================================
-   Loading & error states
-   ========================================================================== */
-.loading {
-  padding: 20px;
-  text-align: center;
-  margin: 20px 0;
-  border-radius: var(--up-radius-md);
-  background: var(--up-surface-elevated);
-  color: var(--up-text-muted);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.cc-loading-spinner {
-  width: 34px;
-  height: 34px;
-  border: 3px solid rgba(255, 255, 255, 0.12);
-  border-top-color: var(--up-primary);
-  border-radius: 50%;
-  animation: cc-spin 0.8s linear infinite;
-}
-
-@keyframes cc-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Highlighted card name inside the "Add Transaction" modal title */
-.tx-card-name {
-  color: var(--up-primary);
-}
-
-/* Inline validation error for the Add Transaction form (replaces a
-   browser alert() — stays visible next to the field that needs
-   attention instead of interrupting with a blocking dialog). */
-.tx-form-error {
-  margin: 0 0 16px;
-}
-
-.form-group.radio-group.has-error .radio-options {
-  outline: 1px solid var(--up-danger);
+.creditcard-radio-group.has-error .creditcard-radio-options {
+  outline: 1px solid var(--error-color);
   outline-offset: 6px;
   border-radius: 4px;
 }
 
-.creditcard-error-with-close {
-  background: var(--up-danger-soft);
-  border: 1px solid rgba(240, 71, 90, 0.4);
-  color: #ff8792;
-  padding: 14px 44px 14px 16px;
-  border-radius: var(--up-radius-sm);
-  font-size: 14px;
-  margin: 20px 0;
-  position: relative;
-  text-align: left;
-}
-
-.creditcard-error-with-close button.error-dismiss {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #ff8792;
-  font-size: 20px;
-  font-weight: bold;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-}
-
-.creditcard-error-with-close button.error-dismiss:hover {
-  color: #ffb1b8;
-}
-
-/* ==========================================================================
-   Status classes / indicators
-   ========================================================================== */
-.positive {
-  color: var(--up-success);
-  font-weight: 500;
-}
-
-.negative {
-  color: var(--up-danger);
-  font-weight: 500;
-}
-
-.payment-status {
-  display: inline-block;
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
+.creditcard-radio-label {
+  color: var(--text-muted);
+  font-size: 13px;
   font-weight: 600;
 }
 
-.payment-status.paid {
-  background: var(--up-success-soft);
-  color: var(--up-success);
-}
-
-.payment-status.pending {
-  background: var(--up-warning-soft);
-  color: var(--up-warning);
-}
-
-.payment-status.overdue {
-  background: var(--up-danger-soft);
-  color: var(--up-danger);
-}
-
-.limit-indicator {
-  height: 4px;
-  background: var(--up-surface-elevated);
-  border-radius: 2px;
-  margin-top: 5px;
-  overflow: hidden;
-}
-
-.limit-progress {
-  height: 100%;
-  background: var(--up-success);
-}
-
-.limit-warning .limit-progress {
-  background: var(--up-warning);
-}
-
-.limit-danger .limit-progress {
-  background: var(--up-danger);
-}
-
-/* ==========================================================================
-   Transaction type radio group
-   ========================================================================== */
-.form-group.radio-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.radio-options {
+.creditcard-radio-options {
   display: flex;
   gap: 20px;
-  margin-top: 5px;
 }
 
-.radio-options label {
+.creditcard-radio-options label {
   display: flex;
   align-items: center;
-  color: var(--up-text);
-  font-weight: 400;
-  font-size: 0.9rem;
+  gap: 8px;
+  color: var(--text-color);
+  font-size: 14px;
 }
 
-.radio-options input[type="radio"] {
-  margin-right: 8px;
-  accent-color: var(--up-primary);
+.creditcard-radio-options input[type='radio'] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--action-color);
 }
 
-/* ==========================================================================
-   Note: the delete-confirmation modal (backup/export step included) is
-   rendered by the shared components/Deleteconfirmationdialog.js, which
-   carries its own matching --dcd-* theme (see that component's .css).
-   This page intentionally does NOT override it — same as bank.css and
-   users.css — so the dialog looks identical everywhere it's used. This
-   page previously overrode it with a different (Material) color set,
-   which is what made the delete dialog look inconsistent on this page.
-   ========================================================================== */
+.creditcard-details-modal {
+  max-width: 700px;
+}
 
-/* ==========================================================================
-   Responsive: tablets / phones
-   ========================================================================== */
+.creditcard-details-panel {
+  margin-bottom: 20px;
+  padding: 20px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+}
+
+.creditcard-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.creditcard-detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.creditcard-detail-row span {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.creditcard-detail-row strong {
+  color: var(--text-color);
+  text-align: right;
+}
+
+.creditcard-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.creditcard-billing-details {
+  margin-bottom: 20px;
+  padding: 20px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+}
+
+.creditcard-billing-details p {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 10px 0;
+}
+
+.creditcard-billing-details p:last-child {
+  margin-bottom: 0;
+}
+
+.creditcard-billing-details strong {
+  color: var(--text-muted);
+}
+
+.creditcard-transaction-payment {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.creditcard-transaction-expense {
+  color: var(--error-color);
+  font-weight: 600;
+}
+
+.cc-loading {
+  padding: 24px;
+  margin: 20px 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tx-form-error {
+  margin-top: 0;
+}
+
 @media (max-width: 768px) {
   .credit-card-container {
     padding: 16px;
   }
 
-  .cards-table th,
-  .cards-table td {
-    padding: 8px 10px;
-    font-size: 0.8rem;
-  }
-
-  .actions-cell {
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .modal-content {
-    width: 95%;
-    padding: 18px;
-  }
-
-  .modal-actions,
-  .form-actions {
-    flex-direction: column;
-  }
-
-  .credit-card-container button {
+  .credit-card-search {
     width: 100%;
-    margin: 5px 0;
-    padding: 10px;
+    margin-left: 0;
   }
 
-  .detail-row {
+  .creditcard-modal-actions,
+  .creditcard-radio-options {
     flex-direction: column;
+  }
+
+  .creditcard-detail-row,
+  .creditcard-billing-details p {
     align-items: flex-start;
-  }
-
-  .detail-label {
-    margin-bottom: 5px;
-    min-width: unset;
-  }
-
-  .billing-details p {
     flex-direction: column;
   }
-}
 
-@media (max-width: 420px) {
-  .credit-card-container {
-    padding: 12px;
+  .creditcard-detail-row strong {
+    text-align: left;
+  }
+
+  .creditcard-modal-actions .button {
+    width: 100%;
   }
 }
 
-/* ==========================================================================
-   Large displays (TV / big desktop monitors)
-   ========================================================================== */
 @media (min-width: 1800px) {
   .credit-card-container {
     max-width: 1500px;
-    font-size: 1.05rem;
   }
 }

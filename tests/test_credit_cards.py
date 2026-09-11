@@ -846,6 +846,8 @@ def test_add_credit_card_payment_crosses_billed_and_unbilled_balances(
     assert data["card"]["used"] == 200
     assert data["card"]["available_limit"] == 9800
     assert data["card"]["total_payable"] == 0
+    assert data["card"]["last_payment_date"] is not None
+    assert data["card"]["last_payment_amount"] == 600
 
     db_session.expire_all()
 
@@ -1158,6 +1160,155 @@ def test_get_credit_card_transactions_returns_descending_history(
     assert data[0]["is_billed"] is True
     assert data[1]["description"] == "Older"
     assert data[1]["type"] == "expense"
+
+
+def test_get_credit_card_transactions_supports_server_pagination(
+    authenticated_client,
+    test_credit_card,
+    db_session,
+):
+    transaction_date = datetime(
+        2026,
+        9,
+        11,
+        12,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    transactions = [
+        CreditCardTransaction(
+            credit_card_id=test_credit_card.id,
+            user_id=test_credit_card.user_id,
+            amount=-100,
+            date=transaction_date,
+            description="First",
+            category="Test",
+            transaction_type="expense",
+            is_payment=False,
+            is_billed=False,
+        ),
+        CreditCardTransaction(
+            credit_card_id=test_credit_card.id,
+            user_id=test_credit_card.user_id,
+            amount=-200,
+            date=transaction_date,
+            description="Second",
+            category="Test",
+            transaction_type="expense",
+            is_payment=False,
+            is_billed=False,
+        ),
+        CreditCardTransaction(
+            credit_card_id=test_credit_card.id,
+            user_id=test_credit_card.user_id,
+            amount=-300,
+            date=transaction_date,
+            description="Third",
+            category="Test",
+            transaction_type="expense",
+            is_payment=False,
+            is_billed=False,
+        ),
+    ]
+
+    db_session.add_all(transactions)
+    db_session.commit()
+
+    response = authenticated_client.get(
+        f"/credit_cards/{test_credit_card.id}/transactions",
+        query_string={
+            "page": 1,
+            "page_size": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+
+    assert isinstance(data, dict)
+    assert len(data["transactions"]) == 2
+    assert data["page"] == 1
+    assert data["page_size"] == 2
+    assert data["total"] == 3
+    assert data["total_pages"] == 2
+
+    # Same timestamp → ID is the deterministic tie-breaker.
+    assert data["transactions"][0]["description"] == "Third"
+    assert data["transactions"][1]["description"] == "Second"
+
+
+def test_get_credit_card_transactions_supports_server_search_and_type_filter(
+    authenticated_client,
+    test_credit_card,
+    db_session,
+):
+    transaction_date = datetime(
+        2026,
+        9,
+        11,
+        12,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    expense = CreditCardTransaction(
+        credit_card_id=test_credit_card.id,
+        user_id=test_credit_card.user_id,
+        amount=-100,
+        date=transaction_date,
+        description="Groceries",
+        category="Food",
+        transaction_type="expense",
+        is_payment=False,
+        is_billed=False,
+    )
+
+    payment = CreditCardTransaction(
+        credit_card_id=test_credit_card.id,
+        user_id=test_credit_card.user_id,
+        amount=25,
+        date=transaction_date,
+        description="Partial payment",
+        category="Payment",
+        transaction_type="payment",
+        is_payment=True,
+        is_billed=True,
+    )
+
+    db_session.add_all([expense, payment])
+    db_session.commit()
+
+    response = authenticated_client.get(
+        f"/credit_cards/{test_credit_card.id}/transactions",
+        query_string={
+            "search": "payment",
+            "type": "payment",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+
+    assert data["total"] == 1
+    assert len(data["transactions"]) == 1
+    assert data["transactions"][0]["description"] == "Partial payment"
+    assert data["transactions"][0]["transaction_type"] == "payment"
+
+
+def test_get_credit_card_transactions_rejects_invalid_type_filter(
+    authenticated_client,
+    test_credit_card,
+):
+    response = authenticated_client.get(
+        f"/credit_cards/{test_credit_card.id}/transactions",
+        query_string={"type": "income"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Invalid transaction type filter"
 
 
 def test_get_credit_card_transactions_returns_empty_history(

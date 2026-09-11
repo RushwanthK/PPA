@@ -312,9 +312,11 @@ export const deleteCreditCard = async (cardId) => {
   }
 };
 
-export const getCreditCardTransactions = async (cardId) => {
+export const getCreditCardTransactions = async (cardId, params = {}) => {
   try {
-    const response = await api.get(`/credit_cards/${cardId}/transactions`);
+    const response = await api.get(`/credit_cards/${cardId}/transactions`, {
+      params,
+    });
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
