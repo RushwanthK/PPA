@@ -269,6 +269,17 @@ export default function CreditCard() {
       };
 
       if (formData.id) {
+        const existingCard = cards.find(
+          card => String(card.id) === String(formData.id)
+        );
+        const previousBillingCycleStart = Number(
+          existingCard?.billing_cycle_start
+        );
+        const newBillingCycleStart = Number(cardData.billing_cycle_start);
+        const billingCycleChanged =
+          Number.isFinite(previousBillingCycleStart) &&
+          previousBillingCycleStart !== newBillingCycleStart;
+
         const response = await updateCreditCard(formData.id, cardData);
         const updatedCard = response?.card;
 
@@ -279,7 +290,27 @@ export default function CreditCard() {
         }
 
         updateLocalCard(updatedCard);
-        setSuccess('Credit card updated successfully.');
+
+        // Changing the billing-cycle start day requires the full billing
+        // recalculation performed by the existing Process Billing endpoint.
+        // Trigger it automatically only when that field actually changed.
+        if (billingCycleChanged) {
+          const billingResponse = await processBilling(formData.id);
+
+          if (!billingResponse?.card) {
+            throw new Error(
+              'Credit card was updated, but billing could not be recalculated automatically.'
+            );
+          }
+
+          updateLocalCard(billingResponse.card);
+        }
+
+        setSuccess(
+          billingCycleChanged
+            ? 'Credit card updated and billing recalculated successfully.'
+            : 'Credit card updated successfully.'
+        );
       } else {
         const response = await createCreditCard(cardData);
         const createdCard = response?.card;
@@ -301,7 +332,7 @@ export default function CreditCard() {
     } finally {
       setLoading(false);
     }
-  }, [formData, resetForm, updateLocalCard]);
+  }, [cards, formData, resetForm, updateLocalCard]);
 
   const handleTransactionSubmit = useCallback(async event => {
     event.preventDefault();
@@ -342,7 +373,14 @@ export default function CreditCard() {
         );
       }
 
-      updateLocalCard(response.card);
+      // The transaction endpoint returns the updated balances but (for
+      // backwards compatibility) may not include the card id in that nested
+      // object. Supply the known id so the local row and details dialog update
+      // without an additional GET request.
+      updateLocalCard({
+        id: transactionData.cardId,
+        ...response.card,
+      });
 
       if (
         selectedCard?.id &&
