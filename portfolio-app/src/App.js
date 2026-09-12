@@ -1,12 +1,17 @@
 import React, {
   useState,
   useEffect,
-  useRef,
   lazy,
   Suspense,
 } from 'react';
 
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import {
+  Routes,
+  Route,
+  NavLink,
+  Navigate,
+  useLocation,
+} from 'react-router-dom';
 
 import { AuthProvider, useAuth } from './AuthContext';
 import './App.css';
@@ -22,7 +27,7 @@ const Bank = lazy(() => import('./pages/bank'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 
 const NAV_LINKS = [
-  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/dashboard', label: 'Overview' },
   { to: '/assets', label: 'Assets' },
   { to: '/savings', label: 'Savings' },
   { to: '/creditcard', label: 'Credit Cards' },
@@ -60,35 +65,39 @@ function AppContent() {
     checkingSession,
   } = useAuth();
 
+  const location = useLocation();
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const navRef = useRef(null);
 
-
-  // Close the mobile nav on outside click / Escape.
+  // Close the navigation menu when the Escape key is pressed.
   useEffect(() => {
-    if (!menuOpen) return;
+    if (!menuOpen) {
+      return;
+    }
 
-    const handleClick = e => {
-      if (navRef.current && !navRef.current.contains(e.target)) {
+    const handleKey = event => {
+      if (event.key === 'Escape') {
         setMenuOpen(false);
       }
     };
 
-    const handleKey = e => {
-      if (e.key === 'Escape') {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
 
     return () => {
-      document.removeEventListener('mousedown', handleClick);
       document.removeEventListener('keydown', handleKey);
     };
   }, [menuOpen]);
+
+  // On mobile, close the overlay after navigation.
+  // On desktop, keep the sidebar open until the user explicitly closes it.
+  useEffect(() => {
+    const isMobile = window.matchMedia('(max-width: 860px)').matches;
+
+    if (isMobile) {
+      setMenuOpen(false);
+    }
+  }, [location.pathname]);
 
   if (checkingSession && user === null) {
     return (
@@ -100,143 +109,191 @@ function AppContent() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${menuOpen ? 'menu-is-open' : ''}`}>
       <header className="app-header">
-        <div className="logo">My Portfolio</div>
+        <div className="header-left">
+          {user && (
+            <button
+              type="button"
+              className={`nav-toggle ${menuOpen ? 'open' : ''}`}
+              aria-label={
+                menuOpen ? 'Close navigation menu' : 'Open navigation menu'
+              }
+              aria-expanded={menuOpen}
+              aria-controls="app-sidebar"
+              onClick={() => setMenuOpen(open => !open)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+          )}
+
+          {user ? (
+            <NavLink
+              to="/dashboard"
+              className="logo-link"
+              onClick={() => {
+                const isMobile = window.matchMedia('(max-width: 860px)').matches;
+
+                if (isMobile) {
+                  setMenuOpen(false);
+                }
+              }}
+              aria-label="Go to financial overview"
+            >
+              My Finances
+            </NavLink>
+          ) : (
+            <span className="logo-link">My Finances</span>
+          )}
+        </div>
 
         {user && (
-          <>
-            <div className="header-actions">
-              <button
-                type="button"
-                className={`nav-toggle ${menuOpen ? 'open' : ''}`}
-                aria-label="Toggle navigation menu"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen(open => !open)}
-              >
-                <span />
-                <span />
-                <span />
-              </button>
-
-              <nav
-                ref={navRef}
-                className={`nav-tabs ${menuOpen ? 'open' : ''}`}
-              >
-              {NAV_LINKS.map(link => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  className={({ isActive }) =>
-                    `nav-link ${isActive ? 'active' : ''}`
-                  }
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {link.label}
-                </NavLink>
-              ))}
-
-              </nav>
-
-              <button
-                type="button"
-                className="profile-trigger"
-                aria-label="Open profile"
-                aria-expanded={profileOpen}
-                aria-haspopup="dialog"
-                title="Profile"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setProfileOpen(true);
-                }}
-              >
-                <span className="profile-trigger-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M4.5 20c.8-3.4 3.3-5 7.5-5s6.7 1.6 7.5 5" />
-                  </svg>
-                </span>
-              </button>
-            </div>
-          </>
+          <button
+            type="button"
+            className="profile-trigger"
+            aria-label="Open profile"
+            aria-expanded={profileOpen}
+            aria-haspopup="dialog"
+            title="Profile"
+            onClick={() => {
+              setMenuOpen(false);
+              setProfileOpen(true);
+            }}
+          >
+            <span className="profile-trigger-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4.5 20c.8-3.4 3.3-5 7.5-5s6.7 1.6 7.5 5" />
+              </svg>
+            </span>
+          </button>
         )}
       </header>
+
+      <div
+        className={`app-body ${menuOpen ? 'menu-is-open' : ''} ${
+          location.pathname === '/' ? 'auth-body' : ''
+        }`}
+      >
+        {user && (
+          <>
+            <aside
+              id="app-sidebar"
+              className={`app-sidebar ${menuOpen ? 'open' : ''}`}
+              aria-hidden={!menuOpen}
+            >
+
+              <nav className="sidebar-nav" aria-label="Main navigation">
+                {NAV_LINKS.map(link => (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    className={({ isActive }) =>
+                      `sidebar-link ${isActive ? 'active' : ''}`
+                    }
+                    onClick={() => {
+                      const isMobile = window.matchMedia('(max-width: 860px)').matches;
+
+                      if (isMobile) {
+                        setMenuOpen(false);
+                      }
+                    }}
+                    tabIndex={menuOpen ? 0 : -1}
+                  >
+                    {link.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </aside>
+
+            <button
+              type="button"
+              className="sidebar-backdrop"
+              aria-label="Close navigation menu"
+              tabIndex={menuOpen ? 0 : -1}
+              onClick={() => setMenuOpen(false)}
+            />
+          </>
+        )}
+
+        <main className="app-main">
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <PublicRoute
+                    user={user}
+                    element={<LoginPage setUser={setUser} />}
+                  />
+                }
+              />
+
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Dashboard />}
+                  />
+                }
+              />
+
+              <Route
+                path="/assets"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Assets />}
+                  />
+                }
+              />
+
+              <Route
+                path="/savings"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Savings />}
+                  />
+                }
+              />
+
+              <Route
+                path="/creditcard"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<CreditCard />}
+                  />
+                }
+              />
+
+              <Route
+                path="/bank"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Bank />}
+                  />
+                }
+              />
+
+              <Route
+                path="/users"
+                element={<Navigate to="/dashboard" replace />}
+              />
+            </Routes>
+          </Suspense>
+        </main>
+      </div>
 
       <ProfileDialog
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
       />
-
-      <main className="app-main">
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <PublicRoute
-                  user={user}
-                  element={<LoginPage setUser={setUser} />}
-                />
-              }
-            />
-
-            <Route
-              path="/dashboard"
-              element={
-                <PrivateRoute
-                  user={user}
-                  element={<Dashboard />}
-                />
-              }
-            />
-
-            <Route
-              path="/assets"
-              element={
-                <PrivateRoute
-                  user={user}
-                  element={<Assets />}
-                />
-              }
-            />
-
-            <Route
-              path="/savings"
-              element={
-                <PrivateRoute
-                  user={user}
-                  element={<Savings />}
-                />
-              }
-            />
-
-            <Route
-              path="/creditcard"
-              element={
-                <PrivateRoute
-                  user={user}
-                  element={<CreditCard />}
-                />
-              }
-            />
-
-            <Route
-              path="/bank"
-              element={
-                <PrivateRoute
-                  user={user}
-                  element={<Bank />}
-                />
-              }
-            />
-
-            <Route
-              path="/users"
-              element={<Navigate to="/dashboard" replace />}
-            />
-          </Routes>
-        </Suspense>
-      </main>
     </div>
   );
 }

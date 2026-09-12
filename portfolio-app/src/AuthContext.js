@@ -7,6 +7,11 @@ import {
   useState,
 } from 'react';
 
+import {
+  notifySessionExpired,
+  onSessionExpired,
+} from './services/authEvents';
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -15,6 +20,21 @@ export function AuthProvider({ children }) {
   const [checkingSession, setCheckingSession] = useState(
     () => Boolean(localStorage.getItem('token'))
   );
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token');
+    setUser(null);
+  }, []);
+
+  /*
+   * Central session-expiry reaction.
+   *
+   * api.js detects a 401 and emits the session-expired event.
+   * AuthContext owns the actual authentication-state change.
+   */
+  useEffect(() => {
+    return onSessionExpired(logout);
+  }, [logout]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
@@ -38,8 +58,19 @@ export function AuthProvider({ children }) {
           }
         );
 
+        /*
+         * /me is intentionally kept on native fetch().
+         *
+         * A 401 means the stored session is no longer valid,
+         * so use the same centralized session-expiry action.
+         */
+        if (response.status === 401) {
+          notifySessionExpired();
+          return;
+        }
+
         if (!response.ok) {
-          throw new Error('Invalid token');
+          throw new Error('Failed to restore session');
         }
 
         const data = await response.json();
@@ -49,11 +80,15 @@ export function AuthProvider({ children }) {
         }
       } catch (error) {
         if (error.name !== 'AbortError') {
-          console.error('Session expired:', error);
-          localStorage.removeItem('token');
+          console.error('Session restoration failed:', error);
 
+          /*
+           * Only authentication failure should force logout.
+           * Other failures are not automatically treated as
+           * "expired session".
+           */
           if (!cancelled) {
-            setUser(null);
+            setCheckingSession(false);
           }
         }
       } finally {
@@ -68,11 +103,6 @@ export function AuthProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    setUser(null);
   }, []);
 
   const value = useMemo(

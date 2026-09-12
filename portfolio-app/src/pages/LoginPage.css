@@ -5,8 +5,7 @@
 
 .login-container {
   width: min(92vw, 400px);
-
-  margin: clamp(40px, 10vh, 100px) auto;
+  margin: 0;
   padding: clamp(24px, 4vw, 34px);
 
   background: var(--surface-color);
@@ -229,7 +228,7 @@
 
 @media (max-width: 480px) {
   .login-container {
-    margin-top: 32px;
+    width: min(92vw, 400px);
   }
 
   .login-input,

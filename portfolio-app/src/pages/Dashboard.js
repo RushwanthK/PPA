@@ -116,7 +116,7 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-container">
-      <h1>Financial Dashboard</h1>
+      <h1>Financial Overview</h1>
 
       <div className="summary-grid">
         <div className="card net-worth"><h3>Net Worth</h3><p>{formatINR(summary.net_worth)}</p></div>

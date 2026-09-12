@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { format } from 'date-fns';
+import { notifySessionExpired } from './authEvents';
 
 //const API_URL = 'http://localhost:5000';
 
@@ -17,6 +18,18 @@ api.interceptors.request.use(config => {
   }
   return config;
 });
+
+// Centralized authenticated-session handling
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      notifySessionExpired();
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export default api;
 

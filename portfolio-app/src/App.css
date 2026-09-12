@@ -1,48 +1,251 @@
 /* ==========================================================================
-   App shell — header, nav, layout scaffolding
-   Fluid across mobile / laptop / desktop / TV using clamp()-based sizing
-   instead of fixed breakpoints wherever possible.
+   App shell — header, navigation drawer, layout scaffolding
    ========================================================================== */
 
 .app-shell {
+  --sidebar-width: 0px;
+
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-/* Header */
+.app-shell.menu-is-open {
+  --sidebar-width: 264px;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
 .app-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
-  padding: clamp(10px, 1.5vw, 16px) clamp(16px, 3vw, 40px);
+
+  width: 100%;
+  min-height: 58px;
+  padding: clamp(8px, 1.2vw, 14px) clamp(16px, 3vw, 40px);
+  box-sizing: border-box;
+
   background: var(--surface-color);
   border-bottom: 1px solid var(--border-color);
   color: var(--text-color);
+
   position: sticky;
   top: 0;
   z-index: 1000;
+
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* Note: position: sticky above also establishes a containing block for
-   absolutely-positioned children, so the mobile dropdown nav (.nav-tabs.open
-   in the max-width: 860px block below) anchors to this header correctly. */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 
-.app-header .logo {
+.logo-link {
+  display: inline-flex;
+  align-items: center;
+
+  color: var(--text-color);
+  text-decoration: none;
   font-size: clamp(18px, 1.4vw, 22px);
   font-weight: 700;
   letter-spacing: 0.2px;
-  color: var(--text-color);
   white-space: nowrap;
+
+  padding: 6px 0;
 }
 
-/* Main content area — capped width so the app doesn't stretch edge-to-edge
-   and look awkward on very wide displays (desktop monitors, TVs). */
+.logo-link:hover {
+  color: var(--action-color);
+}
+
+.logo-link:focus-visible {
+  outline-offset: 4px;
+}
+
+/* ==========================================================================
+   Hamburger toggle
+   ========================================================================== */
+
+.nav-toggle {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  width: 38px;
+  height: 38px;
+
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+
+  background: transparent;
+  color: var(--text-color);
+
+  cursor: pointer;
+
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.nav-toggle:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-color);
+}
+
+.nav-toggle span {
+  display: block;
+  width: 19px;
+  height: 2px;
+
+  background-color: currentColor;
+  border-radius: 2px;
+
+  transition:
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.nav-toggle.open span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.nav-toggle.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-toggle.open span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ==========================================================================
+   Application workspace
+   ========================================================================== */
+
+.app-body {
+  flex: 1;
+  min-height: calc(100vh - 58px);
+
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+
+  transition: grid-template-columns var(--transition-base);
+}
+
+/* ==========================================================================
+   Authentication workspace
+   Login/Register uses the full available workspace instead of the normal
+   authenticated page container.
+   ========================================================================== */
+
+.app-body.auth-body {
+  display: block;
+}
+
+.app-body.auth-body .app-main {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100vh - 58px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 0;
+  padding: clamp(20px, 4vw, 40px);
+
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   Left navigation drawer
+   ========================================================================== */
+
+.app-sidebar {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+
+  background: var(--surface-color);
+  border-right: 1px solid var(--border-color);
+
+  opacity: 0;
+  transform: translateX(-10px);
+  pointer-events: none;
+
+  transition:
+    opacity var(--transition-base),
+    transform var(--transition-base);
+}
+
+.app-sidebar.open {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  padding: 14px 12px 18px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+
+  min-height: 44px;
+  padding: 10px 12px;
+
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.sidebar-link:hover {
+  background-color: var(--surface-hover);
+  color: var(--text-color);
+}
+
+.sidebar-link.active {
+  background-color: var(--primary-soft);
+  border-color: rgba(59, 156, 255, 0.3);
+  color: var(--action-color);
+  font-weight: 600;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* ==========================================================================
+   Main content
+   ========================================================================== */
+
 .app-main {
   flex: 1;
+  min-width: 0;
   width: 100%;
   max-width: 1600px;
   margin: 0 auto;
@@ -50,75 +253,69 @@
   box-sizing: border-box;
 }
 
-/* Navigation */
-.nav-tabs {
-  display: flex;
+/* ==========================================================================
+   Profile trigger
+   ========================================================================== */
+
+.profile-trigger {
+  width: 40px;
+  height: 40px;
+
+  display: inline-flex;
   align-items: center;
-  gap: clamp(4px, 0.8vw, 12px);
-  flex-wrap: wrap;
-}
-
-.nav-link {
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 15px;
-  font-weight: 500;
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-  white-space: nowrap;
-}
-
-.nav-link:hover {
-  background-color: var(--surface-hover);
-  color: var(--text-color);
-}
-
-.nav-link.active {
-  background-color: var(--action-color);
-  color: #fff;
-}
-
-/* Hamburger toggle — hidden on wide screens, shown on narrow ones */
-.nav-toggle {
-  display: none;
-  flex-direction: column;
   justify-content: center;
-  gap: 5px;
-  width: 36px;
-  height: 36px;
+
+  flex: 0 0 auto;
+  padding: 4px;
+
   background: transparent;
-  border: none;
-  padding: 0;
+  color: var(--text-color);
+
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+
   cursor: pointer;
 }
 
-.nav-toggle span {
-  display: block;
-  height: 2px;
-  width: 100%;
-  background-color: var(--text-color);
-  border-radius: 2px;
-  transition: transform var(--transition-fast), opacity var(--transition-fast);
+.profile-trigger:hover {
+  background: var(--surface-hover);
+  border-color: var(--action-color);
 }
 
-.nav-toggle.open span:nth-child(1) {
-  transform: translateY(7px) rotate(45deg);
-}
-.nav-toggle.open span:nth-child(2) {
-  opacity: 0;
-}
-.nav-toggle.open span:nth-child(3) {
-  transform: translateY(-7px) rotate(-45deg);
+.profile-trigger-icon {
+  width: 30px;
+  height: 30px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  color: var(--action-color);
 }
 
-/* Loading states */
+.profile-trigger-icon svg {
+  width: 24px;
+  height: 24px;
+
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ==========================================================================
+   Loading states
+   ========================================================================== */
+
 .app-boot-loading {
   min-height: 100vh;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+
   gap: 16px;
   color: var(--text-muted);
 }
@@ -133,121 +330,130 @@
 .spinner {
   width: 34px;
   height: 34px;
+
   border: 3px solid var(--border-color);
   border-top-color: var(--action-color);
   border-radius: 50%;
+
   animation: spin 0.7s linear infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Respect users who prefer reduced motion */
+/* ==========================================================================
+   Reduced motion
+   ========================================================================== */
+
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation-duration: 1.6s;
   }
+
+  .app-body,
+  .app-sidebar,
+  .header-left,
+  .nav-toggle span {
+    transition: none;
+  }
+
   * {
     scroll-behavior: auto !important;
   }
 }
 
-/* ---- Responsive nav: collapse into a slide-down menu below 860px ---- */
+/* ==========================================================================
+   Mobile
+   The desktop sidebar pushes the workspace. On narrow screens the sidebar
+   becomes an overlay so the workspace is not squeezed into an unusable width.
+   It is still a normal, non-blurred navigation surface.
+   ========================================================================== */
+
 @media (max-width: 860px) {
-  .nav-toggle {
-    display: flex;
+  .app-shell {
+    --sidebar-width: 0px;
   }
 
-  .nav-tabs {
-    position: absolute;
-    top: 100%;
+  .app-shell.menu-is-open {
+    --sidebar-width: 0px;
+  }
+
+  .app-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .app-shell.menu-is-open .header-left {
+    margin-left: 0;
+  }
+
+  .app-body {
+    display: block;
+    min-height: calc(100vh - 58px);
+  }
+
+  .app-sidebar {
+    position: fixed;
     left: 0;
-    right: 0;
-    flex-direction: column;
-    align-items: stretch;
-    background: var(--surface-color);
-    border-bottom: 1px solid var(--border-color);
-    padding: 10px 16px 16px;
-    gap: 6px;
-    max-height: 0;
-    overflow: hidden;
+    top: 58px;
+    bottom: 0;
+    z-index: 1100;
+
+    width: min(264px, 82vw);
+
+    overflow-y: auto;
+
+    box-shadow: var(--shadow-md);
+  }
+
+  .app-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 58px 0 0;
+    z-index: 1099;
+
+    display: block;
+
+    width: auto;
+    height: auto;
+
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+
+    background: transparent;
+    cursor: default;
+
     opacity: 0;
-    transition: max-height var(--transition-fast), opacity var(--transition-fast);
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
   }
 
-  .nav-tabs.open {
-    max-height: 480px;
+  .app-body.menu-is-open .sidebar-backdrop {
     opacity: 1;
+    pointer-events: auto;
   }
 
-  .nav-link {
-    padding: 12px 14px;
+  .app-main {
+    max-width: none;
+    padding: 16px;
   }
 
+  .app-body.auth-body .app-main {
+    min-height: calc(100vh - 58px);
+    padding: 24px 16px;
+  }
 }
 
-/* Large displays (TV / big desktop monitors): keep content from looking
-   sparse and stretched by widening the readable area slightly and bumping
-   base spacing a touch. */
+/* Large displays */
 @media (min-width: 1800px) {
   .app-main {
     max-width: 1800px;
-  }
-}
-/* Profile trigger */
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.profile-trigger {
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  background: transparent;
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.profile-trigger:hover {
-  background: var(--surface-hover);
-  border-color: var(--action-color);
-}
-
-.profile-trigger-icon {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--action-color);
-}
-
-.profile-trigger-icon svg {
-  width: 24px;
-  height: 24px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-@media (max-width: 860px) {
-  .header-actions {
-    gap: 8px;
-  }
-
-  .profile-trigger {
-    width: 40px;
-    height: 40px;
   }
 }

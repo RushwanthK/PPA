@@ -56,18 +56,22 @@ function ProfileDialog({ open, onClose }) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [updatedUser, setUpdatedUser] = useState(EMPTY_FORM);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
   const [profileError, setProfileError] = useState('');
+  const [deleteCheckError, setDeleteCheckError] = useState('');
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteInfo, setDeleteInfo] = useState(null);
   const [deletingUserId, setDeletingUserId] = useState(null);
   const [deleteError, setDeleteError] = useState('');
+
   const [isDownloadingBackup, setIsDownloadingBackup] = useState(false);
   const [backupDownloaded, setBackupDownloaded] = useState(false);
-  const [selectedCategories, setSelectedCategories] = useState(getAllCategories);
-
+  const [selectedCategories, setSelectedCategories] =
+    useState(getAllCategories);
 
   useEffect(() => {
     if (!open) {
@@ -75,6 +79,7 @@ function ProfileDialog({ open, onClose }) {
     }
 
     setProfileError('');
+    setDeleteCheckError('');
     setDeleteError('');
     setShowDeleteModal(false);
     setDeleteInfo(null);
@@ -123,6 +128,7 @@ function ProfileDialog({ open, onClose }) {
 
     setIsEditing(false);
     setProfileError('');
+    setDeleteCheckError('');
     onClose?.();
   }, [
     closeDeleteModal,
@@ -135,6 +141,7 @@ function ProfileDialog({ open, onClose }) {
 
   const handleFieldChange = useCallback(event => {
     const { name, value } = event.target;
+
     setUpdatedUser(prev => ({ ...prev, [name]: value }));
     setProfileError('');
   }, []);
@@ -152,7 +159,9 @@ function ProfileDialog({ open, onClose }) {
       password: '',
       confirmPassword: '',
     });
+
     setProfileError('');
+    setDeleteCheckError('');
     setIsEditing(true);
   }, [user]);
 
@@ -163,6 +172,7 @@ function ProfileDialog({ open, onClose }) {
 
     setIsEditing(false);
     setProfileError('');
+    setDeleteCheckError('');
   }, [isSaving]);
 
   const handleLogout = useCallback(() => {
@@ -232,6 +242,7 @@ function ProfileDialog({ open, onClose }) {
     try {
       setIsDeleting(true);
       setProfileError('');
+      setDeleteCheckError('');
       setDeleteError('');
 
       const response = await canDeleteUser(user.id);
@@ -246,12 +257,13 @@ function ProfileDialog({ open, onClose }) {
         if (details.has_saving_balances) reasons.push('savings');
         if (details.has_credit_balances) reasons.push('credit cards');
 
-        setProfileError(
+        setDeleteCheckError(
           deletionData.message ||
             `Cannot delete your account. Please clear balances from ${reasons.join(
               ', '
             )} and try again.`
         );
+
         return;
       }
 
@@ -263,7 +275,7 @@ function ProfileDialog({ open, onClose }) {
     } catch (error) {
       console.error('Failed to check user deletion:', error);
 
-      setProfileError(
+      setDeleteCheckError(
         error.response?.data?.error ||
           error.response?.data?.message ||
           'Unable to check whether your account can be deleted.'
@@ -286,6 +298,7 @@ function ProfileDialog({ open, onClose }) {
       ...prev,
       [key]: !prev[key],
     }));
+
     setBackupDownloaded(false);
   }, []);
 
@@ -301,6 +314,7 @@ function ProfileDialog({ open, onClose }) {
         return selection;
       }, {})
     );
+
     setBackupDownloaded(false);
   }, []);
 
@@ -326,7 +340,9 @@ function ProfileDialog({ open, onClose }) {
     const categories = getSelectedCategoryKeys();
 
     if (categories.length === 0) {
-      setDeleteError('Select at least one category to include in the backup.');
+      setDeleteError(
+        'Select at least one category to include in the backup.'
+      );
       return;
     }
 
@@ -347,6 +363,7 @@ function ProfileDialog({ open, onClose }) {
       setBackupDownloaded(true);
     } catch (error) {
       console.error('Failed to download Excel backup:', error);
+
       setDeleteError(
         'Unable to download the Excel backup. Your transaction data has not been deleted.'
       );
@@ -363,7 +380,9 @@ function ProfileDialog({ open, onClose }) {
     const categories = getSelectedCategoryKeys();
 
     if (categories.length === 0) {
-      setDeleteError('Select at least one category to include in the backup.');
+      setDeleteError(
+        'Select at least one category to include in the backup.'
+      );
       return;
     }
 
@@ -384,6 +403,7 @@ function ProfileDialog({ open, onClose }) {
       setBackupDownloaded(true);
     } catch (error) {
       console.error('Failed to download PDF backup:', error);
+
       setDeleteError(
         'Unable to download the PDF backup. Your transaction data has not been deleted.'
       );
@@ -413,7 +433,9 @@ function ProfileDialog({ open, onClose }) {
       onClose?.();
       navigate('/', { replace: true });
 
-      console.info(response.data?.message || 'User deleted successfully.');
+      console.info(
+        response.data?.message || 'User deleted successfully.'
+      );
     } catch (error) {
       console.error('Failed to delete user:', error);
 
@@ -440,120 +462,176 @@ function ProfileDialog({ open, onClose }) {
 
   const profileContent = (
     <div className="profile-dialog-content">
-      <div className="profile-avatar" aria-hidden="true">
-        {(user.name || '?').trim().charAt(0).toUpperCase()}
+      <div className="profile-avatar-wrap">
+        <div className="profile-avatar" aria-hidden="true">
+          {(user.name || '?').trim().charAt(0).toUpperCase()}
+        </div>
+
+        <button
+          type="button"
+          className="profile-avatar-edit"
+          onClick={handleEditClick}
+          disabled={isSaving || isDeleting || isDownloadingBackup}
+          aria-label="Edit profile"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M4 20h4l10.5-10.5a2.12 2.12 0 0 0-3-3L5 17v3Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="m14.5 6.5 3 3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </div>
 
       <div className="profile-details" aria-label="Profile details">
         <div className="profile-detail-row">
           <span className="profile-detail-label">Name</span>
-          <span className="profile-detail-value">{user.name || '—'}</span>
+          <span className="profile-detail-value">
+            {user.name || '—'}
+          </span>
         </div>
 
         <div className="profile-detail-row">
           <span className="profile-detail-label">Date of Birth</span>
-          <span className="profile-detail-value">{formatDob(user.dob)}</span>
+          <span className="profile-detail-value">
+            {formatDob(user.dob)}
+          </span>
         </div>
 
         <div className="profile-detail-row">
           <span className="profile-detail-label">Age</span>
-          <span className="profile-detail-value">{user.age ?? '—'}</span>
+          <span className="profile-detail-value">
+            {user.age ?? '—'}
+          </span>
         </div>
 
         <div className="profile-detail-row">
           <span className="profile-detail-label">Place</span>
-          <span className="profile-detail-value">{user.place || '—'}</span>
+          <span className="profile-detail-value">
+            {user.place || '—'}
+          </span>
         </div>
       </div>
-
-      {profileError && (
-        <div className="profile-message profile-message-error" role="alert">
-          {profileError}
-        </div>
-      )}
     </div>
   );
 
   const editContent = (
     <div className="profile-edit-content">
-      {profileError && (
-        <div className="profile-message profile-message-error" role="alert">
-          {profileError}
-        </div>
-      )}
-
       <form className="profile-edit-form" onSubmit={handleUpdateUser}>
-        <label className="profile-field">
-          <span>Name</span>
-          <input
-            type="text"
-            name="name"
-            value={updatedUser.name}
-            onChange={handleFieldChange}
-            required
-            disabled={isSaving}
-            autoComplete="name"
-          />
-        </label>
+        <section className="profile-edit-section">
+          <h3 className="profile-edit-section-title">
+            Personal Information
+          </h3>
 
-        <label className="profile-field">
-          <span>Date of Birth</span>
-          <input
-            type="date"
-            name="dob"
-            value={updatedUser.dob}
-            onChange={handleFieldChange}
-            required
-            disabled={isSaving}
-            max={new Date().toISOString().split('T')[0]}
-          />
-        </label>
+          <div className="profile-edit-fields">
+            <label className="profile-field">
+              <span>Name</span>
+              <input
+                type="text"
+                name="name"
+                value={updatedUser.name}
+                onChange={handleFieldChange}
+                required
+                disabled={isSaving}
+                autoComplete="name"
+              />
+            </label>
 
-        <label className="profile-field">
-          <span>Place</span>
-          <input
-            type="text"
-            name="place"
-            value={updatedUser.place}
-            onChange={handleFieldChange}
-            required
-            disabled={isSaving}
-            autoComplete="address-level2"
-          />
-        </label>
+            <label className="profile-field">
+              <span>Date of Birth</span>
+              <input
+                type="date"
+                name="dob"
+                value={updatedUser.dob}
+                onChange={handleFieldChange}
+                required
+                disabled={isSaving}
+                max={new Date().toISOString().split('T')[0]}
+              />
+            </label>
 
-        <label className="profile-field">
-          <span>New Password</span>
-          <input
-            type="password"
-            name="password"
-            value={updatedUser.password}
-            onChange={handleFieldChange}
-            disabled={isSaving}
-            autoComplete="new-password"
-            placeholder="Leave blank to keep current password"
-          />
-        </label>
+            <label className="profile-field">
+              <span>Place</span>
+              <input
+                type="text"
+                name="place"
+                value={updatedUser.place}
+                onChange={handleFieldChange}
+                required
+                disabled={isSaving}
+                autoComplete="address-level2"
+              />
+            </label>
+          </div>
+        </section>
 
-        <label className="profile-field">
-          <span>Confirm Password</span>
-          <input
-            type="password"
-            name="confirmPassword"
-            value={updatedUser.confirmPassword}
-            onChange={handleFieldChange}
-            disabled={isSaving}
-            autoComplete="new-password"
-            placeholder="Repeat new password"
-          />
-        </label>
+        <section className="profile-edit-section">
+          <h3 className="profile-edit-section-title">
+            Change Password
+          </h3>
 
-        <div className="profile-delete-section">
-          <div>
-            <h3>Danger Zone</h3>
+          <div className="profile-edit-fields">
+            <label className="profile-field">
+              <span>New Password</span>
+              <input
+                type="password"
+                name="password"
+                value={updatedUser.password}
+                onChange={handleFieldChange}
+                disabled={isSaving}
+                autoComplete="new-password"
+                placeholder="Leave blank to keep current password"
+              />
+            </label>
+
+            <label className="profile-field">
+              <span>Confirm Password</span>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={updatedUser.confirmPassword}
+                onChange={handleFieldChange}
+                disabled={isSaving}
+                autoComplete="new-password"
+                placeholder="Repeat new password"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="profile-delete-section">
+          <div className="profile-delete-content">
+            <h3>Delete Account</h3>
+
             <p>
-              Permanently delete your account and its transaction history.
+              Permanently delete your account and its transaction
+              history.
             </p>
+
+            {deleteCheckError && (
+              <div
+                className="profile-message profile-message-error profile-delete-message"
+                role="alert"
+              >
+                {deleteCheckError}
+              </div>
+            )}
           </div>
 
           <Button
@@ -564,7 +642,13 @@ function ProfileDialog({ open, onClose }) {
           >
             {isDeleting ? 'Checking…' : 'Delete Account'}
           </Button>
-        </div>
+        </section>
+
+        {profileError && (
+          <div className="profile-message profile-message-error" role="alert">
+            {profileError}
+          </div>
+        )}
 
         <div className="profile-edit-actions">
           <Button
@@ -575,6 +659,7 @@ function ProfileDialog({ open, onClose }) {
           >
             Cancel
           </Button>
+
           <Button type="submit" variant="primary" disabled={isSaving}>
             {isSaving ? 'Saving…' : 'Save Changes'}
           </Button>
@@ -591,26 +676,19 @@ function ProfileDialog({ open, onClose }) {
         onClose={closeProfile}
         overlayClassName="profile-drawer-overlay"
         className="profile-drawer"
-        closeOnOverlayClick={!isSaving && !isDeleting && !isDownloadingBackup}
+        closeOnOverlayClick={
+          !isSaving && !isDeleting && !isDownloadingBackup
+        }
         footer={
-          <>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={handleEditClick}
-              disabled={isSaving || isDeleting || isDownloadingBackup}
-            >
-              Edit
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              onClick={handleLogout}
-              disabled={isSaving || isDeleting || isDownloadingBackup}
-            >
-              Logout
-            </Button>
-          </>
+          <Button
+            type="button"
+            variant="danger"
+            className="profile-logout-button"
+            onClick={handleLogout}
+            disabled={isSaving || isDeleting || isDownloadingBackup}
+          >
+            Logout
+          </Button>
         }
       >
         {profileContent}
@@ -621,7 +699,9 @@ function ProfileDialog({ open, onClose }) {
         title="Edit Profile"
         onClose={handleCancelEdit}
         className="profile-edit-modal"
-        closeOnOverlayClick={!isSaving && !isDeleting && !isDownloadingBackup}
+        closeOnOverlayClick={
+          !isSaving && !isDeleting && !isDownloadingBackup
+        }
       >
         {editContent}
       </Modal>
@@ -638,7 +718,8 @@ function ProfileDialog({ open, onClose }) {
             deleteInfo.has_transaction_history
               ? [
                   <>
-                    You have <strong>{deleteInfo.transaction_count}</strong>{' '}
+                    You have{' '}
+                    <strong>{deleteInfo.transaction_count}</strong>{' '}
                     transaction records in your account history.
                   </>,
                   'Deleting your account will permanently delete this transaction history.',
