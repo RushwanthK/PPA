@@ -46,10 +46,8 @@ export default function Dashboard() {
 
   const [spendingData, setSpendingData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [assetAllocation, setAssetAllocation] = useState([]);
   const [spendRange, setSpendRange] = useState('30d');
-  const [isApplyingSpend, setIsApplyingSpend] = useState(false);
 
   // Guards against setState calls after the component has unmounted
   // (e.g. user clicks away to another page while a request is still
@@ -86,7 +84,7 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
     loadAssetAllocation();
-  }, [fetchData, loadAssetAllocation, refreshKey]);
+  }, [fetchData, loadAssetAllocation]);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,12 +104,6 @@ export default function Dashboard() {
     };
   }, [spendRange]);
 
-  const handleRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
-
-  const handleApplySpend = useCallback(() => {
-    setIsApplyingSpend(true);
-    setTimeout(() => setIsApplyingSpend(false), 250);
-  }, []);
 
   if (loading) {
     return (
@@ -140,11 +132,12 @@ export default function Dashboard() {
             <h3>Spending by Category</h3>
             <div className="chart-filter">
               <select value={spendRange} onChange={(e) => setSpendRange(e.target.value)}>
-                {FILTER_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                {FILTER_OPTIONS.map(o => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
               </select>
-              <button type="button" onClick={handleApplySpend} className="small-apply">
-                {isApplyingSpend ? 'Applying...' : 'Apply'}
-              </button>
             </div>
           </div>
 
@@ -174,7 +167,7 @@ export default function Dashboard() {
 
           <ResponsiveContainer width="100%" height={320}>
             <PieChart>
-              <Pie data={assetAllocation} cx="50%" cy="50%" outerRadius={100} dataKey="value" nameKey="name"
+              <Pie data={assetAllocation} cx="50%" cy="50%" outerRadius={100} dataKey="value" nameKey="name" isAnimationActive={false}
                    label={({ name, percent }) => `${name}: ${Math.round(percent * 100)}%`}>
                 {assetAllocation.map((entry, i) => <Cell key={`a-${i}`} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
@@ -183,10 +176,6 @@ export default function Dashboard() {
             </PieChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      <div className="dashboard-actions">
-        <button type="button" onClick={handleRefresh} className="small-apply">Refresh Data</button>
       </div>
 
       {/* Frontend-only placeholder for a future LLM-powered financial

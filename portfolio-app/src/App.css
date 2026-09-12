@@ -79,24 +79,6 @@
   color: #fff;
 }
 
-.button.logout-button {
-  padding: 8px 16px;
-  background-color: transparent;
-  color: var(--error-color);
-  border: 1px solid var(--error-color);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
-  margin-left: 4px;
-}
-
-.button.logout-button:hover {
-  background-color: var(--error-color);
-  color: #fff;
-}
-
 /* Hamburger toggle — hidden on wide screens, shown on narrow ones */
 .nav-toggle {
   display: none;
@@ -203,10 +185,6 @@
     padding: 12px 14px;
   }
 
-  .button.logout-button {
-    margin: 6px 0 0;
-    width: 100%;
-  }
 }
 
 /* Large displays (TV / big desktop monitors): keep content from looking
@@ -215,5 +193,61 @@
 @media (min-width: 1800px) {
   .app-main {
     max-width: 1800px;
+  }
+}
+/* Profile trigger */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.profile-trigger {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.profile-trigger:hover {
+  background: var(--surface-hover);
+  border-color: var(--action-color);
+}
+
+.profile-trigger-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--action-color);
+}
+
+.profile-trigger-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 860px) {
+  .header-actions {
+    gap: 8px;
+  }
+
+  .profile-trigger {
+    width: 40px;
+    height: 40px;
   }
 }

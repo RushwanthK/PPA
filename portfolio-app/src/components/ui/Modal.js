@@ -10,6 +10,7 @@ function Modal({
   closeOnOverlayClick = true,
   closeOnEscape = true,
   className = '',
+  overlayClassName = '',
   footer = null,
 }) {
   const contentRef = useRef(null);
@@ -66,7 +67,7 @@ function Modal({
 
   return createPortal(
     <div
-      className="modal"
+      className={`modal ${overlayClassName}`.trim()}
       role="presentation"
       onMouseDown={handleOverlayClick}
     >

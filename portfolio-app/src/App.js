@@ -1,7 +1,6 @@
 import React, {
   useState,
   useEffect,
-  useCallback,
   useRef,
   lazy,
   Suspense,
@@ -11,6 +10,7 @@ import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 
 import { AuthProvider, useAuth } from './AuthContext';
 import './App.css';
+import ProfileDialog from './components/dialogs/ProfileDialog';
 
 // Route-level code splitting:
 // pages are loaded only when the user navigates to them.
@@ -18,7 +18,6 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Assets = lazy(() => import('./pages/Assets'));
 const Savings = lazy(() => import('./pages/savings'));
 const CreditCard = lazy(() => import('./pages/creditcard'));
-const Users = lazy(() => import('./pages/users'));
 const Bank = lazy(() => import('./pages/bank'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 
@@ -28,7 +27,6 @@ const NAV_LINKS = [
   { to: '/savings', label: 'Savings' },
   { to: '/creditcard', label: 'Credit Cards' },
   { to: '/bank', label: 'Banks' },
-  { to: '/users', label: 'Profile' },
 ];
 
 function PrivateRoute({ user, element }) {
@@ -59,17 +57,13 @@ function AppContent() {
   const {
     user,
     setUser,
-    logout: authLogout,
     checkingSession,
   } = useAuth();
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const navRef = useRef(null);
 
-  const logout = useCallback(() => {
-    authLogout();
-    setMenuOpen(false);
-  }, [authLogout]);
 
   // Close the mobile nav on outside click / Escape.
   useEffect(() => {
@@ -112,22 +106,23 @@ function AppContent() {
 
         {user && (
           <>
-            <button
-              type="button"
-              className={`nav-toggle ${menuOpen ? 'open' : ''}`}
-              aria-label="Toggle navigation menu"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(open => !open)}
-            >
-              <span />
-              <span />
-              <span />
-            </button>
+            <div className="header-actions">
+              <button
+                type="button"
+                className={`nav-toggle ${menuOpen ? 'open' : ''}`}
+                aria-label="Toggle navigation menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen(open => !open)}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
 
-            <nav
-              ref={navRef}
-              className={`nav-tabs ${menuOpen ? 'open' : ''}`}
-            >
+              <nav
+                ref={navRef}
+                className={`nav-tabs ${menuOpen ? 'open' : ''}`}
+              >
               {NAV_LINKS.map(link => (
                 <NavLink
                   key={link.to}
@@ -141,16 +136,36 @@ function AppContent() {
                 </NavLink>
               ))}
 
+              </nav>
+
               <button
-                onClick={logout}
-                className="button logout-button"
+                type="button"
+                className="profile-trigger"
+                aria-label="Open profile"
+                aria-expanded={profileOpen}
+                aria-haspopup="dialog"
+                title="Profile"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setProfileOpen(true);
+                }}
               >
-                Logout
+                <span className="profile-trigger-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M4.5 20c.8-3.4 3.3-5 7.5-5s6.7 1.6 7.5 5" />
+                  </svg>
+                </span>
               </button>
-            </nav>
+            </div>
           </>
         )}
       </header>
+
+      <ProfileDialog
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+      />
 
       <main className="app-main">
         <Suspense fallback={<PageFallback />}>
@@ -217,12 +232,7 @@ function AppContent() {
 
             <Route
               path="/users"
-              element={
-                <PrivateRoute
-                  user={user}
-                  element={<Users />}
-                />
-              }
+              element={<Navigate to="/dashboard" replace />}
             />
           </Routes>
         </Suspense>
