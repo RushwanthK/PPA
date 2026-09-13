@@ -11,6 +11,8 @@ function TransactionFormDialog({
   submitting = false,
   children,
   submitLabel = 'Add Transaction',
+  error = null,
+  onDismissError,
 }) {
   return (
     <Modal
@@ -22,6 +24,23 @@ function TransactionFormDialog({
     >
       <form onSubmit={onSubmit}>
         <div className="form-body">
+          {error && (
+            <div className="form-dialog-error" role="alert">
+              <span>{error}</span>
+
+              {onDismissError && (
+                <button
+                  type="button"
+                  className="form-dialog-error-dismiss"
+                  onClick={onDismissError}
+                  aria-label="Dismiss error"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          )}
+
           {children}
         </div>
 

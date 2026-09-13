@@ -4,43 +4,89 @@
    green/blue, input, select, .error) are kept exactly as-is so every
    page's CSS keeps working unchanged. New tokens are additive. */
 :root {
-  /* Core palette (unchanged names, refreshed dark values) */
-  --bg-color: #0f1115;
-  --text-color: #f2f3f5;
-  --error-color: #ff5c5c;
-  --success-color: #43c07f;
-  --action-color: #3b9cff;
+  /* ==========================================================
+     Core application palette
+     ========================================================== */
 
-  /* New tokens used by the modernized shell + future page work */
-  --surface-color: #161922;
-  --surface-hover: #1f232f;
-  --surface-alt: #1b1e28;
-  --border-color: #2a2e3a;
-  --text-muted: #9aa0ac;
+  --bg-color: #0d1117;
+  --text-color: #f3f4f6;
+
+  /* ==========================================================
+     Semantic action colors
+     ========================================================== */
+
+  /* Primary action */
+  --action-color: #4f8cff;
+  --primary-hover: #3f7de6;
+
+  /* Positive / success state */
+  --success-color: #35b878;
+  --success-hover: #2f9f69;
+
+  /* Destructive action */
+  --error-color: #ef5350;
+  --danger-hover: #d94744;
+
+  /* ==========================================================
+     Surfaces
+     ========================================================== */
+
+  --surface-color: #151b23;
+  --surface-hover: #1c2430;
+  --surface-alt: #111720;
+  --surface-elevated: #1b222c;
+
+  /* ==========================================================
+     Borders
+     ========================================================== */
+
+  --border-color: #2a3441;
+  --border-soft: #222b36;
+
+  /* ==========================================================
+     Text hierarchy
+     ========================================================== */
+
+  --text-muted: #9ca6b3;
+  --text-dim: #707b88;
+
+  /* ==========================================================
+     Semantic soft backgrounds
+     ========================================================== */
+
+  --primary-soft: rgba(79, 140, 255, 0.14);
+  --success-soft: rgba(53, 184, 120, 0.12);
+  --danger-soft: rgba(239, 83, 80, 0.12);
+
+  /* ==========================================================
+     Radius
+     ========================================================== */
 
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-xl: 18px;
 
+  /* ==========================================================
+     Shadows
+     ========================================================== */
+
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+
+  /* ==========================================================
+     Motion
+     ========================================================== */
 
   --transition-fast: 0.15s ease;
   --transition-base: 0.25s ease;
   --transition-emphasis: 180ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Shared semantic tokens for reusable components */
-  --surface-elevated: #1e2026;
-  --border-soft: #262a33;
-  --primary-hover: #2f86df;
-  --success-hover: #379f69;
-  --danger-hover: #d94b4b;
-  --primary-soft: rgba(59, 156, 255, 0.14);
-  --success-soft: rgba(67, 192, 127, 0.12);
-  --danger-soft: rgba(255, 92, 92, 0.12);
-  --text-dim: #6f7682;
-  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+  /* ==========================================================
+     Overlay
+     ========================================================== */
+
   --overlay-color: rgba(6, 7, 8, 0.72);
 
   color-scheme: dark;
@@ -93,34 +139,23 @@ img, svg {
   outline-offset: 2px;
 }
 
-/* Buttons */
+/* ==========================================================
+   Global button reset
+   Shared Button component owns the actual button appearance.
+   Specialized controls can override this in their own CSS.
+   ========================================================== */
+
 button {
-  padding: 10px 16px;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-weight: bold;
-  cursor: pointer;
   font-family: inherit;
-  transition: background-color var(--transition-fast), transform var(--transition-fast), opacity var(--transition-fast);
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 button:active {
   transform: translateY(1px);
-}
-
-button.red {
-  background-color: var(--error-color);
-  color: white;
-}
-
-button.green {
-  background-color: var(--success-color);
-  color: white;
-}
-
-button.blue {
-  background-color: var(--action-color);
-  color: white;
 }
 
 /* Inputs */

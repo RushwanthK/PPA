@@ -219,21 +219,30 @@
 
 .dcd-confirm-btn {
   flex: 1 1 auto;
-  background: linear-gradient(135deg, var(--error-color), var(--danger-hover));
-  color: white;
-  border: none;
+
+  background-color: var(--error-color);
+  color: #ffffff;
+
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
+
   padding: 11px 18px;
+
   font-size: 14px;
   font-weight: 700;
+
   cursor: pointer;
-  transition: transform var(--transition-emphasis), filter var(--transition-emphasis);
+
+  transition:
+    background-color var(--transition-emphasis),
+    transform var(--transition-emphasis),
+    opacity var(--transition-emphasis);
 }
 
 @media (hover: hover) {
   .dcd-confirm-btn:hover:not(:disabled) {
+    background-color: var(--danger-hover);
     transform: translateY(-1px);
-    filter: brightness(1.08);
   }
 }
 
@@ -245,19 +254,29 @@
 
 .dcd-cancel-btn {
   flex: 1 1 auto;
-  background: transparent;
+
+  background-color: var(--surface-color);
   border: 1px solid var(--border-color);
-  color: var(--text-muted);
+  color: var(--text-color);
+
   border-radius: var(--radius-sm);
+
   padding: 11px 18px;
+
   font-size: 14px;
   font-weight: 600;
+
   cursor: pointer;
-  transition: border-color var(--transition-emphasis), color var(--transition-emphasis);
+
+  transition:
+    background-color var(--transition-emphasis),
+    border-color var(--transition-emphasis),
+    color var(--transition-emphasis);
 }
 
 .dcd-cancel-btn:hover:not(:disabled) {
-  border-color: var(--text-muted);
+  background-color: var(--surface-hover);
+  border-color: var(--border-color);
   color: var(--text-color);
 }
 

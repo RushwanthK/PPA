@@ -89,7 +89,7 @@
 .login-input:focus {
   border-color: var(--action-color);
 
-  box-shadow: 0 0 0 3px rgba(59, 156, 255, 0.18);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 /* --------------------------------------------------------------------------
@@ -142,15 +142,15 @@
 }
 
 .login-submit.login-mode:hover:not(:disabled) {
-  background-color: #2f86df;
+  background-color: var(--primary-hover);
 }
 
 .login-submit.register-mode {
-  background-color: var(--success-color);
+  background-color: var(--action-color);
 }
 
 .login-submit.register-mode:hover:not(:disabled) {
-  background-color: #379f69;
+  background-color: var(--primary-hover);
 }
 
 /* --------------------------------------------------------------------------

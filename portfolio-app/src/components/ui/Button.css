@@ -1,6 +1,6 @@
 /* ==========================================================================
    Shared Button
-   Component-level styling for every reusable Button.
+   Standard action buttons used throughout the application.
    ========================================================================== */
 
 .button {
@@ -21,6 +21,7 @@
   line-height: 1.2;
 
   cursor: pointer;
+
   transition:
     background-color var(--transition-fast),
     border-color var(--transition-fast),
@@ -45,18 +46,24 @@
   transform: none;
 }
 
-/* --------------------------------------------------------------------------
-   Variants
-   -------------------------------------------------------------------------- */
+/* ==========================================================================
+   Primary
+   Add / Save / Process / Login
+   ========================================================================== */
 
 .button-primary {
   background-color: var(--action-color);
-  color: #fff;
+  color: #ffffff;
 }
 
 .button-primary:hover:not(:disabled) {
   background-color: var(--primary-hover);
 }
+
+/* ==========================================================================
+   Secondary
+   Cancel / View / Details / Edit / Pagination
+   ========================================================================== */
 
 .button-secondary {
   background-color: var(--surface-color);
@@ -66,25 +73,40 @@
 
 .button-secondary:hover:not(:disabled) {
   background-color: var(--surface-hover);
+  border-color: var(--border-color);
 }
+
+/* ==========================================================================
+   Danger
+   Delete / Delete Account / Logout
+   ========================================================================== */
 
 .button-danger {
   background-color: var(--error-color);
-  color: #fff;
+  color: #ffffff;
 }
 
 .button-danger:hover:not(:disabled) {
   background-color: var(--danger-hover);
 }
 
+/* ==========================================================================
+   Success
+   Positive states only
+   ========================================================================== */
+
 .button-success {
   background-color: var(--success-color);
-  color: #fff;
+  color: #ffffff;
 }
 
 .button-success:hover:not(:disabled) {
   background-color: var(--success-hover);
 }
+
+/* ==========================================================================
+   Mobile
+   ========================================================================== */
 
 @media (max-width: 768px) {
   .button {

@@ -52,6 +52,9 @@ export default function Bank() {
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [formError, setFormError] = useState(null);
+  const [transactionFormError, setTransactionFormError] = useState(null);
+  const [transactionTableError, setTransactionTableError] = useState(null);
   const [success, setSuccess] = useState(null);
 
   // Delete-confirmation dialog state, kept separate from the general
@@ -110,7 +113,7 @@ export default function Bank() {
     const fetchTransactions = async () => {
       try {
         setTransactionsLoading(true);
-        setError(null);
+        setTransactionTableError(null);
 
         const response = await getBankTransactions(
           selectedBankId,
@@ -134,14 +137,17 @@ export default function Bank() {
           setTransactionPage(response.page);
         }
       } catch (err) {
-        if (cancelled) return;
+          if (cancelled) return;
 
-        console.error('Error fetching transactions:', err);
-        setError(err.message || 'Failed to fetch transactions');
-        setTransactions([]);
-        setTransactionTotal(0);
-        setTransactionTotalPages(0);
-      } finally {
+          console.error('Error fetching transactions:', err);
+          setTransactionTableError(
+            err.message || 'Failed to fetch transactions'
+          );
+
+          setTransactions([]);
+          setTransactionTotal(0);
+          setTransactionTotalPages(0);
+        } finally {
         if (!cancelled) {
           setTransactionsLoading(false);
         }
@@ -184,7 +190,7 @@ export default function Bank() {
     e.preventDefault();
 
     try {
-      setError(null);
+      setFormError(null);
       setSuccess(null);
       setLoading(true);
 
@@ -231,9 +237,9 @@ export default function Bank() {
 
       resetForm();
     } catch (err) {
-      console.error('Error saving bank:', err);
-      setError(err.message || 'Failed to save bank');
-    } finally {
+        console.error('Error saving bank:', err);
+        setFormError(err.message || 'Failed to save bank');
+      } finally {
       setLoading(false);
     }
   };
@@ -242,7 +248,7 @@ export default function Bank() {
     e.preventDefault();
 
     try {
-      setError(null);
+      setTransactionFormError(null);
       setSuccess(null);
       setLoading(true);
 
@@ -311,12 +317,12 @@ export default function Bank() {
 
       setShowTransactionForm(false);
     } catch (err) {
-      console.error('Error adding transaction:', err);
-      setError(
-        err.message ||
-        'Failed to add transaction'
-      );
-    } finally {
+        console.error('Error adding transaction:', err);
+
+        setTransactionFormError(
+          err.message || 'Failed to add transaction'
+        );
+      } finally {
       setLoading(false);
     }
   };
@@ -694,6 +700,8 @@ export default function Bank() {
         onSubmit={handleSubmit}
         submitting={loading}
         submitLabel={formData.id ? 'Update' : 'Save'}
+        error={formError}
+        onDismissError={() => setFormError(null)}
       >
         <div className="form-group">
           <label htmlFor="name">
@@ -734,6 +742,8 @@ export default function Bank() {
         onSubmit={handleTransactionSubmit}
         submitting={loading}
         submitLabel="Submit"
+        error={transactionFormError}
+        onDismissError={() => setTransactionFormError(null)}
       >
         <div className="form-group">
           <label htmlFor="type">
@@ -835,6 +845,8 @@ export default function Bank() {
           handleAddTransaction(selectedBankId)
         }
         addTransactionDisabled={loading}
+        error={transactionTableError}
+        onDismissError={() => setTransactionTableError(null)}
         columns={[
           {
             key: 'date',

@@ -29,6 +29,8 @@ function TransactionTableDialog({
   pageSize = 25,
   onPageChange,
   onPageSizeChange,
+  error = null,
+  onDismissError,
 }) {
   const hasFilters = Boolean(onSearchChange || onTransactionTypeChange);
   const canGoPrevious = page > 1 && !loading;
@@ -41,6 +43,23 @@ function TransactionTableDialog({
       onClose={onClose}
       className="transaction-table-modal"
     >
+      {error && (
+        <div className="transaction-table-dialog-error" role="alert">
+          <span>{error}</span>
+
+          {onDismissError && (
+            <button
+              type="button"
+              className="transaction-table-dialog-error-dismiss"
+              onClick={onDismissError}
+              aria-label="Dismiss error"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
+      
       <div className="transaction-table-toolbar">
         {hasFilters && (
           <div className="transaction-table-filters">
