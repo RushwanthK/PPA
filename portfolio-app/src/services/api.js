@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { format } from 'date-fns';
 import { notifySessionExpired } from './authEvents';
+import { startBackendRequest } from './backendStatus';
 
 //const API_URL = 'http://localhost:5000';
 
@@ -11,18 +12,29 @@ const api = axios.create({
 });
 
 // Attach token from localStorage
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+api.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    config.__backendRequestStop = startBackendRequest();
+
+    return config;
+  },
+  error => Promise.reject(error)
+);
 
 // Centralized authenticated-session handling
 api.interceptors.response.use(
-  response => response,
+  response => {
+    response.config?.__backendRequestStop?.();
+    return response;
+  },
   error => {
+    error.config?.__backendRequestStop?.();
+
     if (error.response?.status === 401) {
       notifySessionExpired();
     }

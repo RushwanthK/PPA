@@ -16,6 +16,7 @@ import {
 import { AuthProvider, useAuth } from './AuthContext';
 import './App.css';
 import ProfileDialog from './components/dialogs/ProfileDialog';
+import { useBackendStatus } from './services/backendStatus';
 
 // Route-level code splitting:
 // pages are loaded only when the user navigates to them.
@@ -65,6 +66,7 @@ function AppContent() {
     checkingSession,
   } = useAuth();
 
+  const backendStatus = useBackendStatus();
   const location = useLocation();
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -100,13 +102,23 @@ function AppContent() {
   }, [location.pathname]);
 
   if (checkingSession && user === null) {
+    const bootMessage = backendStatus.phase === 'waking'
+      ? 'The server is starting up. This may take a little while.'
+      : backendStatus.phase === 'connecting'
+        ? 'Connecting to server…'
+        : 'Restoring session…';
+
     return (
       <div className="app-boot-loading">
         <div className="spinner" />
-        <p>Restoring session…</p>
+        <p>{bootMessage}</p>
       </div>
     );
   }
+
+  const backendStatusMessage = backendStatus.phase === 'waking'
+    ? 'The server is starting up. This may take a little while.'
+    : 'Connecting to server…';
 
   return (
     <div className={`app-shell ${menuOpen ? 'menu-is-open' : ''}`}>
@@ -171,6 +183,13 @@ function AppContent() {
           </button>
         )}
       </header>
+
+      {backendStatus.phase !== 'idle' && (
+        <div className="backend-status" role="status" aria-live="polite">
+          <div className="backend-status-spinner" aria-hidden="true" />
+          <span>{backendStatusMessage}</span>
+        </div>
+      )}
 
       <div
         className={`app-body ${menuOpen ? 'menu-is-open' : ''} ${

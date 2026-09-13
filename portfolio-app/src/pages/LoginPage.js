@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
+import { startBackendRequest } from '../services/backendStatus';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
@@ -63,6 +64,7 @@ function LoginPage({ setUser }) {
 
       const controller = new AbortController();
       abortRef.current = controller;
+      const stopBackendRequest = startBackendRequest();
 
       try {
         const endpoint = isRegistering ? '/register' : '/login';
@@ -107,6 +109,8 @@ function LoginPage({ setUser }) {
           setError('Network error. Please try again.');
         }
       } finally {
+        stopBackendRequest();
+
         if (!controller.signal.aborted) {
           setSubmitting(false);
         }

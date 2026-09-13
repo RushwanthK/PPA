@@ -11,6 +11,7 @@ import {
   notifySessionExpired,
   onSessionExpired,
 } from './services/authEvents';
+import { startBackendRequest } from './services/backendStatus';
 
 const AuthContext = createContext(null);
 
@@ -47,6 +48,8 @@ export function AuthProvider({ children }) {
     let cancelled = false;
 
     const restoreSession = async () => {
+      const stopBackendRequest = startBackendRequest();
+
       try {
         const response = await fetch(
           `${process.env.REACT_APP_API_URL}/me`,
@@ -92,6 +95,8 @@ export function AuthProvider({ children }) {
           }
         }
       } finally {
+        stopBackendRequest();
+
         if (!cancelled) {
           setCheckingSession(false);
         }
