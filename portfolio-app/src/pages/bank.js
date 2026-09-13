@@ -1,17 +1,43 @@
 // src/pages/bank.js
 import React, { useState, useEffect, useMemo } from 'react';
+
 import {
   getBanks,
   createBank,
+  updateBank,
   deleteBank,
   addBankTransaction,
-  getBankTransactions
+  getBankTransactions,
+  exportUserTransactionsExcel,
+  exportUserTransactionsPdf
 } from '../services/api';
+import { useAuth } from '../AuthContext';
+
+import Button from '../components/ui/Button';
+import SearchBar from '../components/ui/SearchBar';
+import DataTable from '../components/ui/DataTable';
+
+import EntityFormDialog from '../components/dialogs/EntityFormDialog';
+import TransactionFormDialog from '../components/dialogs/TransactionFormDialog';
+import TransactionTableDialog from '../components/dialogs/TransactionTableDialog';
+
+import DeleteConfirmationDialog from '../components/Deleteconfirmationdialog';
+
 import './bank.css';
 
 export default function Bank() {
+  const { user } = useAuth();
   const [banks, setBanks] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionPageSize, setTransactionPageSize] = useState(25);
+  const [transactionSearchInput, setTransactionSearchInput] = useState('');
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionType, setTransactionType] = useState('');
+  const [transactionTotal, setTransactionTotal] = useState(0);
+  const [transactionTotalPages, setTransactionTotalPages] = useState(0);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [transactionRefreshKey, setTransactionRefreshKey] = useState(0);
   const [formData, setFormData] = useState({ id: '', name: '' });
   const [transactionData, setTransactionData] = useState({
     bankId: '',
@@ -26,7 +52,20 @@ export default function Bank() {
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [formError, setFormError] = useState(null);
+  const [transactionFormError, setTransactionFormError] = useState(null);
+  const [transactionTableError, setTransactionTableError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Delete-confirmation dialog state, kept separate from the general
+  // `loading` flag (same pattern as the Users page) so the rest of the
+  // page isn't disabled just because the delete dialog is open.
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingBankId, setDeletingBankId] = useState(null);
+  const [isDeletingBank, setIsDeletingBank] = useState(false);
+  const [deleteDialogError, setDeleteDialogError] = useState(null);
+  const [isDownloadingBankBackup, setIsDownloadingBankBackup] = useState(false);
+  const [bankBackupDownloaded, setBankBackupDownloaded] = useState(false);
 
   // UI state for search & sorting
   const [searchText, setSearchText] = useState('');
@@ -53,6 +92,83 @@ export default function Bank() {
     fetchData();
   }, []);
 
+  // Debounce transaction search so typing does not issue one request per keystroke.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setTransactionSearch(transactionSearchInput.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [transactionSearchInput]);
+
+  // Transaction history is server-paginated and server-filtered. Only the
+  // current page is kept in React state.
+  useEffect(() => {
+    if (!showTransactions || !selectedBankId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const fetchTransactions = async () => {
+      try {
+        setTransactionsLoading(true);
+        setTransactionTableError(null);
+
+        const response = await getBankTransactions(
+          selectedBankId,
+          {
+            page: transactionPage,
+            page_size: transactionPageSize,
+            search: transactionSearch,
+            type: transactionType,
+          }
+        );
+
+        if (cancelled) return;
+
+        setTransactions(Array.isArray(response?.transactions) ? response.transactions : []);
+        setTransactionTotal(Number(response?.total) || 0);
+        setTransactionTotalPages(Number(response?.total_pages) || 0);
+
+        // The API can move a request back to the last valid page after a
+        // filter reduces the result set. Keep the UI state in sync.
+        if (response?.page && response.page !== transactionPage) {
+          setTransactionPage(response.page);
+        }
+      } catch (err) {
+          if (cancelled) return;
+
+          console.error('Error fetching transactions:', err);
+          setTransactionTableError(
+            err.message || 'Failed to fetch transactions'
+          );
+
+          setTransactions([]);
+          setTransactionTotal(0);
+          setTransactionTotalPages(0);
+        } finally {
+        if (!cancelled) {
+          setTransactionsLoading(false);
+        }
+      }
+    };
+
+    fetchTransactions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showTransactions,
+    selectedBankId,
+    transactionPage,
+    transactionPageSize,
+    transactionSearch,
+    transactionType,
+    transactionRefreshKey,
+  ]);
+
   // ---------- helpers ----------
   const safeNumber = (v) => {
     const n = Number(v);
@@ -72,65 +188,125 @@ export default function Bank() {
   // ---------- API actions ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     try {
-      setError(null);
+      setFormError(null);
       setSuccess(null);
       setLoading(true);
 
-      if (!formData.name) throw new Error('Please enter a bank name');
+      const name = formData.name.trim();
+
+      if (!name) {
+        throw new Error('Please enter a bank name');
+      }
 
       if (formData.id) {
-        //const updatedBank = await updateBank(formData.id, { name: formData.name });
-        // refresh list (safer to re-fetch)
-        const banksResponse = await getBanks();
-        setBanks(banksResponse.data || banksResponse || []);
+        const response = await updateBank(formData.id, { name });
+
+        const updatedBank = response?.bank;
+
+        if (!updatedBank) {
+          throw new Error('Bank was updated, but no bank data was returned');
+        }
+
+        setBanks(prevBanks =>
+          prevBanks.map(bank =>
+            String(bank.id) === String(updatedBank.id)
+              ? updatedBank
+              : bank
+          )
+        );
+
         setSuccess('Bank updated successfully!');
       } else {
-        await createBank({ name: formData.name });
-        const banksResponse = await getBanks();
-        setBanks(banksResponse.data || banksResponse || []);
+        const response = await createBank({ name });
+
+        const createdBank = response?.bank;
+
+        if (!createdBank) {
+          throw new Error('Bank was created, but no bank data was returned');
+        }
+
+        setBanks(prevBanks => [
+          ...prevBanks,
+          createdBank
+        ]);
+
         setSuccess('Bank created successfully!');
       }
 
       resetForm();
     } catch (err) {
-      console.error('Error saving bank:', err);
-      setError(err.message || 'Failed to save bank');
-    } finally {
+        console.error('Error saving bank:', err);
+        setFormError(err.message || 'Failed to save bank');
+      } finally {
       setLoading(false);
     }
   };
 
   const handleTransactionSubmit = async (e) => {
     e.preventDefault();
+
     try {
-      setError(null);
+      setTransactionFormError(null);
       setSuccess(null);
       setLoading(true);
 
-      if (!transactionData.amount || isNaN(transactionData.amount)) throw new Error('Please enter a valid amount');
-      if (parseFloat(transactionData.amount) <= 0) throw new Error('Amount must be greater than 0');
+      if (
+        !transactionData.amount ||
+        isNaN(transactionData.amount)
+      ) {
+        throw new Error('Please enter a valid amount');
+      }
 
-      await addBankTransaction(transactionData.bankId, {
-        amount: parseFloat(transactionData.amount),
-        type: transactionData.type,
-        description: transactionData.description,
-        category: transactionData.category
-      });
+      const amount = parseFloat(transactionData.amount);
 
-      // Refresh banks to reflect updated balance
-      const banksResponse = await getBanks();
-      setBanks(banksResponse.data || banksResponse || []);
+      if (amount <= 0) {
+        throw new Error('Amount must be greater than 0');
+      }
 
-      // Refresh transaction list if transaction modal is open
-      if (selectedBankId) {
-        const transactionResponse = await getBankTransactions(selectedBankId);
-        setTransactions(transactionResponse?.data || transactionResponse || []);
+      const response = await addBankTransaction(
+        transactionData.bankId,
+        {
+          amount,
+          type: transactionData.type,
+          description: transactionData.description,
+          category: transactionData.category
+        }
+      );
+
+      const newBalance = response?.balance;
+      const createdTransaction = response?.transaction;
+
+      if (newBalance === undefined || !createdTransaction) {
+        throw new Error(
+          'Transaction was added, but the server did not return the updated transaction data'
+        );
+      }
+
+      setBanks(prevBanks =>
+        prevBanks.map(bank =>
+          String(bank.id) === String(transactionData.bankId)
+            ? {
+                ...bank,
+                balance: newBalance
+              }
+            : bank
+        )
+      );
+
+      // The transaction table is server-paginated, so do not mutate a partial
+      // client-side page manually. Refresh page 1 to include the newest row.
+      if (
+        selectedBankId &&
+        String(selectedBankId) === String(transactionData.bankId)
+      ) {
+        setTransactionPage(1);
+        setTransactionRefreshKey(prev => prev + 1);
       }
 
       setSuccess('Transaction added successfully!');
 
-      // Reset and close transaction form
       setTransactionData({
         bankId: '',
         amount: '',
@@ -138,35 +314,239 @@ export default function Bank() {
         description: '',
         category: ''
       });
+
       setShowTransactionForm(false);
     } catch (err) {
-      console.error('Error adding transaction:', err);
-      setError(err.message || 'Failed to add transaction');
-    } finally {
+        console.error('Error adding transaction:', err);
+
+        setTransactionFormError(
+          err.message || 'Failed to add transaction'
+        );
+      } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteBank = async (bankId) => {
-    if (!window.confirm('Are you sure you want to delete this bank?')) return;
+  const handleDeleteBank = (bankId) => {
+    if (isDeletingBank || isDownloadingBankBackup) return;
+
+    const bank = banks.find(
+      b => String(b.id) === String(bankId)
+    );
+
+    const currentBalance = safeNumber(bank?.balance);
+
+    // General page errors should not be used for delete-dialog errors.
+    setError(null);
+    setSuccess(null);
+
+    // Show the balance validation directly inside the delete dialog.
+    setDeleteDialogError(
+      Math.abs(currentBalance) > 0.000001
+        ? `Cannot delete "${bank?.name || 'this bank'}" because its current balance is Rs. ${currentBalance.toFixed(2)}. Please bring the balance to zero and try again.`
+        : null
+    );
+
+    setDeletingBankId(bankId);
+    setBankBackupDownloaded(false);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeletingBank || isDownloadingBankBackup) return;
+
+    setShowDeleteModal(false);
+    setDeletingBankId(null);
+    setDeleteDialogError(null);
+    setBankBackupDownloaded(false);
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    window.URL.revokeObjectURL(url);
+  };
+
+
+  const handleDownloadBankBackupExcel = async () => {
+    if (
+      !deletingBankId ||
+      isDownloadingBankBackup ||
+      isDeletingBank
+    ) {
+      return;
+    }
+
     try {
+      setIsDownloadingBankBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = user?.id;
+
+      if (!userId) {
+        throw new Error(
+          'Unable to determine the current user account for backup export.'
+        );
+      }
+
+      const response = await exportUserTransactionsExcel(
+        userId,
+        ['banks']
+      );
+
+      const filename =
+        `bank_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`;
+
+      downloadBlob(response.data, filename);
+
+      setBankBackupDownloaded(true);
+    } catch (err) {
+      console.error(
+        'Failed to download bank Excel backup:',
+        err
+      );
+
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the Excel transaction backup. Your bank account has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingBankBackup(false);
+    }
+  };
+
+  const handleDownloadBankBackupPdf = async () => {
+    if (
+      !deletingBankId ||
+      isDownloadingBankBackup ||
+      isDeletingBank
+    ) {
+      return;
+    }
+
+    try {
+      setIsDownloadingBankBackup(true);
+      setDeleteDialogError(null);
+
+      const userId = user?.id;
+
+      if (!userId) {
+        throw new Error(
+          'Unable to determine the current user account for backup export.'
+        );
+      }
+
+      const response = await exportUserTransactionsPdf(
+        userId,
+        ['banks']
+      );
+
+      const filename =
+        `bank_transactions_backup_${new Date()
+          .toISOString()
+          .slice(0, 10)}.pdf`;
+
+      downloadBlob(response.data, filename);
+
+      setBankBackupDownloaded(true);
+    } catch (err) {
+      console.error(
+        'Failed to download bank PDF backup:',
+        err
+      );
+
+      setDeleteDialogError(
+        err.message ||
+        'Unable to download the PDF transaction backup. Your bank account has not been deleted.'
+      );
+    } finally {
+      setIsDownloadingBankBackup(false);
+    }
+  };
+
+  const handleConfirmDeleteBank = async () => {
+    if (
+      !deletingBankId ||
+      isDeletingBank ||
+      isDownloadingBankBackup
+    ) {
+      return;
+    }
+
+    const bank = banks.find(
+      b => String(b.id) === String(deletingBankId)
+    );
+
+    const currentBalance = safeNumber(bank?.balance);
+
+    // Prevent the request from even being sent when the balance
+    // is non-zero. The error stays inside the dialog.
+    if (Math.abs(currentBalance) > 0.000001) {
+      setDeleteDialogError(
+        `Cannot delete "${bank?.name || 'this bank'}" because its current balance is Rs. ${currentBalance.toFixed(2)}. Please bring the balance to zero and try again.`
+      );
+
+      return;
+    }
+
+    try {
+      setIsDeletingBank(true);
+
+      // Delete-specific errors belong to the dialog.
+      setDeleteDialogError(null);
+
+      // Make sure an old page-level error does not appear behind
+      // the delete modal.
       setError(null);
       setSuccess(null);
-      setLoading(true);
-      await deleteBank(bankId);
-      const banksResponse = await getBanks();
-      setBanks(banksResponse.data || banksResponse || []);
+
+      await deleteBank(deletingBankId);
+
+      setBanks(prevBanks =>
+        prevBanks.filter(
+          bank =>
+            String(bank.id) !== String(deletingBankId)
+        )
+      );
+
+      setShowDeleteModal(false);
+      setDeletingBankId(null);
+      setBankBackupDownloaded(false);
+      setDeleteDialogError(null);
+
       setSuccess('Bank deleted successfully!');
     } catch (err) {
       console.error('Error deleting bank:', err);
-      // customized error message (as you had)
-      if (err.response?.data?.error?.includes('linked savings accounts')) {
-        setError('Cannot delete bank because it has linked savings accounts. Please remove all linked savings accounts first.');
+
+      const errorMessage =
+        err.message ||
+        'Failed to delete bank';
+
+      // Your api.js converts the Axios error into a normal Error,
+      // so err.message is the reliable value here.
+      if (
+        errorMessage
+          .toLowerCase()
+          .includes('linked savings accounts')
+      ) {
+        setDeleteDialogError(
+          'Cannot delete bank because it has linked savings accounts. Please remove all linked savings accounts first.'
+        );
       } else {
-        setError(err.message || 'Failed to delete bank');
+        setDeleteDialogError(errorMessage);
       }
     } finally {
-      setLoading(false);
+      setIsDeletingBank(false);
     }
   };
 
@@ -176,29 +556,50 @@ export default function Bank() {
   };
 
   const handleAddTransaction = (bankId) => {
+    setTransactionFormError(null);
     setTransactionData(prev => ({ ...prev, bankId: bankId.toString() }));
     setShowTransactionForm(true);
   };
 
-  const handleViewTransactions = async (bankId) => {
-    try {
-      setError(null);
-      setLoading(true);
-      const response = await getBankTransactions(bankId);
-      const txs = response?.data || response || [];
-      setTransactions(txs);
-      setSelectedBankId(bankId);
-      setShowTransactions(true);
-    } catch (err) {
-      console.error('Error fetching transactions:', err);
-      setError(err.message || 'Failed to fetch transactions');
-    } finally {
-      setLoading(false);
+  const handleViewTransactions = (bankId) => {
+    setTransactionTableError(null);
+    setSelectedBankId(bankId);
+    setTransactionPage(1);
+    setTransactionPageSize(25);
+    setTransactionSearchInput('');
+    setTransactionSearch('');
+    setTransactionType('');
+    setTransactionTotal(0);
+    setTransactionTotalPages(0);
+    setTransactions([]);
+    setShowTransactions(true);
+  };
+
+  const handleTransactionSearchChange = (e) => {
+    setTransactionSearchInput(e.target.value);
+    setTransactionPage(1);
+  };
+
+  const handleTransactionTypeChange = (e) => {
+    setTransactionType(e.target.value);
+    setTransactionPage(1);
+  };
+
+  const handleTransactionPageChange = (page) => {
+    if (page < 1 || (transactionTotalPages > 0 && page > transactionTotalPages)) {
+      return;
     }
+    setTransactionPage(page);
+  };
+
+  const handleTransactionPageSizeChange = (e) => {
+    setTransactionPageSize(Number(e.target.value));
+    setTransactionPage(1);
   };
 
   const resetForm = () => {
     setFormData({ id: '', name: '' });
+    setFormError(null);
     setShowForm(false);
   };
 
@@ -248,6 +649,8 @@ export default function Bank() {
     }, { balance: 0 });
   }, [visibleBanks]);
 
+  const bankPendingDeletion = banks.find(b => b.id === deletingBankId) || null;
+
   // ---------- Render ----------
   if (loading && banks.length === 0) return <div className="loading">Loading banks...</div>;
 
@@ -269,217 +672,387 @@ export default function Bank() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button
+      <div className="bank-toolbar">
+        <Button
           type="button"
-          onClick={() => setShowForm(true)}
-          className="add-button"
+          variant="primary"
+          onClick={() => {
+            setFormError(null);
+            setShowForm(true);
+          }}
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Bank'}
-        </button>
+        </Button>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            type="text"
-            placeholder="Search by name..."
+        <div className="bank-toolbar-search">
+          <SearchBar
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ padding: '8px 10px', borderRadius: 4, border: '1px solid #444', background: '#2d2d2d', color: '#fff' }}
-            aria-label="Search banks by name"
+            placeholder="Search by name..."
+            ariaLabel="Search banks by name"
+            disabled={loading}
           />
         </div>
       </div>
 
       {/* Bank Form Modal */}
-      {showForm && (
-        <div className="modal">
-          <div className="modal-content">
-            <h2>{formData.id ? 'Edit' : 'Add'} Bank</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label htmlFor="name">Bank Name:</label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  placeholder="Bank Name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  disabled={loading}
-                />
-              </div>
+      <EntityFormDialog
+        open={showForm}
+        mode={formData.id ? 'edit' : 'create'}
+        title={formData.id ? 'Edit Bank' : 'Add Bank'}
+        onClose={resetForm}
+        onSubmit={handleSubmit}
+        submitting={loading}
+        submitLabel={formData.id ? 'Update' : 'Save'}
+        error={formError}
+        onDismissError={() => setFormError(null)}
+      >
+        <div className="form-group">
+          <label htmlFor="name">
+            Bank Name:
+          </label>
 
-              <div className="form-actions">
-                <button type="submit" className="save-button" disabled={loading}>
-                  {loading ? 'Saving...' : 'Save'}
-                </button>
-                <button type="button" onClick={resetForm} className="cancel-button" disabled={loading}>Cancel</button>
-              </div>
-            </form>
-          </div>
+          <input
+            type="text"
+            id="name"
+            name="name"
+            placeholder="Bank Name"
+            value={formData.name}
+            onChange={handleInputChange}
+            required
+            disabled={loading}
+          />
         </div>
-      )}
+      </EntityFormDialog>
 
       {/* Transaction Form Modal */}
-      {showTransactionForm && (
-        <div className="modal transaction-form-modal">
-          <div className="modal-content">
-            <h2>Add Transaction - <span style={{ color: '#007bff' }}>{banks.find(b => String(b.id) === String(transactionData.bankId))?.name || 'Bank'}</span></h2>
-            <form onSubmit={handleTransactionSubmit}>
-              <div className="form-group">
-                <label htmlFor="type">Transaction Type:</label>
-                <select id="type" name="type" value={transactionData.type} onChange={handleTransactionChange} required disabled={loading}>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                </select>
-              </div>
+      <TransactionFormDialog
+        open={showTransactionForm}
+        title={
+          <>
+            Add Transaction -{' '}
+            <span className="accent-text">
+              {
+                banks.find(
+                  b =>
+                    String(b.id) ===
+                    String(transactionData.bankId)
+                )?.name || 'Bank'
+              }
+            </span>
+          </>
+        }
+        onClose={() => {
+          setShowTransactionForm(false);
+          setTransactionFormError(null);
+        }}
+        onSubmit={handleTransactionSubmit}
+        submitting={loading}
+        submitLabel="Submit"
+        error={transactionFormError}
+        onDismissError={() => setTransactionFormError(null)}
+      >
+        <div className="form-group">
+          <label htmlFor="type">
+            Transaction Type:
+          </label>
 
-              <div className="form-group">
-                <label htmlFor="amount">Amount:</label>
-                <input
-                  type="number"
-                  id="amount"
-                  name="amount"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="Amount"
-                  value={transactionData.amount}
-                  onChange={handleTransactionChange}
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="description">Description:</label>
-                <input type="text" id="description" name="description" placeholder="Description" value={transactionData.description} onChange={handleTransactionChange} disabled={loading} />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="category">Category:</label>
-                <input type="text" id="category" name="category" placeholder="Category" value={transactionData.category} onChange={handleTransactionChange} disabled={loading} />
-              </div>
-
-              <div className="form-actions">
-                <button type="submit" className="save-button" disabled={loading}>{loading ? 'Processing...' : 'Submit'}</button>
-                <button type="button" className="cancel-button" onClick={() => setShowTransactionForm(false)} disabled={loading}>Cancel</button>
-              </div>
-            </form>
-          </div>
+          <select
+            id="type"
+            name="type"
+            value={transactionData.type}
+            onChange={handleTransactionChange}
+            required
+            disabled={loading}
+          >
+            <option value="income">Income</option>
+            <option value="expense">Expense</option>
+          </select>
         </div>
-      )}
+
+        <div className="form-group">
+          <label htmlFor="amount">
+            Amount:
+          </label>
+
+          <input
+            type="number"
+            id="amount"
+            name="amount"
+            step="0.01"
+            min="0.01"
+            placeholder="Amount"
+            value={transactionData.amount}
+            onChange={handleTransactionChange}
+            required
+            disabled={loading}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="description">
+            Description:
+          </label>
+
+          <input
+            type="text"
+            id="description"
+            name="description"
+            placeholder="Description"
+            value={transactionData.description}
+            onChange={handleTransactionChange}
+            disabled={loading}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="category">
+            Category:
+          </label>
+
+          <input
+            type="text"
+            id="category"
+            name="category"
+            placeholder="Category"
+            value={transactionData.category}
+            onChange={handleTransactionChange}
+            disabled={loading}
+          />
+        </div>
+      </TransactionFormDialog>
 
       {/* Transactions Modal */}
-      {showTransactions && (
-        <div className="modal">
-          <div className="modal-content transaction-modal">
-            <div className="transaction-modal-header">
-              <h2 className="transaction-modal-title">
-                Transactions for {banks.find(b => b.id === selectedBankId)?.name || 'Bank'}
-              </h2>
-
-              <div className="transaction-modal-actions">
-                <button
-                  type="button"
-                  className="transaction-button"
-                  onClick={() => handleAddTransaction(selectedBankId)}
-                >
-                  Add Transaction
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowTransactions(false)}
-                  className="close-button"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            <div className="table-container" style={{ marginTop: 20 }}>
-              <table className="banks-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Balance After</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.length > 0 ? (
-                    transactions.map(tx => (
-                      <tr key={tx.id}>
-                        <td>{tx.date}</td>
-                        <td className={tx.transaction_type === 'income' ? 'income' : 'expense'}>{tx.transaction_type}</td>
-                        <td>Rs. {parseFloat(tx.amount).toFixed(2)}</td>
-                        <td>{tx.description || '-'}</td>
-                        <td>{tx.category || '-'}</td>
-                        <td>Rs. {parseFloat(tx.bank_balance_after).toFixed(2)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="6" className="no-data">No transactions found</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      <TransactionTableDialog
+        open={showTransactions}
+        title={
+          <>
+            Transactions for{' '}
+            {
+              banks.find(
+                b => b.id === selectedBankId
+              )?.name || 'Bank'
+            }
+          </>
+        }
+        transactions={transactions}
+        loading={transactionsLoading}
+        onClose={() => {
+          setShowTransactions(false);
+          setTransactionTableError(null);
+        }}
+        searchText={transactionSearchInput}
+        onSearchChange={handleTransactionSearchChange}
+        transactionType={transactionType}
+        onTransactionTypeChange={handleTransactionTypeChange}
+        page={transactionPage}
+        totalPages={transactionTotalPages}
+        totalTransactions={transactionTotal}
+        pageSize={transactionPageSize}
+        onPageChange={handleTransactionPageChange}
+        onPageSizeChange={handleTransactionPageSizeChange}
+        onAddTransaction={() =>
+          handleAddTransaction(selectedBankId)
+        }
+        addTransactionDisabled={loading}
+        error={transactionTableError}
+        onDismissError={() => setTransactionTableError(null)}
+        columns={[
+          {
+            key: 'date',
+            label: 'Date',
+          },
+          {
+            key: 'transaction_type',
+            label: 'Type',
+            render: tx => (
+              <span
+                className={
+                  tx.transaction_type === 'income'
+                    ? 'income'
+                    : 'expense'
+                }
+              >
+                {tx.transaction_type}
+              </span>
+            ),
+          },
+          {
+            key: 'amount',
+            label: 'Amount',
+            render: tx =>
+              `Rs. ${parseFloat(tx.amount || 0).toFixed(2)}`,
+          },
+          {
+            key: 'description',
+            label: 'Description',
+            render: tx =>
+              tx.description || '-',
+          },
+          {
+            key: 'category',
+            label: 'Category',
+            render: tx =>
+              tx.category || '-',
+          },
+          {
+            key: 'bank_balance_after',
+            label: 'Balance After',
+            render: tx =>
+              `Rs. ${
+                parseFloat(
+                  tx.bank_balance_after || 0
+                ).toFixed(2)
+              }`,
+          },
+        ]}
+      />
 
       {/* Banks Table */}
-      <div className="table-container" style={{ marginTop: 20 }}>
-        <table className="banks-table">
-          <thead>
-            <tr>
-              <th className="sortable" onClick={() => handleSortClick('name')}>
-                Name {sortBy === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th className="sortable" onClick={() => handleSortClick('balance')}>
-                Balance {sortBy === 'balance' ? (sortDir === 'asc' ? '▲' : '▼') : ''}
-              </th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+      <div className="bank-table-section">
+        <DataTable
+          columns={[
+            {
+              key: 'name',
+              label: 'Name',
+              sortable: true,
+            },
+            {
+              key: 'balance',
+              label: 'Balance',
+              sortable: true,
+              render: bank =>
+                `Rs. ${safeNumber(bank.balance).toFixed(2)}`,
+            },
+          ]}
+          data={visibleBanks}
+          rowKey="id"
+          loading={loading && banks.length === 0}
+          emptyMessage="No banks found"
+          sortBy={sortBy}
+          sortDirection={sortDir}
+          onSort={handleSortClick}
+          renderActions={bank => (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => handleEdit(bank)}
+                disabled={loading}
+              >
+                Edit
+              </Button>
 
-          <tbody>
-            {visibleBanks.length > 0 ? (
-              visibleBanks.map(bank => (
-                <tr key={bank.id}>
-                  <td>{bank.name}</td>
-                  <td>Rs. {safeNumber(bank.balance).toFixed(2)}</td>
-                  <td className="actions-cell">
-                    <button type="button" onClick={() => handleEdit(bank)} className="edit-button" disabled={loading}>Edit</button>
-                    <button type="button" onClick={() => handleAddTransaction(bank.id)} className="transaction-button" disabled={loading}>Add Transaction</button>
-                    <button type="button" onClick={() => handleViewTransactions(bank.id)} className="view-button" disabled={loading}>View Transactions</button>
-                    <button type="button" onClick={() => handleDeleteBank(bank.id)} className="delete-button" disabled={loading}>Delete</button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="3" className="no-data">No banks found</td>
-              </tr>
-            )}
-          </tbody>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() =>
+                  handleAddTransaction(bank.id)
+                }
+                disabled={loading}
+              >
+                Add Transaction
+              </Button>
 
-          <tfoot>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  handleViewTransactions(bank.id)
+                }
+                disabled={loading}
+              >
+                View Transactions
+              </Button>
+
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() =>
+                  handleDeleteBank(bank.id)
+                }
+                disabled={
+                  loading || isDeletingBank
+                }
+              >
+                Delete
+              </Button>
+            </>
+          )}
+          renderFooter={() => (
             <tr className="totals-row">
-              <td style={{ fontWeight: 600 }}>Totals</td>
-              <td style={{ fontWeight: 600 }}>Rs. {totals.balance.toFixed(2)}</td>
-              <td></td>
+              <td>
+                Totals
+              </td>
+
+              <td>
+                Rs. {totals.balance.toFixed(2)}
+              </td>
+
+              <td />
             </tr>
-          </tfoot>
-        </table>
+          )}
+        />
       </div>
+
+      {deletingBankId && (
+        <DeleteConfirmationDialog
+          isOpen={showDeleteModal}
+          onClose={closeDeleteModal}
+          onConfirm={handleConfirmDeleteBank}
+
+          title="Delete Bank Account"
+
+          headline={`Delete "${bankPendingDeletion?.name || 'this bank'}"?`}
+
+          description={
+            `Current balance: Rs. ${
+              safeNumber(bankPendingDeletion?.balance).toFixed(2)
+            }`
+          }
+
+          detailLines={[
+            'This action cannot be undone.',
+            'A bank account can only be deleted once its balance is zero and it has no linked savings accounts.',
+            'You may download a backup of all bank transaction history before deleting this bank.'
+          ]}
+
+          isDeleting={isDeletingBank}
+
+          confirmLabel="Delete Bank"
+          confirmWithoutBackupLabel="Delete Without Backup"
+
+          cancelLabel="Cancel"
+
+          /* ---------------- BACKUP ---------------- */
+
+          showBackupSection={true}
+
+          backupSectionTitle="Backup Bank Transactions"
+
+          onDownloadExcel={handleDownloadBankBackupExcel}
+          onDownloadPdf={handleDownloadBankBackupPdf}
+
+          isDownloading={isDownloadingBankBackup}
+
+          backupDownloaded={bankBackupDownloaded}
+
+          backupConfirmedMessage={
+            'Bank transaction backup downloaded successfully.'
+          }
+
+          excelDownloadLabel="Download Excel"
+          pdfDownloadLabel="Download PDF"
+
+          /* ---------------- ERROR ---------------- */
+
+          dialogError={deleteDialogError}
+          onDismissDialogError={() =>
+            setDeleteDialogError(null)
+          }
+        />
+      )}
     </div>
   );
 }

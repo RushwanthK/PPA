@@ -1,41 +1,50 @@
 import os
-from dotenv import load_dotenv
 from datetime import timedelta
+
+from dotenv import load_dotenv
+
 
 load_dotenv()
 
+
 class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SECRET_KEY = os.environ.get('SECRET_KEY', os.urandom(24))
-    
+
+    SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
+
     SQLALCHEMY_DATABASE_URI = os.environ["DATABASE_URL"]
 
-    # ✅ JWT configuration
-    JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]  # Pull from .env
-    JWT_TOKEN_LOCATION = ['headers']
-    JWT_HEADER_NAME = 'Authorization'           # ✅ Required
-    JWT_HEADER_TYPE = 'Bearer'                  # ✅ Required
+    JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
+    JWT_TOKEN_LOCATION = ["headers"]
+    JWT_HEADER_NAME = "Authorization"
+    JWT_HEADER_TYPE = "Bearer"
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=1)
+
+    CORS_ORIGINS = os.environ["CORS_ORIGINS"]
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
+    TESTING = False
+
+
+class TestingConfig(Config):
+    DEBUG = False
+    TESTING = True
+
 
 class ProductionConfig(Config):
     DEBUG = False
+    TESTING = False
 
-# Determine which config to use
-if os.environ.get('FLASK_ENV') == 'development':
-    app_config = DevelopmentConfig()
-else:
-    app_config = ProductionConfig()
 
-"""
-import os
-from dotenv import load_dotenv
-load_dotenv()
+def get_config():
+    environment = os.environ.get("FLASK_ENV", "production")
 
-class Config:
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SECRET_KEY = os.urandom(24)
-"""
+    config_map = {
+        "development": DevelopmentConfig,
+        "testing": TestingConfig,
+        "production": ProductionConfig,
+    }
+
+    return config_map.get(environment, ProductionConfig)

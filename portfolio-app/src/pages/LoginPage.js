@@ -1,76 +1,210 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
+import { startBackendRequest } from '../services/backendStatus';
 
 const API_URL = process.env.REACT_APP_API_URL;
 
+const EMPTY_FORM = {
+  name: '',
+  password: '',
+  dob: '',
+  place: '',
+};
+
 function LoginPage({ setUser }) {
   const [isRegistering, setIsRegistering] = useState(false);
-  const [form, setForm] = useState({ name: '', password: '', dob: '', place: '' });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const navigate = useNavigate();
+  const abortRef = useRef(null);
+  const nameInputRef = useRef(null);
 
-  const handleChange = e => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
+  useEffect(() => {
+    nameInputRef.current?.focus();
+  }, [isRegistering]);
 
-  const handleSubmit = async e => {
-    e.preventDefault();
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const handleChange = useCallback(e => {
+    const { name, value } = e.target;
+
+    setForm(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  }, []);
+
+  const handleToggleMode = useCallback(() => {
     setError('');
+    setMessage('');
+    setForm(EMPTY_FORM);
 
-    try {
-      const endpoint = isRegistering ? '/register' : '/login';
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
+    setIsRegistering(prev => !prev);
+  }, []);
 
-      const data = await response.json();
-      if (!response.ok) {
-        setError(data.error || 'Something went wrong');
+  const handleSubmit = useCallback(
+    async e => {
+      e.preventDefault();
+
+      if (submitting) {
         return;
       }
 
-      localStorage.setItem('token', data.token);
-      setUser(data.user); // set current user
-      navigate('/dashboard');
-    } catch (err) {
-      setError('Network error');
-    }
-  };
+      setError('');
+      setMessage('');
+      setSubmitting(true);
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const stopBackendRequest = startBackendRequest();
+
+      try {
+        const endpoint = isRegistering ? '/register' : '/login';
+
+        const response = await fetch(`${API_URL}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(form),
+          signal: controller.signal,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.error || 'Something went wrong');
+          return;
+        }
+
+        // Registration and login have different backend responses.
+        if (isRegistering) {
+          setForm(prev => ({
+            ...EMPTY_FORM,
+            name: prev.name,
+          }));
+
+          setIsRegistering(false);
+          setMessage('Account created successfully. Please log in.');
+
+          return;
+        }
+
+        // Login response contains the token and authenticated user.
+        localStorage.setItem('token', data.token);
+        setUser(data.user);
+
+        // Replace login route so browser Back does not return to it.
+        navigate('/dashboard', { replace: true });
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          setError('Network error. Please try again.');
+        }
+      } finally {
+        stopBackendRequest();
+
+        if (!controller.signal.aborted) {
+          setSubmitting(false);
+        }
+      }
+    },
+    [form, isRegistering, navigate, setUser, submitting]
+  );
 
   return (
     <div className="login-container">
       <h2>{isRegistering ? 'Register' : 'Login'}</h2>
-      <form onSubmit={handleSubmit}>
-        <input name="name" value={form.name} onChange={handleChange} placeholder="Name" required />
-        <input name="password" type="password" value={form.password} onChange={handleChange} placeholder="Password" required />
+
+      <form className="login-form" onSubmit={handleSubmit}>
+        <input
+          ref={nameInputRef}
+          name="name"
+          value={form.name}
+          onChange={handleChange}
+          placeholder="Name"
+          autoComplete="username"
+          required
+          className="login-input"
+        />
+
+        <input
+          name="password"
+          type="password"
+          value={form.password}
+          onChange={handleChange}
+          placeholder="Password"
+          autoComplete={
+            isRegistering ? 'new-password' : 'current-password'
+          }
+          required
+          className="login-input"
+        />
 
         {isRegistering && (
           <>
-            <input 
-              name="dob" 
-              type="date" 
-              value={form.dob} 
-              onChange={handleChange} 
+            <input
+              name="dob"
+              type="date"
+              value={form.dob}
+              onChange={handleChange}
               required
-              className={!form.dob ? "empty-date" : ""}  // Add this line
+              className={`login-input ${!form.dob ? 'empty-date' : ''}`}
             />
-            <input name="place" value={form.place} onChange={handleChange} placeholder="Place" required />
+
+            <input
+              name="place"
+              value={form.place}
+              onChange={handleChange}
+              placeholder="Place"
+              autoComplete="address-level2"
+              required
+              className="login-input"
+            />
           </>
         )}
 
-        <button type="submit" className={isRegistering ? 'green' : 'blue'}>
-          {isRegistering ? 'Create Account' : 'Login'}
+        <button
+          type="submit"
+          className={`login-submit ${isRegistering ? 'register-mode' : 'login-mode'}`}
+          disabled={submitting}
+        >
+          {submitting
+            ? 'Please wait…'
+            : isRegistering
+              ? 'Create Account'
+              : 'Login'}
         </button>
       </form>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="login-message login-error" role="alert">
+          {error}
+        </p>
+      )}
 
-      <p onClick={() => setIsRegistering(!isRegistering)} className="toggle-auth">
-        {isRegistering ? 'Already have an account? Login' : 'New user? Register'}
-      </p>
+      {message && (
+        <p className="login-message login-success" role="status">
+          {message}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={handleToggleMode}
+        className="toggle-auth"
+      >
+        {isRegistering
+          ? 'Already have an account? Login'
+          : 'New user? Register'}
+      </button>
     </div>
   );
 }

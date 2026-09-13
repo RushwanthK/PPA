@@ -1,0 +1,243 @@
+/* Dummy chatbot — frontend-only preview widget.
+   Uses the shared design tokens from index.css so it matches whichever
+   page it's dropped into. Fixed-position, so it floats above page
+   content without affecting layout/reflow of the page itself. */
+
+.chatbot-root {
+  position: fixed;
+  right: max(clamp(14px, 2vw, 28px), env(safe-area-inset-right, 0px));
+  bottom: max(clamp(14px, 2vw, 28px), env(safe-area-inset-bottom, 0px));
+  z-index: 1200;
+}
+
+.chatbot-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--action-color);
+  color: #fff;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .chatbot-fab:hover {
+    transform: scale(1.06);
+  }
+}
+
+.chatbot-fab:active {
+  transform: scale(0.96);
+}
+
+.chatbot-panel {
+  position: absolute;
+  right: 0;
+  bottom: 72px;
+  width: min(92vw, 340px);
+  height: min(70vh, 480px);
+  height: min(70dvh, 480px);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: chatbot-pop-in var(--transition-base);
+}
+
+@keyframes chatbot-pop-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.chatbot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-alt);
+}
+
+.chatbot-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-color);
+}
+
+.chatbot-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success-color);
+  flex-shrink: 0;
+}
+
+.chatbot-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+
+.chatbot-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.chatbot-close:hover {
+  color: var(--text-color);
+  background: var(--surface-hover);
+}
+
+.chatbot-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chatbot-bubble-row {
+  display: flex;
+}
+
+.chatbot-bubble-row.user {
+  justify-content: flex-end;
+}
+
+.chatbot-bubble-row.bot {
+  justify-content: flex-start;
+}
+
+.chatbot-bubble {
+  max-width: 82%;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chatbot-bubble.bot {
+  background: var(--surface-alt);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-bottom-left-radius: 4px;
+}
+
+.chatbot-bubble.user {
+  background: var(--action-color);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.chatbot-typing {
+  display: flex;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.chatbot-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: chatbot-typing-bounce 1s infinite ease-in-out;
+}
+
+.chatbot-typing span:nth-child(2) { animation-delay: 0.15s; }
+.chatbot-typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chatbot-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.chatbot-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border-color);
+  background: var(--surface-alt);
+}
+
+.chatbot-input-row input {
+  flex: 1;
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 13.5px;
+}
+
+.chatbot-send {
+  padding: 8px 14px;
+  font-size: 13px;
+  background: var(--action-color);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.chatbot-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .chatbot-panel {
+    animation: none;
+  }
+  .chatbot-typing span {
+    animation: none;
+  }
+}
+
+/* Small phones: use nearly the full width/height so typing is comfortable */
+@media (max-width: 420px) {
+  .chatbot-panel {
+    width: 94vw;
+    height: 66vh;
+    height: 66dvh;
+    right: -6px;
+  }
+
+  .chatbot-input-row input,
+  .chatbot-send {
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+/* Large displays (TV / big monitors): the widget stays a fixed comfortable
+   size rather than awkwardly scaling up with the viewport. */
+@media (min-width: 1800px) {
+  .chatbot-panel {
+    width: 380px;
+    height: 520px;
+  }
+}

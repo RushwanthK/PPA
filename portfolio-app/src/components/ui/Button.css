@@ -1,0 +1,116 @@
+/* ==========================================================================
+   Shared Button
+   Standard action buttons used throughout the application.
+   ========================================================================== */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  min-height: 38px;
+  padding: 8px 14px;
+
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+
+  cursor: pointer;
+
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .button:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ==========================================================================
+   Primary
+   Add / Save / Process / Login
+   ========================================================================== */
+
+.button-primary {
+  background-color: var(--action-color);
+  color: #ffffff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+}
+
+/* ==========================================================================
+   Secondary
+   Cancel / View / Details / Edit / Pagination
+   ========================================================================== */
+
+.button-secondary {
+  background-color: var(--surface-color);
+  border-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.button-secondary:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-color);
+}
+
+/* ==========================================================================
+   Danger
+   Delete / Delete Account / Logout
+   ========================================================================== */
+
+.button-danger {
+  background-color: var(--error-color);
+  color: #ffffff;
+}
+
+.button-danger:hover:not(:disabled) {
+  background-color: var(--danger-hover);
+}
+
+/* ==========================================================================
+   Success
+   Positive states only
+   ========================================================================== */
+
+.button-success {
+  background-color: var(--success-color);
+  color: #ffffff;
+}
+
+.button-success:hover:not(:disabled) {
+  background-color: var(--success-hover);
+}
+
+/* ==========================================================================
+   Mobile
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .button {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}

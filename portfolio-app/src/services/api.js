@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { format } from 'date-fns';
+import { notifySessionExpired } from './authEvents';
+import { startBackendRequest } from './backendStatus';
 
-//const API_URL = 'https://rs-ppa-backend.onrender.com';
 //const API_URL = 'http://localhost:5000';
 
 // Create an axios instance with base URL
@@ -11,27 +12,38 @@ const api = axios.create({
 });
 
 // Attach token from localStorage
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+api.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    config.__backendRequestStop = startBackendRequest();
+
+    return config;
+  },
+  error => Promise.reject(error)
+);
+
+// Centralized authenticated-session handling
+api.interceptors.response.use(
+  response => {
+    response.config?.__backendRequestStop?.();
+    return response;
+  },
+  error => {
+    error.config?.__backendRequestStop?.();
+
+    if (error.response?.status === 401) {
+      notifySessionExpired();
+    }
+
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 export default api;
-
-// User API calls
-/*
-export const createUser = async (userData) => {
-  return api.post('/users', userData);
-};
-*/
-
-export const getCurrentUser = async () => {
-  const res = await api.get('/me');
-  return res.data;
-};
 
 export const getUsers = async () => {
   const response = await api.get('/users');  // now returns only the logged-in user
@@ -48,6 +60,38 @@ export const deleteUser = async (id) => {
 
 export const canDeleteUser = async (id) => {
   return api.get(`/users/${id}/can_delete`);
+};
+
+// `categories` is an optional array of category keys, e.g. ['banks', 'savings'].
+// When omitted (or empty), no `categories` param is sent and the backend
+// defaults to exporting every category, so existing callers keep working
+// exactly as before.
+const buildExportParams = (categories) => {
+  if (!categories || categories.length === 0) {
+    return {};
+  }
+
+  return { categories: categories.join(',') };
+};
+
+export const exportUserTransactionsExcel = async (id, categories) => {
+  return api.get(
+    `/users/${id}/transactions/export/excel`,
+    {
+      responseType: 'blob',
+      params: buildExportParams(categories)
+    }
+  );
+};
+
+export const exportUserTransactionsPdf = async (id, categories) => {
+  return api.get(
+    `/users/${id}/transactions/export/pdf`,
+    {
+      responseType: 'blob',
+      params: buildExportParams(categories)
+    }
+  );
 };
 
 // Bank API calls
@@ -127,24 +171,16 @@ export const addBankTransaction = async (bankId, transactionData) => {
   }
 };
 
-export const getBankTransactions = async (bankId) => {
+export const getBankTransactions = async (bankId, params = {}) => {
   try {
-    const response = await api.get(`/banks/${bankId}/transactions`);
-    return { data: response.data };
+    const response = await api.get(`/banks/${bankId}/transactions`, {
+      params,
+    });
+    return response.data;
   } catch (error) {
     const errorMsg = error.response?.data?.error || 'Failed to fetch bank transactions';
     console.error('Error fetching bank transactions:', errorMsg);
     throw new Error(errorMsg);
-  }
-};
-
-export const getBanksForUser = async () => {
-  try {
-    const response = await api.get('/banks/dropdown');
-    return { data: response.data };
-  } catch (error) {
-    console.error('Error fetching user banks:', error);
-    throw error;
   }
 };
 
@@ -160,17 +196,6 @@ export const getBankBalance = async (bankId) => {
       `Failed to fetch balance for bank ${bankId}`;
     console.error('Error fetching bank balance:', errorMsg);
     throw new Error(errorMsg);
-  }
-};
-
-// Add this new function specifically for Bank page
-export const getUsersForBank = async () => {
-  try {
-    const response = await api.get('/users');
-    return { data: response.data };
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    throw error;
   }
 };
 
@@ -218,11 +243,40 @@ export const deleteAsset = async (id) => {
 };
 
 export const createAssetTransaction = async (assetId, transactionData) => {
-  return api.post(`/assets/${assetId}/transactions`, transactionData);
+  try {
+    const response = await api.post(
+      `/assets/${assetId}/transactions`,
+      transactionData
+    );
+
+    return response.data;
+  } catch (error) {
+    const errorMsg =
+      error.response?.data?.error ||
+      'Failed to add asset transaction';
+
+    console.error(
+      'Error adding asset transaction:',
+      errorMsg
+    );
+
+    throw new Error(errorMsg);
+  }
 };
 
-export const getAssetTransactions = async (assetId) => {
-  return api.get(`/assets/${assetId}/transactions`);
+export const getAssetTransactions = async (assetId, params = {}) => {
+  try {
+    const response = await api.get(`/assets/${assetId}/transactions`, {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    const errorMsg =
+      error.response?.data?.error ||
+      'Failed to fetch asset transactions';
+    console.error('Error fetching asset transactions:', errorMsg);
+    throw new Error(errorMsg);
+  }
 };
 
 // Credit Card API calls
@@ -256,16 +310,6 @@ export const getCreditCard = async (cardId) => {
   }
 };
 
-export const getUserCreditCards = async (userId) => {
-  try {
-    const response = await api.get(`/users/${userId}/credit_cards`);
-    return response.data;
-  } catch (error) {
-    const errorMessage = error.response?.data?.error || error.message;
-    throw new Error(`Failed to fetch user credit cards: ${errorMessage}`);
-  }
-};
-
 export const updateCreditCard = async (cardId, updateData) => {
   try {
     const forbiddenFields = ['used', 'available_limit', 'billed_unpaid', 'unbilled_spends'];
@@ -293,9 +337,11 @@ export const deleteCreditCard = async (cardId) => {
   }
 };
 
-export const getCreditCardTransactions = async (cardId) => {
+export const getCreditCardTransactions = async (cardId, params = {}) => {
   try {
-    const response = await api.get(`/credit_cards/${cardId}/transactions`);
+    const response = await api.get(`/credit_cards/${cardId}/transactions`, {
+      params,
+    });
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -394,9 +440,11 @@ export const deleteSaving = async (savingId) => {
   }
 };
 
-export const getSavingTransactions = async (savingId) => {
+export const getSavingTransactions = async (savingId, params = {}) => {
   try {
-    const response = await api.get(`/savings/${savingId}/transactions`);
+    const response = await api.get(`/savings/${savingId}/transactions`, {
+      params,
+    });
     return response.data;
   } catch (error) {
     const errorMessage = error.response?.data?.error || error.message;
@@ -419,11 +467,6 @@ export const addSavingTransaction = async (savingId, transactionData) => {
     const errorMessage = error.response?.data?.error || error.message;
     throw new Error(`Failed to add saving transaction: ${errorMessage}`);
   }
-};
-
-// Transfer API calls
-export const createTransfer = async (transferData) => {
-  return api.post('/transfers', transferData);
 };
 
 export const getBanksByUser = async () => {
@@ -484,3 +527,52 @@ export const getDashboardAssetAllocation = async () => {
     );
   }
 };
+
+
+/*
+Garbage api helpers
+
+export const getCurrentUser = async () => {
+  const res = await api.get('/me');
+  return res.data;
+};
+
+export const getBanksForUser = async () => {
+  try {
+    const response = await api.get('/banks/dropdown');
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error fetching user banks:', error);
+    throw error;
+  }
+};
+
+// Add this new function specifically for Bank page
+export const getUsersForBank = async () => {
+  try {
+    const response = await api.get('/users');
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    throw error;
+  }
+};
+
+export const getUserCreditCards = async (userId) => {
+  try {
+    const response = await api.get(`/users/${userId}/credit_cards`);
+    return response.data;
+  } catch (error) {
+    const errorMessage = error.response?.data?.error || error.message;
+    throw new Error(`Failed to fetch user credit cards: ${errorMessage}`);
+  }
+};
+
+// Transfer API calls
+export const createTransfer = async (transferData) => {
+  return api.post('/transfers', transferData);
+};
+
+
+
+*/

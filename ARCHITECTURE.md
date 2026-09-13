@@ -120,7 +120,7 @@ Users
 
 ---
 
-# Future CI/CD Pipeline
+# Current CI Pipeline
 
 ```
 Developer
@@ -134,9 +134,28 @@ GitHub Repository
       ▼
 GitHub Actions
       │
-      ▼
-Docker Build
+      ├── Backend validation
+      └── Frontend dependency install + build
+```
+
+## Future CI/CD Pipeline
+
+```
+Developer
       │
       ▼
-Deploy to Cloud
+Git Commit
+      │
+      ▼
+GitHub Repository
+      │
+      ▼
+GitHub Actions
+      │
+      ├── Backend tests
+      ├── Frontend tests
+      └── Docker Build
+               │
+               ▼
+          Deploy to Cloud
 ```

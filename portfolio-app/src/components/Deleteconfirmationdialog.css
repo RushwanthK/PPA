@@ -1,0 +1,366 @@
+/* ==========================================================================
+   Backdrop + modal shell
+   Uses the application's global design tokens so this dialog stays visually
+   consistent with the rest of the application.
+   ========================================================================== */
+.dcd-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-color);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: max(20px, env(safe-area-inset-top, 0px))
+           max(20px, env(safe-area-inset-right, 0px))
+           max(20px, env(safe-area-inset-bottom, 0px))
+           max(20px, env(safe-area-inset-left, 0px));
+  z-index: 1100;
+  animation: dcdFadeInBackdrop 0.2s ease;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+}
+
+@keyframes dcdFadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dcd-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--surface-elevated) 0%, var(--surface-color) 100%);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xl);
+  padding: clamp(20px, 4vw, 28px);
+  box-shadow: var(--shadow-lg);
+  animation: dcdPopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-sizing: border-box;
+}
+
+@keyframes dcdPopIn {
+  from { transform: scale(0.94) translateY(8px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.dcd-modal h3 {
+  margin-top: 0;
+  color: var(--error-color);
+}
+
+/* ==========================================================================
+   Warning / description text
+   ========================================================================== */
+.dcd-warning {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.dcd-warning strong {
+  color: var(--text-color);
+}
+
+.dcd-warning p {
+  margin: 8px 0;
+}
+
+/* ==========================================================================
+   Optional backup / export section
+   ========================================================================== */
+.dcd-backup-options {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.dcd-backup-options h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dcd-category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.dcd-category-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dcd-category-shortcuts {
+  display: flex;
+  gap: 6px;
+}
+
+.dcd-category-shortcut-btn {
+  background: transparent;
+  border: none;
+  color: var(--action-color);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color var(--transition-emphasis);
+}
+
+.dcd-category-shortcut-btn:hover:not(:disabled) {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+.dcd-category-shortcut-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.dcd-category-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.dcd-category-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--surface-color);
+  font-size: 13px;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: border-color var(--transition-emphasis), background-color var(--transition-emphasis);
+}
+
+.dcd-category-option:hover {
+  border-color: var(--action-color);
+}
+
+.dcd-category-option input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--action-color);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.dcd-category-warning {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--error-color);
+}
+
+.dcd-backup-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dcd-backup-btn {
+  flex: 1 1 140px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition-emphasis), color var(--transition-emphasis), transform var(--transition-emphasis);
+}
+
+@media (hover: hover) {
+  .dcd-backup-btn:hover:not(:disabled) {
+    border-color: var(--action-color);
+    color: var(--action-color);
+    transform: translateY(-1px);
+  }
+}
+
+.dcd-backup-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dcd-backup-confirmed {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--success-color);
+}
+
+/* ==========================================================================
+   Confirm / cancel actions
+   ========================================================================== */
+.dcd-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+
+.dcd-confirm-btn {
+  flex: 1 1 auto;
+
+  background-color: var(--error-color);
+  color: #ffffff;
+
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+
+  padding: 11px 18px;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background-color var(--transition-emphasis),
+    transform var(--transition-emphasis),
+    opacity var(--transition-emphasis);
+}
+
+@media (hover: hover) {
+  .dcd-confirm-btn:hover:not(:disabled) {
+    background-color: var(--danger-hover);
+    transform: translateY(-1px);
+  }
+}
+
+.dcd-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.dcd-cancel-btn {
+  flex: 1 1 auto;
+
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+
+  border-radius: var(--radius-sm);
+
+  padding: 11px 18px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background-color var(--transition-emphasis),
+    border-color var(--transition-emphasis),
+    color var(--transition-emphasis);
+}
+
+.dcd-cancel-btn:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.dcd-cancel-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+@media (max-width: 768px) {
+  .dcd-modal-actions {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 420px) {
+  .dcd-backup-buttons {
+    flex-direction: column;
+  }
+
+  .dcd-category-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------
+   Delete dialog error
+   Displayed at the very top of the dialog.
+--------------------------------------------------------- */
+
+.dcd-dialog-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  width: 100%;
+  box-sizing: border-box;
+
+  margin: 0 0 16px 0;
+  padding: 12px 14px;
+
+  border: 1px solid var(--error-color);
+  border-radius: var(--radius-sm);
+
+  background-color: var(--danger-soft);
+  color: var(--error-color);
+
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.dcd-dialog-error-message {
+  flex: 1;
+}
+
+.dcd-dialog-error-dismiss {
+  flex-shrink: 0;
+
+  margin: 0;
+  padding: 0;
+
+  border: none;
+  background: transparent;
+
+  color: var(--error-color);
+
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.dcd-dialog-error-dismiss:hover {
+  opacity: 0.75;
+}
+
+@media (max-width: 768px) {
+  .dcd-backup-btn,
+  .dcd-confirm-btn,
+  .dcd-cancel-btn {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}

@@ -13,7 +13,7 @@ The application allows tracking of:
 * Bank Accounts
 * Financial Dashboard & Analytics
 
-Although initially developed as a personal finance application, the project is primarily intended to demonstrate Full Stack Engineering skills including backend development, frontend development, database design, REST API development, authentication, deployment, and DevOps practices.
+Although initially developed as a personal finance application, the project is primarily intended to demonstrate Full Stack Engineering skills including backend development, frontend development, database design, REST API development, authentication, deployment, testing, and DevOps practices.
 
 ---
 
@@ -23,6 +23,7 @@ Although initially developed as a personal finance application, the project is p
 * Learn industry-standard software architecture
 * Gain practical experience with backend and frontend integration
 * Learn Docker, CI/CD and cloud deployment
+* Learn automated testing and regression testing
 * Prepare for Full Stack Software Engineer interviews
 
 ---
@@ -56,11 +57,41 @@ Although initially developed as a personal finance application, the project is p
 * Git
 * GitHub
 
+## CI
+
+* GitHub Actions
+
 ## Deployment
 
 * Frontend: Vercel
 * Backend: Render
 * Database: Supabase PostgreSQL
+
+---
+
+# Current Testing Status
+
+The backend is actively being tested as part of Phase 3.
+
+Current full backend regression result:
+
+```text
+389 passed
+5 warnings
+0 failed
+```
+
+Completed backend testing areas include:
+
+* Authentication / Users
+* Banks
+* Savings
+* Assets
+* Transaction exports / backup
+* Credit Cards
+* Dashboard
+
+The remaining backend work is a transaction-specific coverage audit. Frontend automated testing will be handled separately afterward.
 
 ---
 
@@ -71,6 +102,8 @@ Although initially developed as a personal finance application, the project is p
 * Financial overview
 * Summary cards
 * Net worth calculations
+* Spending analysis
+* Asset allocation
 
 ## Credit Cards
 
@@ -78,6 +111,8 @@ Although initially developed as a personal finance application, the project is p
 * Credit limits
 * Available balance
 * Used amount
+* Transactions
+* Billing behavior
 
 ## Assets
 
@@ -108,18 +143,18 @@ Although initially developed as a personal finance application, the project is p
 
 # Project Structure
 
-```
+```text
 PPA
 │
 ├── app/                 # Flask backend
 ├── portfolio-app/       # React frontend
 ├── migrations/          # Alembic migrations
+├── tests/               # Backend automated tests
 ├── requirements.txt
 ├── run.py
 ├── config.py
 ├── README.md
 ├── ARCHITECTURE.md
-├── PROJECT_STATUS.md
 └── .env
 ```
 
@@ -129,28 +164,43 @@ PPA
 
 Backend
 
-```
+```bash
 python run.py
 ```
 
 Frontend
 
-```
+```bash
 npm start
+```
+
+Backend tests
+
+```bash
+pytest -v
 ```
 
 ---
 
-# Future Roadmap
+# Roadmap
 
-* Docker
-* Docker Compose
-* GitHub Actions
-* Automated Testing
-* Redis Caching
-* Cloud Infrastructure
-* Monitoring & Logging
-* System Design Improvements
+* [x] Docker Fundamentals
+* [x] Dockerized Backend
+* [x] Dockerized Frontend
+* [x] PostgreSQL Docker Container
+* [x] Docker Compose
+* [x] Git / GitHub Workflow
+* [x] GitHub Actions CI Foundation
+* [ ] Complete remaining backend testing audit
+* [ ] Frontend automated testing
+* [ ] Backend + frontend tests enforced in CI
+* [ ] Docker build in CI
+* [ ] Automated Render deployment
+* [ ] Production security/configuration
+* [ ] Health checks / reliability
+* [ ] Logging / monitoring
+* [ ] System design / scalability
+* [ ] Advanced engineering topics
 
 ---
 
@@ -158,10 +208,37 @@ npm start
 
 This repository serves both as a working application and as a structured learning project for mastering modern Full Stack Development and DevOps practices.
 
-The configuration model I want us to reach
+The intended progression is:
 
-Think of the PPA like this:
+```text
+Develop
+  ↓
+Git / GitHub
+  ↓
+CI
+  ↓
+Automated testing
+  ↓
+Docker in CI
+  ↓
+CD / deployment
+  ↓
+Production security
+  ↓
+Reliability
+  ↓
+Monitoring
+  ↓
+System design / scaling
+```
 
+The project should remain focused. Additional technologies should only be introduced when they solve a real engineering problem.
+
+---
+
+# Configuration Model
+
+```text
                     PPA
                      │
           ┌──────────┼──────────┐
@@ -175,3 +252,4 @@ Think of the PPA like this:
           │          │          │
           ▼          ▼          ▼
     Local PG    Docker PG    Supabase PG
+```

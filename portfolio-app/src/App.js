@@ -1,167 +1,320 @@
-import { Routes, Route, Link, Navigate } from 'react-router-dom';
-import React, { useState, useEffect } from 'react';
-import Dashboard from './pages/Dashboard';
-import Assets from './pages/Assets';
-import Savings from './pages/savings';
-import CreditCard from './pages/creditcard';
-import Users from './pages/users';
-import Bank from './pages/bank';
-import LoginPage from './pages/LoginPage';
-import AuthContext from './AuthContext';
+import React, {
+  useState,
+  useEffect,
+  lazy,
+  Suspense,
+} from 'react';
+
+import {
+  Routes,
+  Route,
+  NavLink,
+  Navigate,
+  useLocation,
+} from 'react-router-dom';
+
+import { AuthProvider, useAuth } from './AuthContext';
 import './App.css';
+import ProfileDialog from './components/dialogs/ProfileDialog';
+import { useBackendStatus } from './services/backendStatus';
 
-function App() {
-  const [user, setUser] = useState(null);
+// Route-level code splitting:
+// pages are loaded only when the user navigates to them.
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Assets = lazy(() => import('./pages/Assets'));
+const Savings = lazy(() => import('./pages/savings'));
+const CreditCard = lazy(() => import('./pages/creditcard'));
+const Bank = lazy(() => import('./pages/bank'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (!storedToken) return;
+const NAV_LINKS = [
+  { to: '/dashboard', label: 'Overview' },
+  { to: '/assets', label: 'Assets' },
+  { to: '/savings', label: 'Savings' },
+  { to: '/creditcard', label: 'Credit Cards' },
+  { to: '/bank', label: 'Banks' },
+];
 
-    fetch(`${process.env.REACT_APP_API_URL}/me`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${storedToken}`
-      }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Invalid token');
-        return res.json();
-      })
-      .then(data => {
-        setUser(data); // ✅ Restore user on refresh
-      })
-      .catch(err => {
-        console.error('Session expired:', err);
-        localStorage.removeItem('token');
-        setUser(null);
-      });
-  }, []);
+function PrivateRoute({ user, element }) {
+  return user ? element : <Navigate to="/" replace />;
+}
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
-  };
+function PublicRoute({ user, element }) {
+  return user ? <Navigate to="/dashboard" replace /> : element;
+}
 
-  const PrivateRoute = ({ element }) => {
-    return user ? element : <Navigate to="/" />;
-  };
-
-  if (localStorage.getItem('token') && user === null) {
-    return <div className="loading">Restoring session...</div>;
-  }
-
+function PageFallback() {
   return (
-    <AuthContext.Provider value={{ user, setUser }}>
-      <div>
-        <header className="app-header">
-          <div className="logo">My Portfolio</div>
-          {user && (
-            <nav className="nav-tabs">
-              <Link to="/dashboard" className="nav-link">Dashboard</Link>
-              <Link to="/assets" className="nav-link">Assets</Link>
-              <Link to="/savings" className="nav-link">Savings</Link>
-              <Link to="/creditcard" className="nav-link">Credit Cards</Link>
-              <Link to="/bank" className="nav-link">Banks</Link>
-              <Link to="/users" className="nav-link">Profile</Link>
-              <button onClick={logout} className="button logout-button">Logout</button>
-            </nav>
-          )}
-        </header>
-
-        <Routes>
-          <Route path="/" element={<LoginPage setUser={setUser} />} />
-          <Route path="/dashboard" element={<PrivateRoute element={<Dashboard />} />} />
-          <Route path="/assets" element={<PrivateRoute element={<Assets />} />} />
-          <Route path="/savings" element={<PrivateRoute element={<Savings />} />} />
-          <Route path="/creditcard" element={<PrivateRoute element={<CreditCard />} />} />
-          <Route path="/bank" element={<PrivateRoute element={<Bank />} />} />
-          <Route path="/users" element={<PrivateRoute element={<Users />} />} />
-        </Routes>
-      </div>
-    </AuthContext.Provider>
+    <div className="page-loading" role="status" aria-live="polite">
+      <div className="spinner" />
+    </div>
   );
 }
 
-export default App;
-
-
-//Version 2
-/*import { Routes, Route, Link } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import Assets from './pages/Assets';
-import Savings from './pages/savings';
-import CreditCard from './pages/creditcard';
-import Users from './pages/users';
-import Bank from './pages/bank';
-import './App.css';
-
 function App() {
   return (
-    <div>
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const {
+    user,
+    setUser,
+    checkingSession,
+  } = useAuth();
+
+  const backendStatus = useBackendStatus();
+  const location = useLocation();
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  // Close the navigation menu when the Escape key is pressed.
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const handleKey = event => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKey);
+
+    return () => {
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [menuOpen]);
+
+  // On mobile, close the overlay after navigation.
+  // On desktop, keep the sidebar open until the user explicitly closes it.
+  useEffect(() => {
+    const isMobile = window.matchMedia('(max-width: 860px)').matches;
+
+    if (isMobile) {
+      setMenuOpen(false);
+    }
+  }, [location.pathname]);
+
+  if (checkingSession && user === null) {
+    const bootMessage = backendStatus.phase === 'waking'
+      ? 'The server is starting up. This may take a little while.'
+      : backendStatus.phase === 'connecting'
+        ? 'Connecting to server…'
+        : 'Restoring session…';
+
+    return (
+      <div className="app-boot-loading">
+        <div className="spinner" />
+        <p>{bootMessage}</p>
+      </div>
+    );
+  }
+
+  const backendStatusMessage = backendStatus.phase === 'waking'
+    ? 'The server is starting up. This may take a little while.'
+    : 'Connecting to server…';
+
+  return (
+    <div className={`app-shell ${menuOpen ? 'menu-is-open' : ''}`}>
       <header className="app-header">
-        <div className="logo">My Portfolio</div>
-        <nav className="nav-tabs">
-          <Link to="/dashboard" className="nav-link">Dashboard</Link>
-          <Link to="/assets" className="nav-link">Assets</Link>
-          <Link to="/savings" className="nav-link">Savings</Link>
-          <Link to="/creditcard" className="nav-link">Credit Cards</Link>
-          <Link to="/bank" className="nav-link">Banks</Link>
-          <Link to="/users" className="nav-link">Users</Link>
-        </nav>
+        <div className="header-left">
+          {user && (
+            <button
+              type="button"
+              className={`nav-toggle ${menuOpen ? 'open' : ''}`}
+              aria-label={
+                menuOpen ? 'Close navigation menu' : 'Open navigation menu'
+              }
+              aria-expanded={menuOpen}
+              aria-controls="app-sidebar"
+              onClick={() => setMenuOpen(open => !open)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+          )}
+
+          {user ? (
+            <NavLink
+              to="/dashboard"
+              className="logo-link"
+              onClick={() => {
+                const isMobile = window.matchMedia('(max-width: 860px)').matches;
+
+                if (isMobile) {
+                  setMenuOpen(false);
+                }
+              }}
+              aria-label="Go to financial overview"
+            >
+              My Finances
+            </NavLink>
+          ) : (
+            <span className="logo-link">My Finances</span>
+          )}
+        </div>
+
+        {user && (
+          <button
+            type="button"
+            className="profile-trigger"
+            aria-label="Open profile"
+            aria-expanded={profileOpen}
+            aria-haspopup="dialog"
+            title="Profile"
+            onClick={() => {
+              setMenuOpen(false);
+              setProfileOpen(true);
+            }}
+          >
+            <span className="profile-trigger-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4.5 20c.8-3.4 3.3-5 7.5-5s6.7 1.6 7.5 5" />
+              </svg>
+            </span>
+          </button>
+        )}
       </header>
 
-      <Routes>
-        <Route path="/" element={<div>Welcome to my portfolio! Click the button above to go to your Dashboard.</div>} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/assets" element={<Assets />} />
-        <Route path="/savings" element={<Savings />} />
-        <Route path="/creditcard" element={<CreditCard />} />
-        <Route path="/bank" element={<Bank />} />
-        <Route path="/users" element={<Users />} />
-      </Routes>
+      {backendStatus.phase !== 'idle' && (
+        <div className="backend-status" role="status" aria-live="polite">
+          <div className="backend-status-spinner" aria-hidden="true" />
+          <span>{backendStatusMessage}</span>
+        </div>
+      )}
+
+      <div
+        className={`app-body ${menuOpen ? 'menu-is-open' : ''} ${
+          location.pathname === '/' ? 'auth-body' : ''
+        }`}
+      >
+        {user && (
+          <>
+            <aside
+              id="app-sidebar"
+              className={`app-sidebar ${menuOpen ? 'open' : ''}`}
+              aria-hidden={!menuOpen}
+            >
+
+              <nav className="sidebar-nav" aria-label="Main navigation">
+                {NAV_LINKS.map(link => (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    className={({ isActive }) =>
+                      `sidebar-link ${isActive ? 'active' : ''}`
+                    }
+                    onClick={() => {
+                      const isMobile = window.matchMedia('(max-width: 860px)').matches;
+
+                      if (isMobile) {
+                        setMenuOpen(false);
+                      }
+                    }}
+                    tabIndex={menuOpen ? 0 : -1}
+                  >
+                    {link.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </aside>
+
+            <button
+              type="button"
+              className="sidebar-backdrop"
+              aria-label="Close navigation menu"
+              tabIndex={menuOpen ? 0 : -1}
+              onClick={() => setMenuOpen(false)}
+            />
+          </>
+        )}
+
+        <main className="app-main">
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <PublicRoute
+                    user={user}
+                    element={<LoginPage setUser={setUser} />}
+                  />
+                }
+              />
+
+              <Route
+                path="/dashboard"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Dashboard />}
+                  />
+                }
+              />
+
+              <Route
+                path="/assets"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Assets />}
+                  />
+                }
+              />
+
+              <Route
+                path="/savings"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Savings />}
+                  />
+                }
+              />
+
+              <Route
+                path="/creditcard"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<CreditCard />}
+                  />
+                }
+              />
+
+              <Route
+                path="/bank"
+                element={
+                  <PrivateRoute
+                    user={user}
+                    element={<Bank />}
+                  />
+                }
+              />
+
+              <Route
+                path="/users"
+                element={<Navigate to="/dashboard" replace />}
+              />
+            </Routes>
+          </Suspense>
+        </main>
+      </div>
+
+      <ProfileDialog
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+      />
     </div>
   );
 }
 
 export default App;
-*/
-
-//version 1
-/*import './App.css';
-import { BrowserRouter as Router, Routes, Route, Link, BrowserRouter } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import Assets from './pages/Assets';
-
-function App() {
-  return (
-   
-    <BrowserRouter>
-      <div className="App">
-        <header className="App-header">
-          <p>Welcome to My Portfolio.</p>
-          
-          <Link to="/dashboard" className="dashboard-button" style={{ color: 'white', textDecoration: 'none' }}>
-            <button style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}>
-              Click here to go to Dashboard
-            </button>
-          </Link>
-          <Link to="/assets" >
-              Click here to go to Assets
-          </Link>
-        </header>
-
-        
-        <Routes>
-          
-          <Route path="/" element={<div>Welcome to my portfolio! Click the button above to go to your Dashboard.</div>} />
-          
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/assets" element={<Assets />} />
-        </Routes>
-      </div>
-    </BrowserRouter>
-    
-  );
-}
-
-export default App;*/

@@ -1,334 +1,228 @@
-/* bank.css - Aligned with savings.css */
+/* ==========================================================================
+   Bank Page
+   Bank-specific layout and visual hooks only.
+   Shared buttons, inputs, tables, forms and modals live with their
+   reusable components.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Page shell
+   -------------------------------------------------------------------------- */
 
 .bank-container {
-  background-color: #121212;
-  color: #ffffff;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  padding: 20px;
-  padding-top: 80px;
+  width: 100%;
   max-width: 1200px;
+
+  min-height: 100vh;
+  min-height: 100dvh;
+
   margin: 0 auto;
+  padding: 20px;
+
+  color: var(--text-color);
 }
 
 .bank-container h1 {
-  font-size: 1.8rem;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: #ffffff;
+  margin: 0 0 20px;
+
+  color: var(--text-color);
+
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-/* Buttons */
-.add-button,
-.edit-button,
-.transaction-button,
-.view-button,
-.delete-button,
-.save-button,
-.cancel-button {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-  margin: 2px;
-  color: white;
+/* --------------------------------------------------------------------------
+   Bank-specific text
+   -------------------------------------------------------------------------- */
+
+.bank-container .accent-text {
+  color: var(--action-color);
 }
 
-.save-button,
-.add-button,
-.edit-button {
-  background-color: #4caf50;
-}
-
-.transaction-button,
-.view-button {
-  background-color: #2196f3;
-}
-
-.cancel-button,
-.delete-button {
-  background-color: #dc3545;
-}
-
-button:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Table */
-.table-container {
-  overflow-x: auto;
-  overflow-y: auto;
-  background-color: #1e1e1e;
-  border-radius: 8px;
-  margin-top: 20px;
-}
-
-.banks-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-.banks-table th,
-.banks-table td {
-  padding: 12px 15px;
-  text-align: left;
-  border-bottom: 1px solid #444;
-}
-
-.banks-table th {
-  background-color: #2d2d2d;
-  color: white;
+.bank-container .income {
+  color: var(--success-color);
   font-weight: 600;
 }
 
-.banks-table td {
-  background-color: #1e1e1e;
+.bank-container .expense {
+  color: var(--error-color);
+  font-weight: 600;
 }
 
-.banks-table tr:hover td {
-  background-color: #2d2d2d;
-}
+/* --------------------------------------------------------------------------
+   Bank toolbar
+   -------------------------------------------------------------------------- */
 
-.no-data {
-  text-align: center;
-  padding: 20px;
-  color: #aaa;
-}
-
-.income {
-  color: #4caf50;
-  font-weight: 500;
-}
-
-.expense {
-  color: #dc3545;
-  font-weight: 500;
-}
-
-/* Modal */
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: #1e1e1e;
-  padding: 25px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.modal-content h2 {
-  font-size: 1.3rem;
-  color: #ffffff;
-  margin-top: 0;
-}
-
-.transaction-modal {
-  display: flex;
-  flex-direction: column;
-
-  max-height: 85vh;
-
-  width: fit-content;
-  max-width: 95vw;
-
-  overflow: hidden;
-}
-
-.close-button {
-  background: none;
-  border: none;
-  color: #aaa;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 5px;
-}
-
-.close-button:hover {
-  color: #fff;
-}
-
-/* Forms */
-.form-group {
-  margin-bottom: 15px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: 500;
-  color: #ddd;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  border: 1px solid #444;
-  background-color: #2d2d2d;
-  color: #ffffff;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: #4caf50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-/* Error Styling */
-.bank-error-with-close {
-  background-color: rgba(220, 53, 69, 0.15);
-  border: 1px solid #ff4c4c;
-  color: #ff4c4c;
-  padding: 14px 44px 14px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  margin: 20px 0;
-  position: relative;
-  text-align: left;
-}
-
-.bank-error-with-close button.error-dismiss {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: #ff4c4c;
-  font-size: 20px;
-  font-weight: bold;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-}
-
-.bank-error-with-close button.error-dismiss:hover {
-  color: #e74c3c;
-}
-
-/* Actions cell */
-.actions-cell {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-/* Loading state */
-.loading {
-  padding: 20px;
-  text-align: center;
-  color: #aaa;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .banks-table th,
-  .banks-table td {
-    padding: 8px 10px;
-    font-size: 0.8rem;
-  }
-
-  .modal-content {
-    width: 95%;
-    padding: 15px;
-  }
-
-  .actions-cell {
-    flex-direction: column;
-  }
-
-  .add-button,
-  .edit-button,
-  .transaction-button,
-  .view-button,
-  .delete-button,
-  .save-button,
-  .cancel-button {
-    width: 100%;
-    margin-top: 5px;
-  }
-}
-
-/* sortable header */
-.banks-table th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-
-/* totals row */
-.banks-table tfoot .totals-row td {
-  background-color: rgba(255,255,255,0.03);
-  border-top: 2px solid #444;
-  padding-top: 12px;
-  font-size: 0.95rem;
-}
-
-/* Transaction Modal */
-.transaction-modal .table-container {
-  flex: 1;
-  overflow: auto;
-}
-
-.transaction-modal .banks-table {
-  width: max-content;
-}
-
-.transaction-modal .banks-table th,
-.transaction-modal .banks-table td {
-  white-space: nowrap;
-}
-
-.transaction-modal-actions {
-  display: flex;
-  align-items: center;
-  gap: 40px;
-  margin-left: auto;
-}
-
-.transaction-form-modal {
-  z-index: 1100;
-}
-
-.transaction-modal-header {
+.bank-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 15px;
+
+  flex-wrap: wrap;
 }
 
-.transaction-modal-title {
+.bank-toolbar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  margin-left: auto;
+
+  width: min(420px, 100%);
+}
+
+/* --------------------------------------------------------------------------
+   Bank table section
+   -------------------------------------------------------------------------- */
+
+.bank-table-section {
+  margin-top: 20px;
+}
+
+.bank-table-section .totals-row td {
+  padding-top: 12px;
+
+  background-color: var(--surface-elevated);
+
+  border-top: 2px solid var(--border-color);
+
+  color: var(--text-color);
+
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   Page messages
+   -------------------------------------------------------------------------- */
+
+.bank-error-with-close {
+  position: relative;
+
+  margin: 20px 0;
+  padding: 14px 44px 14px 16px;
+
+  background: var(--danger-soft);
+
+  border: 1px solid rgba(255, 92, 92, 0.4);
+  border-radius: var(--radius-sm);
+
+  color: var(--error-color);
+
+  font-size: 14px;
+  text-align: left;
+}
+
+.bank-error-with-close .error-dismiss {
+  position: absolute;
+
+  top: 50%;
+  right: 12px;
+
+  width: auto;
+
   margin: 0;
+  padding: 0;
+
+  transform: translateY(-50%);
+
+  background: transparent;
+  color: var(--error-color);
+
+  border: none;
+
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.bank-error-with-close .error-dismiss:hover {
+  color: #ffb1b8;
+}
+
+.success-message {
+  position: relative;
+
+  margin: 20px 0;
+  padding: 14px 44px 14px 16px;
+
+  background: var(--success-soft);
+
+  border: 1px solid rgba(67, 192, 127, 0.4);
+  border-radius: var(--radius-sm);
+
+  color: var(--success-color);
+
+  font-size: 14px;
+  text-align: left;
+}
+
+.success-message strong {
+  color: var(--success-color);
+}
+
+.success-message .close-success {
+  position: absolute;
+
+  top: 50%;
+  right: 12px;
+
+  width: auto;
+
+  margin: 0;
+  padding: 0;
+
+  transform: translateY(-50%);
+
+  background: transparent;
+  color: var(--success-color);
+
+  border: none;
+
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.success-message .close-success:hover {
+  color: #a9f2c1;
+}
+
+/* --------------------------------------------------------------------------
+   General Bank loading state
+   -------------------------------------------------------------------------- */
+
+.bank-container + .loading,
+.loading {
+  padding: 20px;
+
+  color: var(--text-muted);
+
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .bank-container {
+    padding: 16px;
+  }
+
+  .bank-toolbar-search {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .bank-container {
+    padding: 12px;
+  }
 }
