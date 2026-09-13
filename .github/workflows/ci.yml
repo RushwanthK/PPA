@@ -12,6 +12,28 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ppa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d ppa_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      FLASK_ENV: testing
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ppa_test
+      JWT_SECRET_KEY: ci-test-secret
+      SECRET_KEY: ci-test-secret
+      CORS_ORIGINS: http://localhost:3000
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,6 +48,9 @@ jobs:
 
       - name: Validate backend
         run: python -m compileall -q app run.py config.py init_db.py
+
+      - name: Run backend tests
+        run: pytest -q
 
       - name: Set up Node
         uses: actions/setup-node@v4
