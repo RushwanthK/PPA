@@ -178,9 +178,6 @@
   width: 100%;
   margin-top: auto;
   padding-top: 24px;
-}
-
-.profile-drawer .modal-footer {
   justify-content: space-between;
   gap: 12px;
 }

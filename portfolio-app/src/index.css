@@ -21,14 +21,16 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
+  --radius-xl: 18px;
 
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.4);
 
   --transition-fast: 0.15s ease;
   --transition-base: 0.25s ease;
+  --transition-emphasis: 180ms cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* Shared semantic tokens for reusable components */
+  /* Shared semantic tokens for reusable components */
   --surface-elevated: #1e2026;
   --border-soft: #262a33;
   --primary-hover: #2f86df;
@@ -39,6 +41,7 @@
   --danger-soft: rgba(255, 92, 92, 0.12);
   --text-dim: #6f7682;
   --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --overlay-color: rgba(6, 7, 8, 0.72);
 
   color-scheme: dark;
 }

@@ -537,8 +537,14 @@ export default function CreditCard() {
     setDeleteDialogError(null);
     setDeletingCardId(cardId);
     setCardBackupDownloaded(false);
+
+    // The delete confirmation replaces the card-details dialog.
+    setShowCardDetails(false);
     setShowDeleteModal(true);
-  }, [isDeletingCard, isDownloadingCardBackup]);
+  }, [
+    isDeletingCard,
+    isDownloadingCardBackup,
+  ]);
 
   const closeDeleteModal = useCallback(() => {
     if (isDeletingCard || isDownloadingCardBackup) return;
