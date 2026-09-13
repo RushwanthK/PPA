@@ -33,6 +33,9 @@ export default function Savings() {
   const [banks, setBanks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [formError, setFormError] = useState(null);
+  const [transactionFormError, setTransactionFormError] = useState(null);
+  const [transactionTableError, setTransactionTableError] = useState(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -125,7 +128,7 @@ export default function Savings() {
     const fetchTransactions = async () => {
       try {
         setTransactionsLoading(true);
-        setError(null);
+        setTransactionTableError(null);
 
         const response = await getSavingTransactions(
           selectedSavingId,
@@ -154,7 +157,9 @@ export default function Savings() {
         if (cancelled) return;
 
         console.error('Error fetching saving transactions:', err);
-        setError(err.message || 'Failed to fetch saving transactions');
+        setTransactionTableError(
+          err.message || 'Failed to fetch saving transactions'
+        );
         setTransactions([]);
         setTransactionTotal(0);
         setTransactionTotalPages(0);
@@ -195,6 +200,7 @@ export default function Savings() {
       name: '',
       bankId: '',
     });
+    setFormError(null);
     setShowForm(false);
   };
 
@@ -212,7 +218,7 @@ export default function Savings() {
     event.preventDefault();
 
     try {
-      setError(null);
+      setFormError(null);
       setLoading(true);
 
       const name = formData.name.trim();
@@ -296,14 +302,14 @@ export default function Savings() {
       resetForm();
     } catch (err) {
       console.error('Error saving savings account:', err);
-      setError(err.message || 'Failed to save savings account');
+      setFormError(err.message || 'Failed to save savings account');
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddTransaction = async saving => {
-    setError(null);
+    setTransactionFormError(null);
     setTransactionData(prev => ({
       ...prev,
       savingId: String(saving.id),
@@ -335,7 +341,7 @@ export default function Savings() {
     event.preventDefault();
 
     try {
-      setError(null);
+      setTransactionFormError(null);
       setLoading(true);
 
       if (!transactionData.savingId) {
@@ -395,14 +401,16 @@ export default function Savings() {
       setShowTransactionForm(false);
     } catch (err) {
       console.error('Error adding saving transaction:', err);
-      setError(err.message || 'Failed to add saving transaction');
+      setTransactionFormError(
+        err.message || 'Failed to add saving transaction'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleViewTransactions = savingId => {
-    setError(null);
+    setTransactionTableError(null);
     setSelectedSavingId(savingId);
     setTransactionPage(1);
     setTransactionPageSize(25);
@@ -717,7 +725,10 @@ export default function Savings() {
         <Button
           type="button"
           variant="primary"
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            setFormError(null);
+            setShowForm(true);
+          }}
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Savings'}
@@ -742,6 +753,8 @@ export default function Savings() {
         onSubmit={handleSubmit}
         submitting={loading}
         submitLabel={formData.id ? 'Update' : 'Save'}
+        error={formError}
+        onDismissError={() => setFormError(null)}
       >
         {formData.id && (() => {
           const originalSaving = savings.find(
@@ -818,11 +831,14 @@ export default function Savings() {
         onClose={() => {
           if (loading) return;
           setShowTransactionForm(false);
+          setTransactionFormError(null);
           setBankBalanceInfo(null);
         }}
         onSubmit={handleTransactionSubmit}
         submitting={loading}
         submitLabel="Submit"
+        error={transactionFormError}
+        onDismissError={() => setTransactionFormError(null)}
       >
         {bankBalanceInfo && (
           <div className="bank-balance-display">
@@ -925,7 +941,10 @@ export default function Savings() {
         }
         transactions={transactions}
         loading={transactionsLoading}
-        onClose={() => setShowTransactions(false)}
+        onClose={() => {
+          setShowTransactions(false);
+          setTransactionTableError(null);
+        }}
         searchText={transactionSearchInput}
         onSearchChange={handleTransactionSearchChange}
         transactionType={transactionType}
@@ -946,6 +965,8 @@ export default function Savings() {
           }
         }}
         addTransactionDisabled={loading || !selectedSaving}
+        error={transactionTableError}
+        onDismissError={() => setTransactionTableError(null)}
         columns={[
           {
             key: 'date',

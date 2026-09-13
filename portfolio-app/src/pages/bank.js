@@ -556,12 +556,13 @@ export default function Bank() {
   };
 
   const handleAddTransaction = (bankId) => {
+    setTransactionFormError(null);
     setTransactionData(prev => ({ ...prev, bankId: bankId.toString() }));
     setShowTransactionForm(true);
   };
 
   const handleViewTransactions = (bankId) => {
-    setError(null);
+    setTransactionTableError(null);
     setSelectedBankId(bankId);
     setTransactionPage(1);
     setTransactionPageSize(25);
@@ -598,6 +599,7 @@ export default function Bank() {
 
   const resetForm = () => {
     setFormData({ id: '', name: '' });
+    setFormError(null);
     setShowForm(false);
   };
 
@@ -674,7 +676,10 @@ export default function Bank() {
         <Button
           type="button"
           variant="primary"
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            setFormError(null);
+            setShowForm(true);
+          }}
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Bank'}
@@ -738,7 +743,10 @@ export default function Bank() {
             </span>
           </>
         }
-        onClose={() => setShowTransactionForm(false)}
+        onClose={() => {
+          setShowTransactionForm(false);
+          setTransactionFormError(null);
+        }}
         onSubmit={handleTransactionSubmit}
         submitting={loading}
         submitLabel="Submit"
@@ -830,7 +838,10 @@ export default function Bank() {
         }
         transactions={transactions}
         loading={transactionsLoading}
-        onClose={() => setShowTransactions(false)}
+        onClose={() => {
+          setShowTransactions(false);
+          setTransactionTableError(null);
+        }}
         searchText={transactionSearchInput}
         onSearchChange={handleTransactionSearchChange}
         transactionType={transactionType}

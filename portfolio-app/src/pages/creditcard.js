@@ -89,7 +89,10 @@ export default function CreditCard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [formError, setFormError] = useState(null);
   const [transactionFormError, setTransactionFormError] = useState(null);
+  const [transactionTableError, setTransactionTableError] = useState(null);
+  const [billingError, setBillingError] = useState(null);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingCardId, setDeletingCardId] = useState(null);
@@ -153,7 +156,7 @@ export default function CreditCard() {
     const fetchTransactions = async () => {
       try {
         setTransactionsLoading(true);
-        setError(null);
+        setTransactionTableError(null);
 
         const response = await getCreditCardTransactions(selectedCard.id, {
           page: transactionPage,
@@ -182,7 +185,9 @@ export default function CreditCard() {
         if (cancelled) return;
 
         console.error('Error fetching credit card transactions:', err);
-        setError(err.message || 'Failed to load transactions');
+        setTransactionTableError(
+          err.message || 'Failed to load transactions'
+        );
         setTransactions([]);
         setTransactionTotal(0);
         setTransactionTotalPages(0);
@@ -225,6 +230,7 @@ export default function CreditCard() {
       limit: '',
       billing_cycle_start: '1',
     });
+    setFormError(null);
     setShowForm(false);
   }, []);
 
@@ -259,7 +265,7 @@ export default function CreditCard() {
 
     try {
       setLoading(true);
-      setError(null);
+      setFormError(null);
       setSuccess(null);
 
       const cardData = {
@@ -328,7 +334,7 @@ export default function CreditCard() {
       resetForm();
     } catch (err) {
       console.error('Error saving credit card:', err);
-      setError(err.message || 'Failed to save credit card');
+      setFormError(err.message || 'Failed to save credit card');
     } finally {
       setLoading(false);
     }
@@ -348,7 +354,6 @@ export default function CreditCard() {
 
     try {
       setLoading(true);
-      setError(null);
       setSuccess(null);
 
       const amount = parseFloat(transactionData.amount);
@@ -408,7 +413,7 @@ export default function CreditCard() {
   const handleProcessBilling = useCallback(async cardId => {
     try {
       setLoading(true);
-      setError(null);
+      setBillingError(null);
       setSuccess(null);
 
       const response = await processBilling(cardId);
@@ -437,7 +442,7 @@ export default function CreditCard() {
       setSuccess('Billing processed successfully.');
     } catch (err) {
       console.error('Error processing billing:', err);
-      setError(err.message || 'Failed to process billing');
+      setBillingError(err.message || 'Failed to process billing');
     } finally {
       setLoading(false);
     }
@@ -469,12 +474,14 @@ export default function CreditCard() {
 
   const handleViewCardDetails = useCallback(card => {
     setSelectedCard(card);
+    setBillingError(null);
     setShowCardDetails(true);
     setError(null);
   }, []);
 
   const handleViewTransactions = useCallback(card => {
     setSelectedCard(card);
+    setTransactionTableError(null);
     setTransactionPage(1);
     setTransactionSearchInput('');
     setTransactionSearch('');
@@ -489,6 +496,7 @@ export default function CreditCard() {
 
   const closeTransactions = useCallback(() => {
     setShowTransactions(false);
+    setTransactionTableError(null);
     setTransactions([]);
     setTransactionSearchInput('');
     setTransactionSearch('');
@@ -799,7 +807,7 @@ export default function CreditCard() {
           type="button"
           variant="primary"
           onClick={() => {
-            setError(null);
+            setFormError(null);
             setSuccess(null);
             setFormData({
               id: '',
@@ -833,6 +841,8 @@ export default function CreditCard() {
         onSubmit={handleSubmit}
         submitting={loading}
         submitLabel={formData.id ? 'Update' : 'Save'}
+        error={formError}
+        onDismissError={() => setFormError(null)}
       >
         <div className="form-group">
           <label htmlFor="credit-card-name">Card Name</label>
@@ -1132,6 +1142,20 @@ export default function CreditCard() {
       >
         {selectedCard && (
           <>
+            {billingError && (
+              <div className="creditcard-error-with-close" role="alert">
+                <span>{billingError}</span>
+                <button
+                  type="button"
+                  className="creditcard-error-dismiss"
+                  onClick={() => setBillingError(null)}
+                  aria-label="Dismiss billing error"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
             <div className="creditcard-details-panel">
               <div className="creditcard-detail-row">
                 <span>Limit:</span>
@@ -1220,6 +1244,7 @@ export default function CreditCard() {
 
       <TransactionTableDialog
         open={showTransactions && Boolean(selectedCard)}
+
         title={
           <>
             Transactions for{' '}
@@ -1251,6 +1276,8 @@ export default function CreditCard() {
           }
         }}
         addTransactionDisabled={loading || !selectedCard}
+        error={transactionTableError}
+        onDismissError={() => setTransactionTableError(null)}
         columns={[
           {
             key: 'date',

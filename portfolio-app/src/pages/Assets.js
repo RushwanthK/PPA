@@ -39,6 +39,9 @@ export default function Assets() {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [formError, setFormError] = useState(null);
+  const [transactionFormError, setTransactionFormError] = useState(null);
+  const [transactionTableError, setTransactionTableError] = useState(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -129,7 +132,7 @@ export default function Assets() {
     const fetchTransactions = async () => {
       try {
         setTransactionsLoading(true);
-        setError(null);
+        setTransactionTableError(null);
 
         const response = await getAssetTransactions(selectedAssetId, {
           page: transactionPage,
@@ -155,7 +158,9 @@ export default function Assets() {
         if (cancelled) return;
 
         console.error('Error fetching asset transactions:', err);
-        setError(err.message || 'Failed to fetch asset transactions');
+        setTransactionTableError(
+          err.message || 'Failed to fetch asset transactions'
+        );
         setTransactions([]);
         setTransactionTotal(0);
         setTransactionTotalPages(0);
@@ -203,6 +208,7 @@ export default function Assets() {
       platform: '',
       category: '',
     });
+    setFormError(null);
     setShowForm(false);
   };
 
@@ -210,7 +216,7 @@ export default function Assets() {
     event.preventDefault();
 
     try {
-      setError(null);
+      setFormError(null);
       setLoading(true);
 
       const name = formData.name.trim();
@@ -263,14 +269,16 @@ export default function Assets() {
       resetForm();
     } catch (err) {
       console.error('Error saving asset:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to save asset');
+      setFormError(
+        err.response?.data?.error || err.message || 'Failed to save asset'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddTransaction = (assetId) => {
-    setError(null);
+    setTransactionFormError(null);
     setTransactionData(prev => ({
       ...prev,
       assetId: String(assetId),
@@ -282,7 +290,7 @@ export default function Assets() {
     event.preventDefault();
 
     try {
-      setError(null);
+      setTransactionFormError(null);
       setLoading(true);
 
       if (!transactionData.assetId) {
@@ -341,14 +349,16 @@ export default function Assets() {
       setShowTransactionForm(false);
     } catch (err) {
       console.error('Error adding asset transaction:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to add transaction');
+      setTransactionFormError(
+        err.response?.data?.error || err.message || 'Failed to add transaction'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleViewTransactions = (assetId) => {
-    setError(null);
+    setTransactionTableError(null);
     setSelectedAssetId(assetId);
     setTransactionPage(1);
     setTransactionPageSize(25);
@@ -661,7 +671,10 @@ export default function Assets() {
         <Button
           type="button"
           variant="primary"
-          onClick={() => setShowForm(true)}
+          onClick={() => {
+            setFormError(null);
+            setShowForm(true);
+          }}
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Asset'}
@@ -686,6 +699,8 @@ export default function Assets() {
         onSubmit={handleSubmit}
         submitting={loading}
         submitLabel={formData.id ? 'Update' : 'Save'}
+        error={formError}
+        onDismissError={() => setFormError(null)}
       >
         <div className="form-group">
           <label htmlFor="asset-name">Asset Name:</label>
@@ -749,10 +764,15 @@ export default function Assets() {
             </span>
           </>
         }
-        onClose={() => setShowTransactionForm(false)}
+        onClose={() => {
+          setShowTransactionForm(false);
+          setTransactionFormError(null);
+        }}
         onSubmit={handleTransactionSubmit}
         submitting={loading}
         submitLabel="Submit"
+        error={transactionFormError}
+        onDismissError={() => setTransactionFormError(null)}
       >
         <div className="form-group">
           <label htmlFor="asset-transaction-type">Transaction Type:</label>
@@ -918,7 +938,10 @@ export default function Assets() {
         }
         transactions={transactions}
         loading={transactionsLoading}
-        onClose={() => setShowTransactions(false)}
+        onClose={() => {
+          setShowTransactions(false);
+          setTransactionTableError(null);
+        }}
         searchText={transactionSearchInput}
         onSearchChange={handleTransactionSearchChange}
         transactionType={transactionType}
@@ -935,6 +958,8 @@ export default function Assets() {
         onPageSizeChange={handleTransactionPageSizeChange}
         onAddTransaction={() => handleAddTransaction(selectedAssetId)}
         addTransactionDisabled={loading}
+        error={transactionTableError}
+        onDismissError={() => setTransactionTableError(null)}
         columns={[
           {
             key: 'date',
