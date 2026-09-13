@@ -70,3 +70,10 @@
     flex-direction: column;
   }
 }
+
+@media (max-width: 520px) {
+  .form-group input,
+  .form-group select {
+    font-size: 16px;
+  }
+}

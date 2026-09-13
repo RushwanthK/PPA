@@ -17,7 +17,7 @@
   width: min(420px, 92vw);
   height: 100%;
   max-height: none;
-  padding: 28px 24px 24px;
+  padding: 28px 24px calc(24px + env(safe-area-inset-bottom, 0px));
   border-radius: 20px 0 0 20px;
   border-right: none;
   overflow-y: auto;
@@ -98,11 +98,13 @@
     opacity var(--transition-fast);
 }
 
-.profile-avatar-edit:hover:not(:disabled) {
-  background: var(--action-color);
-  border-color: var(--action-color);
-  color: #fff;
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .profile-avatar-edit:hover:not(:disabled) {
+    background: var(--action-color);
+    border-color: var(--action-color);
+    color: #fff;
+    transform: translateY(-1px);
+  }
 }
 
 .profile-avatar-edit:active:not(:disabled) {
@@ -195,6 +197,7 @@
 .profile-edit-modal {
   width: min(560px, 94vw);
   max-height: 88vh;
+  max-height: 88dvh;
   animation: profile-edit-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 

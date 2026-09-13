@@ -1,6 +1,7 @@
 .dashboard-container {
   padding: clamp(1.25rem, 3vw, 2rem);
   min-height: calc(100vh - 60px);
+  min-height: calc(100dvh - 60px);
   color: var(--text-color);
 }
 
@@ -21,9 +22,11 @@
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+  }
 }
 
 .card h3 {
@@ -88,11 +91,11 @@
   border-top: 4px solid var(--action-color);
   width: 40px;
   height: 40px;
-  animation: spin 1s linear infinite;
+  animation: dashboard-spin 1s linear infinite;
   margin: 2rem auto;
 }
 
-@keyframes spin {
+@keyframes dashboard-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }

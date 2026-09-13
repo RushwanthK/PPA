@@ -6,6 +6,7 @@
   --sidebar-width: 0px;
 
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
@@ -135,6 +136,7 @@
 .app-body {
   flex: 1;
   min-height: calc(100vh - 58px);
+  min-height: calc(100dvh - 58px);
 
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
@@ -156,6 +158,7 @@
   width: 100%;
   max-width: none;
   min-height: calc(100vh - 58px);
+  min-height: calc(100dvh - 58px);
 
   display: flex;
   align-items: center;
@@ -310,6 +313,7 @@
 
 .app-boot-loading {
   min-height: 100vh;
+  min-height: 100dvh;
 
   display: flex;
   flex-direction: column;
@@ -386,6 +390,16 @@
     padding-right: 12px;
   }
 
+  .nav-toggle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .profile-trigger {
+    width: 44px;
+    height: 44px;
+  }
+
   .app-shell.menu-is-open .header-left {
     margin-left: 0;
   }
@@ -393,6 +407,7 @@
   .app-body {
     display: block;
     min-height: calc(100vh - 58px);
+    min-height: calc(100dvh - 58px);
   }
 
   .app-sidebar {
@@ -400,6 +415,7 @@
     left: 0;
     top: 58px;
     bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: 1100;
 
     width: min(264px, 82vw);
@@ -447,7 +463,9 @@
 
   .app-body.auth-body .app-main {
     min-height: calc(100vh - 58px);
+    min-height: calc(100dvh - 58px);
     padding: 24px 16px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
 }
 

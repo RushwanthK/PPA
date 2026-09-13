@@ -12,7 +12,10 @@
   align-items: center;
   justify-content: center;
 
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top, 0px))
+           max(20px, env(safe-area-inset-right, 0px))
+           max(20px, env(safe-area-inset-bottom, 0px))
+           max(20px, env(safe-area-inset-left, 0px));
 
   background: rgba(6, 7, 8, 0.72);
   backdrop-filter: blur(4px);
@@ -23,6 +26,7 @@
 
   width: min(90%, 600px);
   max-height: 80vh;
+  max-height: 80dvh;
 
   overflow-y: auto;
 
@@ -100,11 +104,16 @@
 
 @media (max-width: 768px) {
   .modal {
-    padding: 12px;
+    padding: max(12px, env(safe-area-inset-top, 0px))
+             max(12px, env(safe-area-inset-right, 0px))
+             max(12px, env(safe-area-inset-bottom, 0px))
+             max(12px, env(safe-area-inset-left, 0px));
   }
 
   .modal-content {
     width: 95%;
     padding: 18px;
+    max-height: 85vh;
+    max-height: 85dvh;
   }
 }

@@ -121,8 +121,10 @@
     opacity var(--transition-fast);
 }
 
-.login-submit:hover:not(:disabled) {
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .login-submit:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
 }
 
 .login-submit:active:not(:disabled) {
@@ -226,14 +228,16 @@
    Responsive
    -------------------------------------------------------------------------- */
 
-@media (max-width: 480px) {
-  .login-container {
-    width: min(92vw, 400px);
-  }
-
+@media (max-width: 768px) {
   .login-input,
   .login-submit {
     font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    width: min(92vw, 400px);
   }
 }
 

@@ -40,7 +40,10 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top, 0px))
+           max(20px, env(safe-area-inset-right, 0px))
+           max(20px, env(safe-area-inset-bottom, 0px))
+           max(20px, env(safe-area-inset-left, 0px));
   z-index: 1100;
   animation: dcdFadeInBackdrop 0.2s ease;
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
@@ -55,6 +58,7 @@
   width: 100%;
   max-width: 460px;
   max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   background: linear-gradient(180deg, var(--dcd-surface-elevated) 0%, #17181b 100%);
   border: 1px solid var(--dcd-border-soft);
@@ -212,10 +216,12 @@
   transition: border-color var(--dcd-transition), color var(--dcd-transition), transform var(--dcd-transition);
 }
 
-.dcd-backup-btn:hover:not(:disabled) {
-  border-color: var(--dcd-primary);
-  color: var(--dcd-primary);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .dcd-backup-btn:hover:not(:disabled) {
+    border-color: var(--dcd-primary);
+    color: var(--dcd-primary);
+    transform: translateY(-1px);
+  }
 }
 
 .dcd-backup-btn:disabled {
@@ -253,9 +259,11 @@
   transition: transform var(--dcd-transition), filter var(--dcd-transition);
 }
 
-.dcd-confirm-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.08);
+@media (hover: hover) {
+  .dcd-confirm-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+  }
 }
 
 .dcd-confirm-btn:disabled {
@@ -356,4 +364,13 @@
 
 .dcd-dialog-error-dismiss:hover {
   opacity: 0.75;
+}
+
+@media (max-width: 768px) {
+  .dcd-backup-btn,
+  .dcd-confirm-btn,
+  .dcd-cancel-btn {
+    min-height: 44px;
+    font-size: 16px;
+  }
 }

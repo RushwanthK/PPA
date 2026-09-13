@@ -5,8 +5,8 @@
 
 .chatbot-root {
   position: fixed;
-  right: clamp(14px, 2vw, 28px);
-  bottom: clamp(14px, 2vw, 28px);
+  right: max(clamp(14px, 2vw, 28px), env(safe-area-inset-right, 0px));
+  bottom: max(clamp(14px, 2vw, 28px), env(safe-area-inset-bottom, 0px));
   z-index: 1200;
 }
 
@@ -27,8 +27,10 @@
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.chatbot-fab:hover {
-  transform: scale(1.06);
+@media (hover: hover) {
+  .chatbot-fab:hover {
+    transform: scale(1.06);
+  }
 }
 
 .chatbot-fab:active {
@@ -41,6 +43,7 @@
   bottom: 72px;
   width: min(92vw, 340px);
   height: min(70vh, 480px);
+  height: min(70dvh, 480px);
   background: var(--surface-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -219,7 +222,14 @@
   .chatbot-panel {
     width: 94vw;
     height: 66vh;
+    height: 66dvh;
     right: -6px;
+  }
+
+  .chatbot-input-row input,
+  .chatbot-send {
+    font-size: 16px;
+    min-height: 44px;
   }
 }
 
