@@ -71,29 +71,69 @@ Although initially developed as a personal finance application, the project is p
 
 # Current Testing Status
 
-The backend is actively being tested as part of Phase 3.
+## Phase 3 — Automated Testing
 
-Current full backend regression result:
+Backend automated testing is well established. The remaining work is to complete the transaction-specific coverage review, establish meaningful frontend tests, and verify that both test suites are enforced consistently through CI.
 
-```text
-389 passed
-5 warnings
-0 failed
-```
+### Backend Testing
 
-Completed backend testing areas include:
+Test modules cover the following areas:
 
-* Authentication / Users
-* Banks
-* Savings
-* Assets
-* Transaction exports / backup
-* Credit Cards
-* Dashboard
+- Authentication, registration, login, and user APIs
+- Banks
+- Savings
+- Assets
+- Transaction exports and backup
+- Credit Cards
+- Dashboard
+- Database isolation and transaction-related behavior
 
-The remaining backend work is a transaction-specific coverage audit. Frontend automated testing will be handled separately afterward.
+**Last recorded backend regression result:** `389 passed, 5 warnings`.
 
----
+This result comes from the existing project notes and has not been independently re-run during the latest documentation review. Re-run the full test suite before treating it as the current verified result.
+
+The remaining backend work is to review transaction-specific edge cases, close meaningful coverage gaps, and perform conservative cleanup where justified by the findings.
+
+### GitHub Actions CI
+
+The workflow in `.github/workflows/ci.yml` currently:
+
+- Runs for pushes to `main` and pull requests targeting `main`.
+- Starts a PostgreSQL 17 service for backend testing.
+- Uses Python 3.12 and installs backend dependencies.
+- Performs Python validation.
+- Runs the backend test suite using `pytest -q`.
+- Uses Node.js 22 and installs frontend dependencies using `npm ci`.
+- Validates the React production build using `npm run build`.
+
+Backend pytest execution is already configured in CI.
+
+The workflow does not yet run frontend automated tests or build Docker images. A successful recent GitHub Actions run and repository branch-protection settings still need to be verified.
+
+### Frontend Testing
+
+The frontend has an `npm test` script and a React Testing Library dependency, but meaningful PPA frontend testing has not yet been established.
+
+The existing `src/App.test.js` is still the Create React App starter test. In addition, `src/setupTests.js` imports `@testing-library/jest-dom`, but that package is not declared in the frontend `package.json` or its lockfile.
+
+The test setup must be corrected before the frontend test suite can be relied upon.
+
+Planned frontend coverage includes:
+
+- Component rendering and routing
+- Form validation
+- API interactions and error feedback
+- Transaction workflows
+- Deletion confirmation
+- Backup and export flows
+
+### Immediate Next Steps
+
+1. Complete the backend transaction-specific testing audit.
+2. Resolve the frontend test setup and replace the starter test.
+3. Add meaningful frontend regression tests.
+4. Add frontend test execution to GitHub Actions while retaining the production build check.
+5. Verify the complete pipeline and update the status after successful execution.
 
 # Current Features
 
@@ -184,25 +224,109 @@ pytest -v
 
 # Roadmap
 
-* [x] Docker Fundamentals
-* [x] Dockerized Backend
-* [x] Dockerized Frontend
-* [x] PostgreSQL Docker Container
-* [x] Docker Compose
-* [x] Git / GitHub Workflow
-* [x] GitHub Actions CI Foundation
-* [ ] Complete remaining backend testing audit
-* [ ] Frontend automated testing
-* [ ] Backend + frontend tests enforced in CI
-* [ ] Docker build in CI
-* [ ] Automated Render deployment
-* [ ] Production security/configuration
-* [ ] Health checks / reliability
-* [ ] Logging / monitoring
-* [ ] System design / scalability
-* [ ] Advanced engineering topics
+## Phases 0–2 — Application, Git and CI Foundations
 
----
+- [x] Full-stack application foundation
+- [x] Vercel frontend deployment — completed per project history
+- [x] Render backend deployment — completed per project history
+- [x] Supabase PostgreSQL integration — completed per project history
+- [x] Backend and frontend Dockerization
+- [x] PostgreSQL container, volumes, networking and Docker Compose
+- [x] Git/GitHub workflow and repository safety practices
+- [x] GitHub Actions CI foundation
+- [x] Backend pytest execution configured in GitHub Actions
+- [x] Frontend dependency installation and production build validation in CI
+
+## Phase 3 — Automated Testing (Current Phase)
+
+- [x] Backend test modules established for the major application areas
+- [x] Backend pytest step configured in CI
+- [ ] Complete the transaction-specific backend coverage audit
+- [ ] Investigate non-finite transaction amounts (`NaN` and infinity) for bank and credit-card transactions
+- [ ] Address any confirmed validation or regression gaps
+- [ ] Complete conservative backend cleanup where justified
+- [ ] Resolve the frontend test setup and dependency issue
+- [ ] Replace the default frontend starter test with meaningful PPA tests
+- [ ] Add component, form, API interaction, transaction and error-feedback tests
+- [ ] Add frontend test execution to GitHub Actions
+- [ ] Verify consistent backend and frontend test execution
+- [ ] Verify the latest successful CI run and the required-check settings for pull requests
+
+Phase 3 is complete when backend and frontend test suites run consistently, meaningful coverage is established, and CI validates both suites alongside the React production build.
+
+## Phase 3B — RAG and AI Integration (Planned)
+
+This phase will follow Phase 3 and precede Phase 4.
+
+- [ ] Build a separate project-document learning chatbot
+- [ ] Learn document ingestion, extraction, chunking and metadata
+- [ ] Evaluate embeddings and PostgreSQL `pgvector`
+- [ ] Implement semantic retrieval and PostgreSQL full-text search
+- [ ] Build the initial PPA Knowledge Copilot using approved documentation and trusted financial-education material
+- [ ] Generate grounded answers with source references and insufficient-evidence handling
+- [ ] Integrate the initial copilot with React and Flask
+- [ ] Add automated RAG tests and a repeatable evaluation dataset
+- [ ] Add appropriate model credential, usage and cost controls
+- [ ] Document the architecture and prepare for subsequent CI and deployment work
+
+Personalized financial analysis using private user transactions must wait until the required security and authorization controls in Phase 6 are implemented.
+
+## Phase 4 — Docker Integrated into CI
+
+- [ ] Build the backend Docker image in GitHub Actions
+- [ ] Build the frontend Docker image in GitHub Actions
+- [ ] Verify both image builds succeed
+- [ ] Keep AI dependencies and database extensions compatible with the Docker environment
+
+## Phase 5 — Continuous Deployment
+
+- [ ] Automate Render deployment after successful validation
+- [ ] Manage deployment credentials securely
+- [ ] Handle deployment failures
+- [ ] Establish an appropriate rollback strategy
+
+## Phase 6 — Production Configuration and Security
+
+- [ ] Establish clear Local, Docker, CI and Production configuration boundaries
+- [ ] Review secrets and environment-variable management
+- [ ] Harden production configuration and access controls
+- [ ] Protect AI endpoints with appropriate authentication, authorization and rate limits
+- [ ] Enforce user-level data isolation for any future financial-analysis tools
+- [ ] Evaluate prompt-injection and sensitive-data-disclosure risks
+
+## Phase 7 — Production Reliability
+
+- [ ] Implement a health endpoint
+- [ ] Add deployment health checks
+- [ ] Establish a migration-aware deployment process
+- [ ] Understand and document rollback behavior
+- [ ] Ensure ordinary financial features remain available if AI services fail
+
+## Phase 8 — Logging and Monitoring
+
+- [ ] Improve application and API error logging
+- [ ] Improve database and deployment error visibility
+- [ ] Introduce appropriate health monitoring and alerts
+- [ ] Monitor AI latency, failures and usage if the copilot is deployed
+- [ ] Prevent sensitive data from leaking into logs
+
+## Phase 9 — System Design and Scalability
+
+- [ ] Document architecture and important technology trade-offs
+- [ ] Analyze performance bottlenecks
+- [ ] Evaluate caching, Redis and background jobs against real requirements
+- [ ] Document RAG retrieval, financial calculation and LLM-generation boundaries
+- [ ] Evaluate scalability and concurrent workloads
+
+## Phase 10 — Advanced / Optional Engineering
+
+- [ ] Evaluate rate limiting and API versioning
+- [ ] Evaluate caching and background jobs
+- [ ] Explore performance and load testing
+- [ ] Consider Infrastructure as Code
+- [ ] Explore additional technologies only when they address an identified engineering need
+
+The primary objective is to build a reliable application and develop the ability to explain the engineering decisions behind it, rather than adding technologies simply for complexity.
 
 # Learning Goal
 

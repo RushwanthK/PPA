@@ -523,55 +523,168 @@ Run full regression suite
 
 ## Current Testing Position
 
+The backend testing foundation is established, and testing now needs to progress from module-by-module coverage to a systematic audit of remaining transaction behaviors.
+
+### Backend Testing Status
+
+The existing backend suite covers:
+
+- Authentication and users
+- Banks
+- Savings
+- Assets
+- Transaction exports and backup
+- Credit cards
+- Dashboard
+
+The last recorded full backend regression result in the project notes is:
+
+`389 passed, 5 warnings`
+
+This result has not been independently re-run during the latest repository review.
+
+### CI Testing Status
+
+The current `.github/workflows/ci.yml` already contains:
+
+- A PostgreSQL 17 test database service
+- Python 3.12 dependency installation
+- Backend Python validation
+- Backend pytest execution
+- Node.js 22 setup
+- Frontend dependency installation
+- React production build validation
+
+The missing CI component is frontend automated test execution.
+
+The workflow definition does not prove that the latest remote run is green, so actual GitHub Actions results must still be checked.
+
+### Frontend Testing Readiness
+
+The frontend has a test script and React Testing Library dependency, but the current `App.test.js` is a default starter test rather than a PPA test.
+
+`setupTests.js` imports `@testing-library/jest-dom`, but that dependency is absent from the committed frontend package manifest and lockfile. The test setup must be corrected before useful frontend testing can begin.
+
+### Immediate Learning Position
+
 ```text
-Backend module testing
-├── Authentication / Users   ✅
-├── Banks                    ✅
-├── Savings                  ✅
-├── Assets                   ✅
-├── Transaction exports      ✅
-├── Credit Cards             ✅
-├── Dashboard                ✅
-└── Transaction audit        ← NEXT
+Backend module testing           ✅ Established
+Backend test execution in CI     ✅ Configured
+Transaction coverage audit       ← NEXT
+Frontend test setup               ⏳
+Frontend component/form tests     ⏳
+Frontend tests in CI              ⏳
+Full Phase 3 verification         ⏳
+RAG and AI learning               ⏳ Planned for Phase 3B
 ```
 
-Frontend testing is intentionally deferred until the remaining meaningful backend testing work is complete.
+The purpose of the remaining work is to learn how to find meaningful behavioral gaps, construct reliable tests and use CI as regression protection—not merely to increase the test count.
 
 # Next Learning Goals
 
-## Backend Testing
+## Phase 3 — Backend Transaction Audit
 
-* Learn how to identify testing gaps from route and business-logic branches.
-* Distinguish unit-style assertions from API integration/behavior tests.
-* Strengthen database side-effect verification.
-* Identify transaction-specific edge cases that are worth testing.
+The immediate learning goal is to identify meaningful gaps in the existing transaction tests.
+
+Focus on:
+
+- Reviewing active transaction routes and their validation branches.
+- Understanding how input validation affects balances and database records.
+- Testing invalid inputs and confirming that rejected operations have no unwanted side effects.
+- Checking ownership, missing-resource behavior, transaction history and error responses.
+- Distinguishing a test setup problem from a genuine application defect.
+- Re-running the complete regression suite after changes.
+
+### Initial Audit Candidate: Non-Finite Amounts
+
+Static inspection identified a candidate area to investigate in:
+
+- `app/banks/bank_routes.py`
+- `app/credit_cards/credit_card_routes.py`
+
+Review how these endpoints handle `NaN` and positive or negative infinity.
+
+A useful test should verify the API response and the resulting database state, including whether any balance changes or transaction records are created.
+
+This is an investigation target, not a confirmed defect. Run the tests and determine the actual behavior before changing production code.
+
+The existing savings and asset transaction implementations provide useful comparison points because they already contain explicit finite-number validation.
+
+## Frontend Automated Testing
+
+Once the backend audit is sufficiently complete:
+
+- Resolve the frontend test dependency/setup mismatch.
+- Replace the default Create React App starter test.
+- Learn to render components and query the resulting UI.
+- Test form input, validation and error messages.
+- Mock API requests where appropriate.
+- Test loading, successful and failed API interactions.
+- Test important transaction, deletion and backup/export workflows.
+
+The goal is to test observable behavior rather than internal implementation details wherever practical.
 
 ## CI Testing
 
-After backend and frontend tests are established, integrate them into GitHub Actions so that tests become part of the repository's required validation flow.
+The backend pytest command is already configured in GitHub Actions.
+
+Remaining learning goals:
+
+- Understand how PostgreSQL is provisioned as a CI service.
+- Verify that backend tests run against the isolated test database.
+- Add frontend automated test execution to CI.
+- Retain React production build validation.
+- Understand how failed test commands prevent a workflow from passing.
+- Verify actual workflow results in GitHub Actions.
+- Learn how GitHub branch protection and required status checks relate to the CI workflow.
+
+## Phase 3B — RAG and AI Learning
+
+After Phase 3, learn RAG through a separate document chatbot before extending PPA.
+
+Concepts to study:
+
+- LLM fundamentals and embeddings
+- Document extraction, chunking and metadata
+- Vector similarity and semantic retrieval
+- PostgreSQL full-text search and hybrid retrieval
+- Context construction and grounded responses
+- Source citations and insufficient-evidence handling
+- Retrieval evaluation and regression testing
+- Model latency, token usage and cost control
+
+The first copilot should use approved documentation and trusted financial-education material. Personalized financial analysis should follow only after the required security controls are implemented.
 
 ## DevOps Progression
 
 The intended progression remains:
 
 ```text
-Develop
-  ↓
-Version control
-  ↓
-CI
-  ↓
-Automated tests
-  ↓
+Working full-stack application
+        ↓
+Git / GitHub workflow
+        ↓
+GitHub Actions CI
+        ↓
+Automated backend and frontend testing
+        ↓
+Phase 3 complete
+        ↓
+Phase 3B — RAG and AI learning
+        ↓
 Docker build in CI
-  ↓
+        ↓
 Continuous deployment
-  ↓
-Production configuration/security
-  ↓
-Reliability
-  ↓
-Monitoring
-  ↓
-System design / scaling
+        ↓
+Production configuration and security
+        ↓
+Reliability and rollback
+        ↓
+Logging and monitoring
+        ↓
+System design and scalability
+        ↓
+Optional advanced engineering
 ```
+
+The goal is to understand why each engineering practice exists, how to implement it correctly, and what trade-offs it introduces. Additional technologies should be adopted only when they solve an identified problem.
