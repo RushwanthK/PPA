@@ -1,3 +1,4 @@
+import logging
 from time import perf_counter
 from uuid import uuid4
 
@@ -73,6 +74,9 @@ def create_app():
     from config import get_config
 
     app.config.from_object(get_config())
+
+    if app.config.get("PERF_DIAGNOSTICS_ENABLED", False):
+        app.logger.setLevel(logging.INFO)
 
     JWTManager(app)
 
