@@ -30,3 +30,6 @@ portfolio-app/venv/
 
 # macOS
 .DS_Store
+
+# Patch file
+*.patch

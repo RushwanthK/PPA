@@ -10,6 +10,11 @@ load_dotenv()
 class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Opt-in request/SQL timing for performance diagnosis. Keep disabled by default.
+    PERF_DIAGNOSTICS_ENABLED = os.environ.get(
+        "PPA_PERF_DIAGNOSTICS", "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
     SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
 
     SQLALCHEMY_DATABASE_URI = os.environ["DATABASE_URL"]
