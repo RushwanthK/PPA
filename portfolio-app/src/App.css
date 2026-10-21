@@ -4,12 +4,11 @@
 
 .app-shell {
   --sidebar-width: 0px;
+  --header-padding-total: clamp(16px, 2.4vw, 28px);
+  --header-content-height: clamp(40px, 2.1vw + 12px, 45px);
   /* Match the header's responsive height so the desktop sidebar sticks just
      below it instead of sliding underneath the header while scrolling. */
-  --app-header-offset: calc(
-    clamp(8px, 1.2vw, 14px) +
-    clamp(8px, 1.2vw, 14px) +
-    max(40px, calc(clamp(27px, 2.1vw, 33px) + 12px)) + 1px);
+  --app-header-offset: calc(var(--header-padding-total) + var(--header-content-height) + 1px);
 
   min-height: 100vh;
   min-height: 100dvh;
@@ -432,11 +431,7 @@
   .app-shell {
     --sidebar-width: 0px;
     /* Mobile header controls are 44px high, so keep the overlay below them. */
-    --app-header-offset: calc(
-      clamp(8px, 1.2vw, 14px) +
-      clamp(8px, 1.2vw, 14px) +
-      45px
-    );
+    --app-header-offset: calc(var(--header-padding-total) + 45px);
   }
 
   .app-shell.menu-is-open {
