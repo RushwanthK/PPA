@@ -4,6 +4,14 @@
 
 .app-shell {
   --sidebar-width: 0px;
+  /* Match the header's responsive height so the desktop sidebar sticks just
+     below it instead of sliding underneath the header while scrolling. */
+  --app-header-offset: calc(
+    clamp(8px, 1.2vw, 14px) +
+    clamp(8px, 1.2vw, 14px) +
+    max(40px, calc(clamp(27px, 2.1vw, 33px) + 12px)) +
+    1px
+  );
 
   min-height: 100vh;
   min-height: 100dvh;
@@ -214,7 +222,16 @@
 .app-sidebar {
   min-width: 0;
   width: 100%;
-  overflow: hidden;
+
+  /* Keep desktop navigation visible while the main page scrolls. The panel
+     can scroll internally if its links ever exceed the available height. */
+  position: sticky;
+  top: var(--app-header-offset);
+  align-self: start;
+  height: calc(100vh - var(--app-header-offset));
+  height: calc(100dvh - var(--app-header-offset));
+  overflow-x: hidden;
+  overflow-y: auto;
 
   background: var(--surface-color);
   border-right: 1px solid var(--border-color);
@@ -416,6 +433,12 @@
 @media (max-width: 860px) {
   .app-shell {
     --sidebar-width: 0px;
+    /* Mobile header controls are 44px high, so keep the overlay below them. */
+    --app-header-offset: calc(
+      clamp(8px, 1.2vw, 14px) +
+      clamp(8px, 1.2vw, 14px) +
+      45px
+    );
   }
 
   .app-shell.menu-is-open {
@@ -450,7 +473,7 @@
   .app-sidebar {
     position: fixed;
     left: 0;
-    top: 58px;
+    top: var(--app-header-offset);
     bottom: 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: 1100;
@@ -468,7 +491,7 @@
 
   .sidebar-backdrop {
     position: fixed;
-    inset: 58px 0 0;
+    inset: var(--app-header-offset) 0 0;
     z-index: 1099;
 
     display: block;
