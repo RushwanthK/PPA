@@ -9,9 +9,7 @@
   --app-header-offset: calc(
     clamp(8px, 1.2vw, 14px) +
     clamp(8px, 1.2vw, 14px) +
-    max(40px, calc(clamp(27px, 2.1vw, 33px) + 12px)) +
-    1px
-  );
+    max(40px, calc(clamp(27px, 2.1vw, 33px) + 12px)) + 1px);
 
   min-height: 100vh;
   min-height: 100dvh;
