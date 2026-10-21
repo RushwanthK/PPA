@@ -94,6 +94,7 @@ def create_app():
         supports_credentials=True,
         expose_headers=["Authorization"],
         allow_headers=["Content-Type", "Authorization"],
+        max_age=600,
     )
 
     from .routes import routes
