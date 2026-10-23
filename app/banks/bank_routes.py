@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import or_, cast, String
-from datetime import datetime, timezone
+from sqlalchemy import or_
+from datetime import datetime, timedelta, timezone
 import pytz
 
 from ..models import Bank, Saving, BankTransaction
@@ -305,6 +305,9 @@ def get_bank_transactions(bank_id):
 
     search = (request.args.get('search') or '').strip()
     transaction_type = (request.args.get('type') or '').strip().lower()
+    start_date_text = (request.args.get('start_date') or '').strip()
+    end_date_text = (request.args.get('end_date') or '').strip()
+    amount_range = (request.args.get('amount_range') or '').strip()
 
     query = BankTransaction.query.filter(
         BankTransaction.bank_id == bank_id,
@@ -318,19 +321,70 @@ def get_bank_transactions(bank_id):
             }), 400
         query = query.filter(BankTransaction.transaction_type == transaction_type)
 
+    # Free-text search intentionally covers only the two textual fields that
+    # users expect to search. PostgreSQL pg_trgm indexes are added separately
+    # for these columns; amount and date are handled by typed filters below.
     if search:
-        # The global search intentionally covers the fields a user can see
-        # in the bank transaction table. This means search applies to the
-        # complete bank history in the database, not only the current page.
         search_pattern = f"%{search}%"
         query = query.filter(or_(
             BankTransaction.description.ilike(search_pattern),
             BankTransaction.category.ilike(search_pattern),
-            BankTransaction.transaction_type.ilike(search_pattern),
-            cast(BankTransaction.amount, String).ilike(search_pattern),
-            cast(BankTransaction.date, String).ilike(search_pattern),
-            cast(BankTransaction.bank_balance_after, String).ilike(search_pattern),
         ))
+
+    # The stored DATE convention is naive UTC (timestamp without time zone).
+    # The user selects IST calendar dates, so convert local-midnight boundaries
+    # to naive UTC values and filter with a half-open range. The exclusive end
+    # boundary includes every instant on the selected end date.
+    try:
+        start_date_value = (
+            datetime.strptime(start_date_text, "%Y-%m-%d").date()
+            if start_date_text else None
+        )
+        end_date_value = (
+            datetime.strptime(end_date_text, "%Y-%m-%d").date()
+            if end_date_text else None
+        )
+    except ValueError:
+        return jsonify({
+            "error": "Dates must use YYYY-MM-DD format"
+        }), 400
+
+    if start_date_value and end_date_value and start_date_value > end_date_value:
+        return jsonify({
+            "error": "Start date must be on or before end date"
+        }), 400
+
+    if start_date_value:
+        start_ist = IST.localize(datetime.combine(start_date_value, datetime.min.time()))
+        start_utc = start_ist.astimezone(pytz.UTC).replace(tzinfo=None)
+        query = query.filter(BankTransaction.date >= start_utc)
+
+    if end_date_value:
+        end_exclusive_date = end_date_value + timedelta(days=1)
+        end_ist_exclusive = IST.localize(
+            datetime.combine(end_exclusive_date, datetime.min.time())
+        )
+        end_utc_exclusive = end_ist_exclusive.astimezone(pytz.UTC).replace(tzinfo=None)
+        query = query.filter(BankTransaction.date < end_utc_exclusive)
+
+    amount_ranges = {
+        "under_500": (0, 500),
+        "500_1000": (500, 1000),
+        "1000_5000": (1000, 5000),
+        "5000_10000": (5000, 10000),
+        "10000_plus": (10000, None),
+    }
+    if amount_range:
+        bounds = amount_ranges.get(amount_range)
+        if bounds is None:
+            return jsonify({
+                "error": "Invalid amount range filter"
+            }), 400
+
+        lower_bound, upper_bound = bounds
+        query = query.filter(BankTransaction.amount >= lower_bound)
+        if upper_bound is not None:
+            query = query.filter(BankTransaction.amount < upper_bound)
 
     # id makes ordering deterministic when two transactions have the same
     # timestamp. The composite DB index added for this endpoint supports
@@ -357,7 +411,14 @@ def get_bank_transactions(bank_id):
             "description": tx.description or '',
             "category": tx.category or '',
             "transaction_type": tx.transaction_type,
-            "date": tx.date.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S"),
+            # The database column is timezone-naive by schema, but values are
+            # stored using the application's UTC convention. Attach UTC before
+            # converting so local Windows and UTC-based production hosts agree.
+            "date": (
+                (pytz.UTC.localize(tx.date) if tx.date.tzinfo is None else tx.date)
+                .astimezone(IST)
+                .strftime("%Y-%m-%d %H:%M:%S")
+            ),
             "bank_balance_after": tx.bank_balance_after
         } for tx in transactions],
         "page": page,
@@ -400,3 +461,4 @@ def get_bank_balance():
         "name": bank.name,        # Bank name
         "balance": bank.balance   # Current balance
     })
+

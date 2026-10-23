@@ -38,8 +38,37 @@
   width: min(420px, 100%);
 }
 
+/* Extra controls exist only on the bank transaction-history dialog. */
+.bank-transaction-table-modal .transaction-table-filters {
+  flex-wrap: wrap;
+}
+
+.bank-transaction-table-modal .transaction-table-filters .search-input {
+  width: min(320px, 100%);
+}
+
+.transaction-date-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 145px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.transaction-date-filter {
+  width: 100%;
+  min-width: 0;
+}
+
+.transaction-amount-filter {
+  min-width: 150px;
+}
+
 .transaction-type-filter,
-.transaction-page-size {
+.transaction-page-size,
+.transaction-date-filter,
+.transaction-amount-filter {
   min-height: 38px;
 
   margin: 0;
@@ -58,7 +87,9 @@
 }
 
 .transaction-type-filter:focus,
-.transaction-page-size:focus {
+.transaction-page-size:focus,
+.transaction-date-filter:focus,
+.transaction-amount-filter:focus {
   border-color: var(--action-color);
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
@@ -120,6 +151,11 @@
     width: 100%;
   }
 
+  .bank-transaction-table-modal .transaction-date-filter-group,
+  .bank-transaction-table-modal .transaction-amount-filter {
+    width: 100%;
+  }
+
   .transaction-pagination-summary {
     width: 100%;
   }
@@ -131,7 +167,9 @@
 
 @media (max-width: 768px) {
   .transaction-type-filter,
-  .transaction-page-size {
+  .transaction-page-size,
+  .bank-transaction-table-modal .transaction-date-filter,
+  .bank-transaction-table-modal .transaction-amount-filter {
     font-size: 16px;
     min-height: 44px;
   }

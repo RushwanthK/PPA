@@ -8,6 +8,7 @@ import './TransactionTableDialog.css';
 function TransactionTableDialog({
   open,
   title = 'Transactions',
+  modalClassName = '',
   transactions = [],
   columns = [],
   loading = false,
@@ -16,9 +17,16 @@ function TransactionTableDialog({
   addTransactionDisabled = false,
   emptyMessage = 'No transactions found.',
   searchText = '',
+  searchPlaceholder = 'Search transactions...',
   onSearchChange,
   transactionType = '',
   onTransactionTypeChange,
+  startDate = '',
+  endDate = '',
+  onStartDateChange,
+  onEndDateChange,
+  amountRange = '',
+  onAmountRangeChange,
   transactionTypeOptions = [
     { value: 'income', label: 'Income' },
     { value: 'expense', label: 'Expense' },
@@ -32,7 +40,13 @@ function TransactionTableDialog({
   error = null,
   onDismissError,
 }) {
-  const hasFilters = Boolean(onSearchChange || onTransactionTypeChange);
+  const hasFilters = Boolean(
+    onSearchChange ||
+    onTransactionTypeChange ||
+    onStartDateChange ||
+    onEndDateChange ||
+    onAmountRangeChange
+  );
   const canGoPrevious = page > 1 && !loading;
   const canGoNext = page < totalPages && !loading;
 
@@ -41,7 +55,7 @@ function TransactionTableDialog({
       open={open}
       title={title}
       onClose={onClose}
-      className="transaction-table-modal"
+      className={`transaction-table-modal ${modalClassName}`.trim()}
     >
       {error && (
         <div className="transaction-table-dialog-error" role="alert">
@@ -67,7 +81,7 @@ function TransactionTableDialog({
               <SearchBar
                 value={searchText}
                 onChange={onSearchChange}
-                placeholder="Search transactions..."
+                placeholder={searchPlaceholder}
                 ariaLabel="Search transactions"
                 disabled={loading}
               />
@@ -87,6 +101,53 @@ function TransactionTableDialog({
                     {option.label}
                   </option>
                 ))}
+              </select>
+            )}
+
+            {onStartDateChange && (
+              <label className="transaction-date-filter-group">
+                <span>From (IST)</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={onStartDateChange}
+                  max={endDate || undefined}
+                  aria-label="Filter transactions from date (IST)"
+                  disabled={loading}
+                  className="transaction-date-filter"
+                />
+              </label>
+            )}
+
+            {onEndDateChange && (
+              <label className="transaction-date-filter-group">
+                <span>Through (IST)</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={onEndDateChange}
+                  min={startDate || undefined}
+                  aria-label="Filter transactions through date (IST)"
+                  disabled={loading}
+                  className="transaction-date-filter"
+                />
+              </label>
+            )}
+
+            {onAmountRangeChange && (
+              <select
+                value={amountRange}
+                onChange={onAmountRangeChange}
+                aria-label="Filter transactions by amount range"
+                disabled={loading}
+                className="transaction-amount-filter"
+              >
+                <option value="">All amounts</option>
+                <option value="under_500">₹0 to &lt;₹500</option>
+                <option value="500_1000">₹500 to &lt;₹1,000</option>
+                <option value="1000_5000">₹1,000 to &lt;₹5,000</option>
+                <option value="5000_10000">₹5,000 to &lt;₹10,000</option>
+                <option value="10000_plus">₹10,000+</option>
               </select>
             )}
           </div>

@@ -34,6 +34,9 @@ export default function Bank() {
   const [transactionSearchInput, setTransactionSearchInput] = useState('');
   const [transactionSearch, setTransactionSearch] = useState('');
   const [transactionType, setTransactionType] = useState('');
+  const [transactionStartDate, setTransactionStartDate] = useState('');
+  const [transactionEndDate, setTransactionEndDate] = useState('');
+  const [transactionAmountRange, setTransactionAmountRange] = useState('');
   const [transactionTotal, setTransactionTotal] = useState(0);
   const [transactionTotalPages, setTransactionTotalPages] = useState(0);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -122,6 +125,9 @@ export default function Bank() {
             page_size: transactionPageSize,
             search: transactionSearch,
             type: transactionType,
+            start_date: transactionStartDate || undefined,
+            end_date: transactionEndDate || undefined,
+            amount_range: transactionAmountRange || undefined,
           }
         );
 
@@ -166,6 +172,9 @@ export default function Bank() {
     transactionPageSize,
     transactionSearch,
     transactionType,
+    transactionStartDate,
+    transactionEndDate,
+    transactionAmountRange,
     transactionRefreshKey,
   ]);
 
@@ -569,6 +578,9 @@ export default function Bank() {
     setTransactionSearchInput('');
     setTransactionSearch('');
     setTransactionType('');
+    setTransactionStartDate('');
+    setTransactionEndDate('');
+    setTransactionAmountRange('');
     setTransactionTotal(0);
     setTransactionTotalPages(0);
     setTransactions([]);
@@ -582,6 +594,21 @@ export default function Bank() {
 
   const handleTransactionTypeChange = (e) => {
     setTransactionType(e.target.value);
+    setTransactionPage(1);
+  };
+
+  const handleTransactionStartDateChange = (e) => {
+    setTransactionStartDate(e.target.value);
+    setTransactionPage(1);
+  };
+
+  const handleTransactionEndDateChange = (e) => {
+    setTransactionEndDate(e.target.value);
+    setTransactionPage(1);
+  };
+
+  const handleTransactionAmountRangeChange = (e) => {
+    setTransactionAmountRange(e.target.value);
     setTransactionPage(1);
   };
 
@@ -826,6 +853,7 @@ export default function Bank() {
       {/* Transactions Modal */}
       <TransactionTableDialog
         open={showTransactions}
+        modalClassName="bank-transaction-table-modal"
         title={
           <>
             Transactions for{' '}
@@ -843,9 +871,16 @@ export default function Bank() {
           setTransactionTableError(null);
         }}
         searchText={transactionSearchInput}
+        searchPlaceholder="Search description or category..."
         onSearchChange={handleTransactionSearchChange}
         transactionType={transactionType}
         onTransactionTypeChange={handleTransactionTypeChange}
+        startDate={transactionStartDate}
+        endDate={transactionEndDate}
+        onStartDateChange={handleTransactionStartDateChange}
+        onEndDateChange={handleTransactionEndDateChange}
+        amountRange={transactionAmountRange}
+        onAmountRangeChange={handleTransactionAmountRangeChange}
         page={transactionPage}
         totalPages={transactionTotalPages}
         totalTransactions={transactionTotal}

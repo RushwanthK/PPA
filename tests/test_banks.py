@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.models import Bank, BankTransaction, Saving
 
 
@@ -898,6 +900,171 @@ def test_get_bank_transactions_supports_pagination_and_search(
         transaction["transaction_type"] == "income"
         for transaction in data["transactions"]
     )
+
+
+def test_bank_transaction_text_search_only_matches_description_and_category(
+    authenticated_client,
+    test_bank,
+    db_session,
+):
+    db_session.add_all([
+        BankTransaction(
+            user_id=test_bank.user_id,
+            bank_id=test_bank.id,
+            amount=42.5,
+            date=datetime(2026, 10, 10, 12, 0, 0),
+            description="Lunch purchase",
+            category="Dining",
+            transaction_type="expense",
+            bank_balance_after=9957.5,
+        ),
+        BankTransaction(
+            user_id=test_bank.user_id,
+            bank_id=test_bank.id,
+            amount=500,
+            date=datetime(2026, 10, 11, 12, 0, 0),
+            description="Monthly deposit",
+            category="Salary",
+            transaction_type="income",
+            bank_balance_after=10500,
+        ),
+    ])
+    db_session.commit()
+
+    response = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions?search=lUnCh"
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["total"] == 1
+    assert data["transactions"][0]["description"] == "Lunch purchase"
+
+    # The search box no longer searches transaction_type, amount, date, or
+    # balance-after text. Those are handled by dedicated filters or are not
+    # part of the text-search contract.
+    for term in ("expense", "42.5", "2026-10-10", "9957.5"):
+        response = authenticated_client.get(
+            f"/banks/{test_bank.id}/transactions?search={term}"
+        )
+        assert response.status_code == 200
+        assert response.get_json()["total"] == 0
+
+
+def test_bank_transaction_amount_ranges_use_non_overlapping_boundaries(
+    authenticated_client,
+    test_bank,
+    db_session,
+):
+    amounts = [
+        100,
+        499.99,
+        500,
+        999.99,
+        1000,
+        4999.99,
+        5000,
+        9999.99,
+        10000,
+        15000,
+    ]
+    db_session.add_all([
+        BankTransaction(
+            user_id=test_bank.user_id,
+            bank_id=test_bank.id,
+            amount=amount,
+            date=datetime(2026, 10, 1, 12, 0, index),
+            description=f"Amount test {amount}",
+            category="Test",
+            transaction_type="income",
+            bank_balance_after=10000 + amount,
+        )
+        for index, amount in enumerate(amounts)
+    ])
+    db_session.commit()
+
+    expected_by_range = {
+        "under_500": [100, 499.99],
+        "500_1000": [500, 999.99],
+        "1000_5000": [1000, 4999.99],
+        "5000_10000": [5000, 9999.99],
+        "10000_plus": [10000, 15000],
+    }
+
+    for amount_range, expected_amounts in expected_by_range.items():
+        response = authenticated_client.get(
+            f"/banks/{test_bank.id}/transactions?amount_range={amount_range}"
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["total"] == len(expected_amounts)
+        assert sorted(tx["amount"] for tx in data["transactions"]) == expected_amounts
+
+
+def test_bank_transaction_ist_date_range_uses_inclusive_calendar_dates(
+    authenticated_client,
+    test_bank,
+    db_session,
+):
+    # Stored timestamps are naive UTC by application convention. On IST,
+    # these represent Sep 30 23:59:59.999999, Oct 1 00:00, Oct 31
+    # 23:59:59.999999 and Nov 1 00:00 respectively.
+    transaction_rows = [
+        ("before start", datetime(2026, 9, 30, 18, 29, 59, 999999)),
+        ("start boundary", datetime(2026, 9, 30, 18, 30, 0)),
+        ("end boundary", datetime(2026, 10, 31, 18, 29, 59, 999999)),
+        ("after end", datetime(2026, 10, 31, 18, 30, 0)),
+    ]
+    db_session.add_all([
+        BankTransaction(
+            user_id=test_bank.user_id,
+            bank_id=test_bank.id,
+            amount=100 + index,
+            date=stored_utc,
+            description=description,
+            category="Date test",
+            transaction_type="income",
+            bank_balance_after=10100 + index,
+        )
+        for index, (description, stored_utc) in enumerate(transaction_rows)
+    ])
+    db_session.commit()
+
+    response = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions"
+        "?start_date=2026-10-01&end_date=2026-10-31"
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["total"] == 2
+    assert {tx["description"] for tx in data["transactions"]} == {
+        "start boundary",
+        "end boundary",
+    }
+
+
+def test_bank_transaction_filters_reject_invalid_date_and_amount_values(
+    authenticated_client,
+    test_bank,
+):
+    invalid_date = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions?start_date=2026-02-30"
+    )
+    assert invalid_date.status_code == 400
+    assert invalid_date.get_json()["error"] == "Dates must use YYYY-MM-DD format"
+
+    reversed_dates = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions"
+        "?start_date=2026-10-31&end_date=2026-10-01"
+    )
+    assert reversed_dates.status_code == 400
+    assert reversed_dates.get_json()["error"] == "Start date must be on or before end date"
+
+    invalid_amount_range = authenticated_client.get(
+        f"/banks/{test_bank.id}/transactions?amount_range=unknown"
+    )
+    assert invalid_amount_range.status_code == 400
+    assert invalid_amount_range.get_json()["error"] == "Invalid amount range filter"
 
 
 def test_get_bank_transactions_rejects_invalid_type_filter(
