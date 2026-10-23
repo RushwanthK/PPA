@@ -27,6 +27,7 @@ function TransactionTableDialog({
   onEndDateChange,
   amountRange = '',
   onAmountRangeChange,
+  onClearFilters,
   transactionTypeOptions = [
     { value: 'income', label: 'Income' },
     { value: 'expense', label: 'Expense' },
@@ -46,6 +47,13 @@ function TransactionTableDialog({
     onStartDateChange ||
     onEndDateChange ||
     onAmountRangeChange
+  );
+  const hasActiveFilters = Boolean(
+    searchText ||
+    transactionType ||
+    startDate ||
+    endDate ||
+    amountRange
   );
   const canGoPrevious = page > 1 && !loading;
   const canGoNext = page < totalPages && !loading;
@@ -78,13 +86,15 @@ function TransactionTableDialog({
         {hasFilters && (
           <div className="transaction-table-filters">
             {onSearchChange && (
-              <SearchBar
-                value={searchText}
-                onChange={onSearchChange}
-                placeholder={searchPlaceholder}
-                ariaLabel="Search transactions"
-                disabled={loading}
-              />
+              <div className="transaction-table-search">
+                <SearchBar
+                  value={searchText}
+                  onChange={onSearchChange}
+                  placeholder={searchPlaceholder}
+                  ariaLabel="Search transactions"
+                  disabled={loading}
+                />
+              </div>
             )}
 
             {onTransactionTypeChange && (
@@ -149,6 +159,19 @@ function TransactionTableDialog({
                 <option value="5000_10000">₹5,000 to &lt;₹10,000</option>
                 <option value="10000_plus">₹10,000+</option>
               </select>
+            )}
+
+            {onClearFilters && (
+              <div className="transaction-clear-filters">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onClearFilters}
+                  disabled={loading || !hasActiveFilters}
+                >
+                  Clear Filters
+                </Button>
+              </div>
             )}
           </div>
         )}

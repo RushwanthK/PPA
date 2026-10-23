@@ -624,6 +624,16 @@ export default function Bank() {
     setTransactionPage(1);
   };
 
+  const handleClearTransactionFilters = () => {
+    setTransactionSearchInput('');
+    setTransactionSearch('');   // reset immediately, skipping the 300ms debounce
+    setTransactionType('');
+    setTransactionStartDate('');
+    setTransactionEndDate('');
+    setTransactionAmountRange('');
+    setTransactionPage(1);
+  };
+
   const resetForm = () => {
     setFormData({ id: '', name: '' });
     setFormError(null);
@@ -881,6 +891,7 @@ export default function Bank() {
         onEndDateChange={handleTransactionEndDateChange}
         amountRange={transactionAmountRange}
         onAmountRangeChange={handleTransactionAmountRangeChange}
+        onClearFilters={handleClearTransactionFilters}
         page={transactionPage}
         totalPages={transactionTotalPages}
         totalTransactions={transactionTotal}

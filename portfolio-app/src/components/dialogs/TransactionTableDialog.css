@@ -38,13 +38,67 @@
   width: min(420px, 100%);
 }
 
-/* Extra controls exist only on the bank transaction-history dialog. */
-.bank-transaction-table-modal .transaction-table-filters {
-  flex-wrap: wrap;
+/* --------------------------------------------------------------------------
+   Bank transaction-history dialog: grid layout for the extra filters
+   Row 1: search (full width)
+   Row 2: type | from | through | amount | clear filters
+   -------------------------------------------------------------------------- */
+
+.bank-transaction-table-modal .transaction-table-toolbar {
+  align-items: flex-start;
+  flex-wrap: nowrap;
 }
 
-.bank-transaction-table-modal .transaction-table-filters .search-input {
-  width: min(320px, 100%);
+.bank-transaction-table-modal .transaction-table-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1fr)
+    minmax(140px, 160px)
+    minmax(140px, 160px)
+    minmax(150px, 1fr)
+    auto;
+
+  align-items: end;
+  gap: 12px;
+
+  min-width: 0;
+}
+
+.bank-transaction-table-modal .transaction-table-search {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.bank-transaction-table-modal .transaction-table-search .search-input {
+  width: 100%;
+}
+
+.bank-transaction-table-modal .transaction-type-filter,
+.bank-transaction-table-modal .transaction-amount-filter {
+  width: 100%;
+  min-width: 0;
+}
+
+.bank-transaction-table-modal .transaction-date-filter-group {
+  min-width: 0;
+}
+
+.bank-transaction-table-modal .transaction-clear-filters {
+  display: flex;
+  align-items: flex-end;
+}
+
+.bank-transaction-table-modal .transaction-clear-filters button {
+  width: auto;
+  min-height: 38px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.bank-transaction-table-modal .transaction-table-toolbar > button,
+.bank-transaction-table-modal .transaction-table-toolbar > .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .transaction-date-filter-group {
@@ -133,6 +187,21 @@
   margin: 0;
 }
 
+/* Medium screens: two filters per row */
+@media (max-width: 1000px) {
+  .bank-transaction-table-modal .transaction-table-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .bank-transaction-table-modal .transaction-table-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bank-transaction-table-modal .transaction-clear-filters {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 768px) {
   .transaction-table-toolbar {
     align-items: stretch;
@@ -151,8 +220,16 @@
     width: 100%;
   }
 
+  .bank-transaction-table-modal .transaction-table-filters {
+    grid-template-columns: 1fr;
+  }
+
   .bank-transaction-table-modal .transaction-date-filter-group,
   .bank-transaction-table-modal .transaction-amount-filter {
+    width: 100%;
+  }
+
+  .bank-transaction-table-modal .transaction-clear-filters button {
     width: 100%;
   }
 
