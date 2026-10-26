@@ -35,6 +35,8 @@ function TransactionTableDialog({
   page = 1,
   totalPages = 1,
   totalTransactions = 0,
+  hasMore = false,
+  cursorPagination = false,
   pageSize = 25,
   onPageChange,
   onPageSizeChange,
@@ -56,7 +58,9 @@ function TransactionTableDialog({
     amountRange
   );
   const canGoPrevious = page > 1 && !loading;
-  const canGoNext = page < totalPages && !loading;
+  const canGoNext = cursorPagination
+    ? hasMore && !loading
+    : page < totalPages && !loading;
 
   return (
     <Modal
@@ -105,7 +109,7 @@ function TransactionTableDialog({
                 disabled={loading}
                 className="transaction-type-filter"
               >
-                <option value="">All types</option>
+                <option value="">Income/Expense</option>
                 {transactionTypeOptions.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -116,7 +120,7 @@ function TransactionTableDialog({
 
             {onStartDateChange && (
               <label className="transaction-date-filter-group">
-                <span>From (IST)</span>
+                <span>From Date</span>
                 <input
                   type="date"
                   value={startDate}
@@ -131,7 +135,7 @@ function TransactionTableDialog({
 
             {onEndDateChange && (
               <label className="transaction-date-filter-group">
-                <span>Through (IST)</span>
+                <span>To Date</span>
                 <input
                   type="date"
                   value={endDate}
@@ -152,7 +156,7 @@ function TransactionTableDialog({
                 disabled={loading}
                 className="transaction-amount-filter"
               >
-                <option value="">All amounts</option>
+                <option value="">Amount Range</option>
                 <option value="under_500">₹0 to &lt;₹500</option>
                 <option value="500_1000">₹500 to &lt;₹1,000</option>
                 <option value="1000_5000">₹1,000 to &lt;₹5,000</option>
@@ -195,12 +199,16 @@ function TransactionTableDialog({
         emptyMessage={emptyMessage}
       />
 
-      {(totalPages > 0 || totalTransactions > 0) && (
+      {(cursorPagination
+        ? (transactions.length > 0 || page > 1)
+        : (totalPages > 0 || totalTransactions > 0)) && (
         <div className="transaction-pagination" aria-label="Transaction pagination">
           <div className="transaction-pagination-summary">
-            {totalTransactions === 0
-              ? 'No transactions'
-              : `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, totalTransactions)} of ${totalTransactions}`}
+            {cursorPagination
+              ? `Showing ${transactions.length} transaction${transactions.length === 1 ? '' : 's'} on this page`
+              : (totalTransactions === 0
+                ? 'No transactions'
+                : `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, totalTransactions)} of ${totalTransactions}`)}
           </div>
 
           <div className="transaction-pagination-controls">
@@ -226,7 +234,9 @@ function TransactionTableDialog({
             </Button>
 
             <span className="transaction-page-number">
-              Page {page} of {Math.max(totalPages, 1)}
+              {cursorPagination
+                ? `Page ${page}`
+                : `Page ${page} of ${Math.max(totalPages, 1)}`}
             </span>
 
             <Button
