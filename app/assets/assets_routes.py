@@ -23,6 +23,7 @@ from ..models import (
     AssetTransaction,
 )
 from ..utils.financial_util import money
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 
 assets_routes = Blueprint(
@@ -181,6 +182,7 @@ def create_asset():
     try:
         db.session.add(asset)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Asset created!",
@@ -328,6 +330,7 @@ def update_asset(asset_id):
 
     try:
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": (
@@ -459,6 +462,7 @@ def add_asset_transaction(asset_id):
     try:
         db.session.add(transaction)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Transaction added",
@@ -625,6 +629,7 @@ def delete_asset(asset_id):
 
         db.session.delete(asset)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": (

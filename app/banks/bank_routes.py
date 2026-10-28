@@ -12,6 +12,7 @@ import pytz
 from ..models import Bank, Saving, BankTransaction
 from .. import db
 from ..utils.financial_util import money
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 bank_routes = Blueprint("bank_routes", __name__)
 
@@ -53,6 +54,7 @@ def create_bank():
 
         db.session.add(bank)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Bank created successfully",
@@ -128,6 +130,7 @@ def update_bank(bank_id):
 
     try:
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Bank updated successfully",
@@ -180,6 +183,7 @@ def delete_bank(bank_id):
     
     db.session.delete(bank)
     db.session.commit()
+    invalidate_dashboard_cache(user_id)
     return jsonify({"message": "Bank deleted successfully"}), 200
 
 
@@ -255,6 +259,7 @@ def add_bank_transaction(bank_id):
         db.session.flush()
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Transaction added successfully",

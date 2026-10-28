@@ -9,6 +9,7 @@ import pytz
 from ..models import Bank, Saving, SavingTransaction
 from .. import db
 from ..utils.financial_util import money
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 savings_routes = Blueprint("savings_routes", __name__)
 
@@ -61,6 +62,7 @@ def create_saving():
     try:
         db.session.add(saving)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Saving account created!",
@@ -205,6 +207,7 @@ def update_saving(saving_id):
             saving.name = data['name'].strip()
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Saving account updated successfully",
@@ -350,6 +353,7 @@ def add_saving_transaction(saving_id):
 
         db.session.add(transaction)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Transaction added",
@@ -516,6 +520,7 @@ def delete_saving(saving_id):
 
         db.session.delete(saving)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             'message': 'Saving account deleted successfully'

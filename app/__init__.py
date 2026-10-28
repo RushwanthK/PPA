@@ -83,6 +83,27 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db)
 
+    # Redis is optional. Without REDIS_URL the application keeps its existing
+    # database-backed behavior. The client connects lazily on the first command.
+    app.extensions["ppa_dashboard_redis"] = None
+    redis_url = app.config.get("REDIS_URL")
+    if redis_url:
+        try:
+            import redis
+        except ImportError as exc:
+            raise RuntimeError(
+                "REDIS_URL is configured, but the redis package is not installed"
+            ) from exc
+
+        app.extensions["ppa_dashboard_redis"] = redis.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=0.2,
+            socket_timeout=0.2,
+            health_check_interval=30,
+            max_connections=app.config["REDIS_MAX_CONNECTIONS"],
+        )
+
     # Allow local development and tests to use the same local CORS behavior.
     CORS(
         app,

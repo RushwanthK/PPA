@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from ..models import User, Transaction, TransferTransaction
 from .. import db
 from ..utils.date_util import calculate_age,parse_date
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 users_routes = Blueprint("users_routes", __name__)
 
@@ -171,6 +172,7 @@ def delete_user(id):
         db.session.delete(user)
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "User deleted successfully",

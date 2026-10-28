@@ -8,6 +8,7 @@ import pytz
 from ..models import CreditCard, CreditCardTransaction
 from .. import db
 from ..utils.financial_util import money 
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 from .credit_card_util import (
     calculate_current_cycle_start,
@@ -62,6 +63,7 @@ def create_credit_card():
         
         db.session.add(card)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
         
         return jsonify({
             "message": "Credit card created successfully",
@@ -209,6 +211,7 @@ def update_credit_card(card_id):
             card.unbilled_spends = money(max(0,card.unbilled_spends - payments_applied))
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
         return jsonify({
             "message": "Credit card updated successfully",
             "card": {
@@ -262,6 +265,7 @@ def delete_credit_card(card_id):
         # Now delete the card
         db.session.delete(card)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
         
         return jsonify({"message": "Credit card and all associated transactions deleted successfully"}), 200
         
@@ -524,6 +528,7 @@ def add_credit_card_transaction(card_id):
 
         db.session.add(transaction)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Transaction added successfully",
@@ -631,6 +636,7 @@ def process_billing(card_id):
             card.last_payment_amount = last_payment.amount
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Billing processed successfully",

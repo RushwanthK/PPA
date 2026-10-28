@@ -18,6 +18,13 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", os.urandom(24))
 
     SQLALCHEMY_DATABASE_URI = os.environ["DATABASE_URL"]
+    REDIS_URL = os.environ.get("REDIS_URL")
+    DASHBOARD_CACHE_TTL_SECONDS = int(
+        os.environ.get("DASHBOARD_CACHE_TTL_SECONDS", "60")
+    )
+    REDIS_MAX_CONNECTIONS = int(
+        os.environ.get("REDIS_MAX_CONNECTIONS", "5")
+    )
 
     JWT_SECRET_KEY = os.environ["JWT_SECRET_KEY"]
     JWT_TOKEN_LOCATION = ["headers"]
@@ -36,6 +43,8 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     DEBUG = False
     TESTING = True
+    # Tests must not depend on a running external Redis service.
+    REDIS_URL = None
 
 
 class ProductionConfig(Config):
