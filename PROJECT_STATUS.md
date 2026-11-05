@@ -38,7 +38,7 @@ The branch contains additional implementation work in parallel with Phase 3:
 - Cache invalidation hooks have been added after successful write operations in bank, savings, asset, credit-card and user routes.
 - The frontend bank transaction dialog consumes the cursor API, debounces search and tracks cursor history; the desktop sidebar is sticky below the header.
 
-These are implemented in the reviewed source. Their test execution, query-plan benefit, live Redis connectivity, migration execution and production performance impact remain to be verified separately.
+These are implemented in the reviewed source. Redis is deployed on Render alongside the production backend and configured through `REDIS_URL`; request-level cache hits/misses and production performance should still be checked operationally. Test execution, query-plan benefit and migration execution remain to be verified separately.
 
 ### Planned Phase 3B — RAG and AI Integration
 
@@ -210,7 +210,7 @@ The reviewed branch adds optional cache-aside behavior for:
 
 Important consistency limitation: a Redis invalidation failure after the PostgreSQL commit does not fail the financial write. An older cache generation may remain visible until its TTL expires. This is an intentional availability trade-off in the current implementation and should be covered by an explicit integration test/operational decision.
 
-Redis is optional through `REDIS_URL`. The current `docker-compose.yml` backend environment mapping does not pass `REDIS_URL` and does not define a Redis service, so the current Compose stack bypasses the Redis layer unless Compose/environment configuration is deliberately extended.
+The production Render backend uses the Render Redis service through `REDIS_URL`. Redis remains optional for other environments. The current `docker-compose.yml` backend environment mapping does not pass `REDIS_URL` and does not define a Redis service, so the local Compose stack bypasses the Redis layer.
 
 ### Bank Transaction Search Indexes
 
@@ -355,7 +355,8 @@ Personalized financial analysis is a later extension. The backend must calculate
 - [x] Add opt-in request and SQL cursor-execution diagnostics for performance investigation
 - [x] Implement optional Redis cache-aside for dashboard summary, spending and asset-allocation responses
 - [x] Add per-user generation-based cache invalidation hooks after successful domain writes
-- [ ] Verify cache behavior and invalidation reliability against a real Redis instance
+- [x] Deploy Redis alongside the production backend on Render and configure it through `REDIS_URL`
+- [ ] Verify cache behavior and invalidation reliability against the production Redis instance
 - [ ] Verify migration and trigram-index usage with realistic query plans
 - [ ] Compare local/development and production timings under comparable conditions
 - [ ] Evaluate background job execution where a concrete workload requires it

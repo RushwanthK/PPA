@@ -40,11 +40,11 @@ PostgreSQL remains the source of truth. Redis is an optional cache layer used on
           ┌───────┴────────┐
           │                │
           ▼                ▼
-  Supabase PostgreSQL   Optional Redis
+  Supabase PostgreSQL   Render Redis
   (source of truth)     (dashboard cache)
 ```
 
-The reviewed source supports an optional Redis connection through `REDIS_URL`; it does not establish which Redis provider is used or prove that a production Redis instance is connected. A missing or unavailable Redis service is handled by falling back to PostgreSQL for dashboard calculations.
+The production deployment includes a Redis service on Render alongside the Flask backend. The backend connects through `REDIS_URL`; PostgreSQL remains the source of truth and Redis caches dashboard aggregates. Runtime connectivity should be confirmed from the dashboard response's `X-Dashboard-Cache` header (`HIT`, `MISS` or `BYPASS`). If Redis is missing or unavailable, dashboard calculations fall back to PostgreSQL.
 
 ---
 
@@ -264,7 +264,7 @@ The existing transaction ordering index should also be considered when inspectin
 
 # Dashboard Redis Cache Architecture
 
-Redis is an optional cache-aside layer for three dashboard resources:
+Redis is a cache-aside layer for three dashboard resources in the Render production deployment. The code keeps Redis optional so local/CI environments and deployments without Redis can use PostgreSQL fallback:
 
 - Dashboard summary
 - Spending for a supported range (`30d`, `3m`, `6m`, `1y`, `all`)
@@ -274,7 +274,7 @@ PostgreSQL remains authoritative. Cache configuration is supplied through enviro
 
 | Variable | Default / behavior |
 |---|---|
-| `REDIS_URL` | Not set by default; enables Redis when supplied |
+| `REDIS_URL` | Render Redis connection URL in production; enables Redis when supplied |
 | `DASHBOARD_CACHE_TTL_SECONDS` | 60 seconds |
 | `REDIS_MAX_CONNECTIONS` | 5 connections |
 
@@ -324,7 +324,7 @@ The reviewed branch adds invalidation hooks in bank, savings, assets, credit-car
 - A Redis failure must not convert a successful financial database write into an API failure.
 - If invalidation fails after the database commit, the old cached generation can remain visible until its short TTL expires. This is bounded staleness, not immediate consistency.
 
-The current `docker-compose.yml` does not define a Redis service and does not pass `REDIS_URL` into the backend container. The present Compose configuration therefore does not enable the Redis cache. A local Docker Redis setup would require an explicit service and environment wiring; do not assume it is already part of the stack.
+The current `docker-compose.yml` does not define a Redis service and does not pass `REDIS_URL` into the backend container. The present local Compose configuration therefore does not enable the Redis cache. Production Redis is configured separately on Render; a local Docker Redis setup would require explicit service and environment wiring.
 
 ---
 

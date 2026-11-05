@@ -708,7 +708,7 @@ The reviewed branch adds invalidation hooks after successful writes in bank, sav
 
 Redis is fail-open: missing configuration or cache read/write failures fall back to the database. A Redis outage should not make ordinary financial writes fail. If invalidation fails after the PostgreSQL transaction has committed, an older cached dashboard response can remain accessible until the cache TTL expires. This is bounded staleness, not immediate consistency.
 
-The current Docker Compose backend environment does not pass `REDIS_URL` and the Compose file does not define a Redis service. The current Compose setup therefore bypasses Redis by default. Production or another runtime must independently provide a reachable Redis URL for the feature to be active.
+The production backend has a Redis service deployed on Render alongside it and uses `REDIS_URL` to connect. The current Docker Compose backend environment does not pass `REDIS_URL` and the Compose file does not define a Redis service, so local Compose bypasses Redis by default. Use the `X-Dashboard-Cache` response header (`HIT`, `MISS` or `BYPASS`) to observe the runtime path without recording the connection URL or credentials in project documentation.
 
 The testing configuration explicitly sets `REDIS_URL = None`, so the regular backend test suite does not require an external Redis service. `tests/test_dashboard_cache.py` uses deterministic fake Redis clients to cover a cache hit, generation invalidation/user isolation, Redis failure fallback and invalidation following a bank transaction. These test cases are present in the branch; their execution must still be verified.
 

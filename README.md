@@ -67,7 +67,7 @@ Although initially developed as a personal finance application, the project is p
 * Frontend: Vercel
 * Backend: Render
 * Database: Supabase PostgreSQL
-* Redis: optional external service configured through `REDIS_URL`; Render
+* Redis: Render Redis service alongside the backend, configured through `REDIS_URL`
 
 ---
 
@@ -149,7 +149,7 @@ Planned frontend coverage includes:
 * User-scoped cache keys with generation-token invalidation and configurable TTL
 * Cache diagnostics through the `X-Dashboard-Cache` response header (`HIT`, `MISS` or `BYPASS`)
 
-Redis is optional. When `REDIS_URL` is not configured or Redis is unavailable, dashboard calculations fall back to PostgreSQL. The cache is an optimization layer, not the source of truth. If invalidation fails after a database commit, an older cached result may remain available until its TTL expires.
+The production Render backend uses the Render Redis service through `REDIS_URL`. Redis remains optional in local/CI environments; when it is not configured or is unavailable, dashboard calculations fall back to PostgreSQL. The cache is an optimization layer, not the source of truth. If invalidation fails after a database commit, an older cached result may remain available until its TTL expires. Check `X-Dashboard-Cache` (`HIT`, `MISS` or `BYPASS`) on dashboard responses to confirm which path handled a request.
 
 ## Credit Cards
 
@@ -260,7 +260,7 @@ Optional performance diagnostics can be enabled in the backend environment with:
 PPA_PERF_DIAGNOSTICS=true
 ```
 
-Optional dashboard caching requires `REDIS_URL`. The reviewed `docker-compose.yml` does not currently pass `REDIS_URL` to the backend container or define a Redis service; the Docker Compose stack therefore bypasses Redis unless that environment wiring is added deliberately. Testing configuration explicitly disables the external Redis dependency.
+Dashboard caching uses the Render Redis service in production through `REDIS_URL`. The reviewed `docker-compose.yml` does not pass `REDIS_URL` to the backend container or define a Redis service, so the local Docker Compose stack bypasses Redis. Testing configuration explicitly disables the external Redis dependency.
 
 ---
 
