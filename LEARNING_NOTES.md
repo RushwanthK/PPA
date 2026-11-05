@@ -521,6 +521,215 @@ Only change production code for genuine defects
 Run full regression suite
 ```
 
+# Sprint 12 - Backend Performance and Transaction History Optimization
+
+This sprint records the engineering concepts introduced in the current performance branch. The code is present in the reviewed branch, but runtime measurements, migration execution and the new tests still need to be verified in the target environments.
+
+## Request-Level and SQL Performance Diagnostics
+
+The Flask application factory supports opt-in diagnostics through:
+
+```text
+PPA_PERF_DIAGNOSTICS=true
+```
+
+The setting is disabled by default. When enabled, the application creates a request ID and records:
+
+- HTTP method, Flask endpoint and response status
+- Total Flask request elapsed time (`app_ms`)
+- Time from request start until the first SQL cursor execution begins (`first_sql_start_ms`)
+- SQL cursor execution count (`sql_count`)
+- Accumulated DBAPI cursor execution time (`sql_execute_ms`)
+
+The request ID is also exposed in the `X-Request-ID` response header so a browser request can be correlated with the server log.
+
+### Important measurement boundaries
+
+`sql_execute_ms` measures DBAPI cursor execution. It does not include all result fetching, SQLAlchemy object processing, JSON serialization, frontend rendering or browser-to-server network latency. It is therefore not equivalent to total database time or end-to-end request latency.
+
+A useful performance investigation separates the request into layers:
+
+```text
+Browser / network time
+        ↓
+Flask request processing
+        ↓
+SQL execution
+        ↓
+Result fetching and ORM processing
+        ↓
+Serialization and response transfer
+        ↓
+Frontend rendering
+```
+
+Do not conclude that a request is database-bound from one timing value. Compare request elapsed time, SQL count, SQL execution time, query plans and browser timings. Keep local/development and production measurements separate unless the workloads and network conditions are comparable.
+
+### Logging safety
+
+The implementation intentionally avoids logging SQL text, SQL parameters, query strings, request bodies, user IDs and financial values. Diagnostics should remain opt-in and should not become a channel for exposing personal financial data.
+
+SQLAlchemy event listeners are attached during app creation only when the setting is enabled. Changing the environment variable therefore requires an application restart/recreation.
+
+## Bank Transaction API — Search and Structured Filters
+
+The bank transaction endpoint now retrieves filtered data on the server. Its free-text search contract is limited to:
+
+- Transaction description
+- Transaction category
+
+Other fields have dedicated behavior:
+
+- `type`: `income` or `expense`
+- `start_date`: inclusive start of the selected IST calendar date
+- `end_date`: inclusive end of the selected IST calendar date
+- `amount_range`: one of the five supported amount bands
+- `page_size`: requested result count, clamped to 1–100 (default 25)
+
+Text search intentionally does not include amount, date, balance-after or transaction type. This keeps the free-text contract explicit and allows the other dimensions to use typed filters.
+
+### Amount range boundaries
+
+The ranges use half-open intervals to avoid overlap:
+
+- `under_500`: amount `>= 0` and `< 500`
+- `500_1000`: amount `>= 500` and `< 1,000`
+- `1000_5000`: amount `>= 1,000` and `< 5,000`
+- `5000_10000`: amount `>= 5,000` and `< 10,000`
+- `10000_plus`: amount `>= 10,000`
+
+A transaction worth exactly ₹500 belongs to the ₹500–less-than-₹1,000 range; exactly ₹1,000 belongs to the next range. Half-open intervals remove ambiguity at boundaries.
+
+### IST calendar filtering over naive UTC timestamps
+
+The application's stored transaction timestamps follow a naive-UTC convention. The user selects calendar dates in IST. The backend converts IST midnight to naive UTC and filters using a half-open interval:
+
+```text
+start_utc = IST midnight on start_date converted to UTC
+end_utc_exclusive = IST midnight on (end_date + 1 day) converted to UTC
+
+WHERE transaction.date >= start_utc
+  AND transaction.date < end_utc_exclusive
+```
+
+This makes the user's end date inclusive without constructing an artificial last instant such as `23:59:59.999999`. For IST, midnight corresponds to 18:30 on the previous UTC date. The filter leaves the database timestamp column unwrapped, preserving the opportunity to use a normal index on that column.
+
+Keep the timezone convention consistent. Do not mix timezone-aware and naive timestamps casually, especially around credit-card transaction behavior, which the existing project notes identify as sensitive.
+
+## PostgreSQL Trigram Search Indexes
+
+Migration `7bc2e41d5a90` enables the `pg_trgm` extension if needed and adds two partial GIN indexes:
+
+- `ix_transaction_bank_description_trgm` on `description` using `gin_trgm_ops`
+- `ix_transaction_bank_category_trgm` on `category` using `gin_trgm_ops`
+
+Both indexes apply only to rows where `type = 'bank_transaction'`. The transaction table is shared by multiple transaction subclasses; the partial predicate avoids including unrelated transaction rows in these indexes.
+
+Trigram indexes can help with suitable `LIKE`/`ILIKE` substring patterns. They are not a guarantee of faster queries: index selection depends on data volume, selectivity, pattern length and the PostgreSQL planner's estimates. Run the migration against the intended database and inspect real plans with:
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT ...;
+```
+
+Check both the normal ordered transaction page and description/category searches. Record the dataset size and plan; do not document an index as beneficial solely because it exists.
+
+## Cursor / Keyset Pagination
+
+### Why move away from offset pagination?
+
+Offset pagination commonly requires the database to walk past earlier rows for later pages. The old API also calculated an exact `COUNT(*)` for page metadata. As the transaction history grows, the work can increase even when the client only needs the next small page.
+
+The new-client path uses keyset pagination ordered by:
+
+```sql
+ORDER BY date DESC, id DESC
+```
+
+The ID is a deterministic tie-breaker when two transactions share the same timestamp. The next page uses the lexicographic predicate:
+
+```sql
+(date, id) < (:cursor_date, :cursor_id)
+```
+
+The endpoint fetches `page_size + 1` rows. The extra row determines whether another page exists, so the normal cursor path does not need an exact total count. The older page-number path remains available when a request supplies `page`; it continues to use offset pagination and `COUNT(*)` for compatibility during frontend/backend rollout.
+
+### Cursor contents and scope
+
+The URL-safe Base64 cursor stores the precise timestamp, transaction ID, a version and a SHA-256 digest of the active filter scope. The digest prevents a client from accidentally reusing a cursor with a different bank, user, page size or filter set.
+
+The digest is not a keyed signature, and Base64 is not encryption. The cursor is not an authorization credential. The route independently verifies that the authenticated user owns the requested bank. If tamper resistance becomes a requirement, evaluate an HMAC-signed cursor as a separate API-security decision.
+
+### Pagination consistency
+
+Keyset pagination avoids the row-shifting behavior that can occur when newer rows are inserted ahead of an offset between requests. The branch tests include a case that inserts a newer transaction after page one and verifies that the subsequent cursor page continues from the prior boundary.
+
+It does not create a database snapshot spanning multiple HTTP requests. Updates/deletes to rows and concurrent writes still need to be understood in the context of the endpoint's intended consistency model.
+
+## Dashboard Cache-Aside with Redis
+
+Redis is an optional cache for dashboard aggregates. PostgreSQL remains the source of truth. The cache is enabled through `REDIS_URL`; the configured defaults include a 60-second payload TTL and a maximum Redis connection pool size of 5.
+
+Cached dashboard resources:
+
+- Summary
+- Spending for each supported range (`30d`, `3m`, `6m`, `1y`, `all`)
+- Asset allocation
+
+### Cache-aside read flow
+
+```text
+Authenticated dashboard request
+        ↓
+Read the user's generation token
+        ↓
+Build a user + generation + resource cache key
+        ↓
+Cache HIT? ── Yes ──> Return cached payload
+        │
+        No
+        ↓
+Calculate from PostgreSQL
+        ↓
+Store under the generation observed before calculation
+        ↓
+Return database result
+```
+
+The response includes `X-Dashboard-Cache` with `HIT`, `MISS` or `BYPASS`, which helps observe which path ran. It does not itself measure the speedup.
+
+### Generation-token invalidation
+
+Each user has a generation key. A successful database write rotates that user's generation value. New dashboard requests therefore build a new key namespace and do not find cached values from the prior generation. This avoids scanning or deleting every old resource key. Old values expire under their own short TTL.
+
+The reviewed branch adds invalidation hooks after successful writes in bank, savings, asset, credit-card and user route modules. When extending or changing a financial write path, check whether it can affect summary, spending or asset allocation and whether the invalidation hook is present after commit.
+
+### Failure behavior and consistency trade-off
+
+Redis is fail-open: missing configuration or cache read/write failures fall back to the database. A Redis outage should not make ordinary financial writes fail. If invalidation fails after the PostgreSQL transaction has committed, an older cached dashboard response can remain accessible until the cache TTL expires. This is bounded staleness, not immediate consistency.
+
+The current Docker Compose backend environment does not pass `REDIS_URL` and the Compose file does not define a Redis service. The current Compose setup therefore bypasses Redis by default. Production or another runtime must independently provide a reachable Redis URL for the feature to be active.
+
+The testing configuration explicitly sets `REDIS_URL = None`, so the regular backend test suite does not require an external Redis service. `tests/test_dashboard_cache.py` uses deterministic fake Redis clients to cover a cache hit, generation invalidation/user isolation, Redis failure fallback and invalidation following a bank transaction. These test cases are present in the branch; their execution must still be verified.
+
+## Frontend Transaction Table and Navigation
+
+The bank page now maintains search input and debounced search state separately. A 300 ms debounce avoids issuing a request for every keystroke. Cursor history is stored in a React ref so remembering the next cursor does not itself trigger another fetch. Page, page size and filter changes reset or use the appropriate cursor boundary.
+
+An effect cleanup flag prevents stale results from updating the component after the relevant request effect has been cancelled. After a transaction is added, the cursor history resets and page one is refreshed; a partial page is not manually modified on the client.
+
+The shared `TransactionTableDialog` supports both cursor pagination and the legacy page-number display, and exposes search, type, date, amount and clear-filter controls with loading/error feedback.
+
+The desktop navigation sidebar uses CSS `position: sticky` below a calculated header offset. It has its own vertical scrolling container and is not viewport-fixed. The mobile navigation retains overlay behavior and closes after navigation.
+
+## Tests Added for the Performance Changes
+
+The reviewed `tests/test_banks.py` adds cases for cursor validation/scope, concurrent insertion between cursor pages, combined filters, legacy pagination, avoiding exact count queries on the cursor path, search contract, amount boundaries, IST boundaries, invalid filters and authorization.
+
+`tests/test_dashboard_cache.py` adds four tests for cache hit, generation invalidation and user separation, Redis outage fallback, and bank-transaction invalidation.
+
+The code review confirms that test cases are present; it does not prove that they pass. Run focused tests first, then the complete backend regression suite, and record the actual command, environment and output. The previous `389 passed, 5 warnings` result remains historical until rerun.
+
 ## Current Testing Position
 
 The backend testing foundation is established, and testing now needs to progress from module-by-module coverage to a systematic audit of remaining transaction behaviors.
@@ -594,21 +803,6 @@ Focus on:
 - Checking ownership, missing-resource behavior, transaction history and error responses.
 - Distinguishing a test setup problem from a genuine application defect.
 - Re-running the complete regression suite after changes.
-
-### Initial Audit Candidate: Non-Finite Amounts
-
-Static inspection identified a candidate area to investigate in:
-
-- `app/banks/bank_routes.py`
-- `app/credit_cards/credit_card_routes.py`
-
-Review how these endpoints handle `NaN` and positive or negative infinity.
-
-A useful test should verify the API response and the resulting database state, including whether any balance changes or transaction records are created.
-
-This is an investigation target, not a confirmed defect. Run the tests and determine the actual behavior before changing production code.
-
-The existing savings and asset transaction implementations provide useful comparison points because they already contain explicit finite-number validation.
 
 ## Frontend Automated Testing
 

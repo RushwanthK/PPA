@@ -2,7 +2,7 @@
 
 ## Current Overall Status
 
-Review basis: the repository ZIP supplied for review, whose file entries are dated September 13, 2026. This document does not independently verify changes made after that snapshot or the current state of live cloud services.
+Review basis: direct source review of `RushwanthK/PPA`, branch `perf/add-request-diagnostics`, at commit `7cfee3c177f6b12b6178c7b1762b9577f19c8d13` (October 28, 2026, 11:21:12 UTC). At the November 5, 2026 review, this branch was 10 commits ahead of `main` and 0 behind. This is a source-code review; it does not independently verify test execution, migration execution, merge status, branch protection or live deployment/runtime behavior.
 
 PPA is an established full-stack personal finance application and a structured learning project for Full Stack Engineering and DevOps.
 
@@ -14,6 +14,9 @@ PPA is an established full-stack personal finance application and a structured l
 - Docker volumes, networking and Docker Compose
 - Git/GitHub workflow and repository safety practices
 - GitHub Actions CI foundation
+- Opt-in backend request/SQL timing diagnostics
+- Server-side bank transaction search/filtering and cursor-pagination implementation
+- Optional Redis cache-aside implementation for dashboard aggregates
 
 ### Current Phase — Phase 3: Automated Testing
 
@@ -21,17 +24,31 @@ Backend automated testing is well established across the major modules.
 
 The repository workflow already contains a backend pytest execution step. The remaining Phase 3 work is to finish the transaction-specific coverage audit, establish meaningful frontend automated tests, include those tests in CI, and verify consistent successful execution.
 
-The project notes record a previous full backend regression result of 389 passed tests with five warnings. This result must be re-run before it is treated as the current verified result.
+The project notes record a previous full backend regression result of 389 passed tests with five warnings. This result has not been re-run against the reviewed branch and must not be treated as its current verified result.
+
+### Performance Engineering Work in the Reviewed Branch
+
+The branch contains additional implementation work in parallel with Phase 3:
+
+- Request-level performance diagnostics can be enabled through `PPA_PERF_DIAGNOSTICS`.
+- Bank transaction history now uses cursor/keyset pagination by default, with legacy page-number compatibility.
+- Bank transaction filtering covers description/category search, type, IST calendar dates and amount ranges.
+- Migration `7bc2e41d5a90` adds partial GIN trigram indexes for bank transaction description and category search.
+- The dashboard has optional Redis cache-aside for summary, spending-by-range and asset-allocation responses, with per-user generation tokens and TTL.
+- Cache invalidation hooks have been added after successful write operations in bank, savings, asset, credit-card and user routes.
+- The frontend bank transaction dialog consumes the cursor API, debounces search and tracks cursor history; the desktop sidebar is sticky below the header.
+
+These are implemented in the reviewed source. Their test execution, query-plan benefit, live Redis connectivity, migration execution and production performance impact remain to be verified separately.
 
 ### Planned Phase 3B — RAG and AI Integration
 
-A separate project-document learning chatbot and the PPA Knowledge Copilot are planned after automated testing and before Phase 4. The uploaded code snapshot contains a chatbot placeholder, not the planned RAG implementation.
+A separate project-document learning chatbot and the PPA Knowledge Copilot are planned after automated testing and before Phase 4. The reviewed code does not contain the planned RAG implementation.
 
 ### Remaining Roadmap
 
 After the above work, the project will proceed to Docker integrated into CI, automated deployment, production security, reliability, logging and monitoring, system design, and optional advanced engineering.
 
-Live GitHub Actions results, branch-protection settings and the current state of Vercel, Render and Supabase must be checked separately before claiming they are currently healthy.
+Live GitHub Actions results, branch-protection settings and the current state of Vercel, Render, Supabase and any Redis service must be checked separately before claiming they are currently healthy.
 
 ---
 
@@ -108,6 +125,23 @@ Live GitHub Actions results, branch-protection settings and the current state of
 * [x] Credit Cards
 * [x] Dashboard
 
+### Banks — Transaction History
+
+The existing `tests/test_banks.py` has been expanded alongside the new endpoint behavior. The added coverage includes:
+
+* [x] Cursor pagination and filter-scope mismatch handling covered by test cases
+* [x] Malformed cursor handling covered by test cases
+* [x] Stable continuation when newer transactions are inserted between page requests covered by a test case
+* [x] Combined filters across cursor pages covered by a test case
+* [x] Legacy page-number pagination compatibility covered by a test case
+* [x] No exact `COUNT(*)` query on the normal cursor-pagination path covered by a test case
+* [x] Description/category-only case-insensitive text search covered by a test case
+* [x] Non-overlapping amount-range boundaries covered by test cases
+* [x] Inclusive IST calendar-date filtering and midnight boundaries covered by a test case
+* [x] Invalid date/type/amount-range and authorization behavior covered by test cases
+
+These checkmarks mean the corresponding test cases are present in the reviewed branch. They do not mean the tests have been executed successfully during this review.
+
 ### Credit Cards
 
 * [x] CRUD routes
@@ -158,11 +192,48 @@ Dashboard focused suite:
 
 `22 passed`
 
+### Dashboard Redis Cache — New Implementation
+
+The reviewed branch adds optional cache-aside behavior for:
+
+* [x] Dashboard summary
+* [x] Spending by selected range (`30d`, `3m`, `6m`, `1y`, `all`)
+* [x] Asset allocation
+* [x] User-scoped cache keys and per-user generation tokens
+* [x] Configurable cache TTL (default 60 seconds)
+* [x] Bounded Redis connection pool (default maximum 5 connections)
+* [x] Fail-open fallback to PostgreSQL when Redis is unavailable
+* [x] `X-Dashboard-Cache` diagnostic response header (`HIT`, `MISS`, `BYPASS`)
+* [x] Cache invalidation hooks after successful writes in bank, savings, asset, credit-card and user route modules
+
+`tests/test_dashboard_cache.py` adds four focused test cases for cache hit behavior, generation invalidation/user isolation, Redis failure fallback and invalidation after a bank transaction. The code and tests are present; execution on this branch has not been verified during this review.
+
+Important consistency limitation: a Redis invalidation failure after the PostgreSQL commit does not fail the financial write. An older cache generation may remain visible until its TTL expires. This is an intentional availability trade-off in the current implementation and should be covered by an explicit integration test/operational decision.
+
+Redis is optional through `REDIS_URL`. The current `docker-compose.yml` backend environment mapping does not pass `REDIS_URL` and does not define a Redis service, so the current Compose stack bypasses the Redis layer unless Compose/environment configuration is deliberately extended.
+
+### Bank Transaction Search Indexes
+
+Migration:
+
+`migrations/versions/7bc2e41d5a90_add_bank_transaction_search_indexes.py`
+
+* [x] Enable PostgreSQL `pg_trgm` extension if it is not already enabled
+* [x] Add partial GIN trigram index for bank transaction descriptions
+* [x] Add partial GIN trigram index for bank transaction categories
+
+Index names:
+
+- `ix_transaction_bank_description_trgm`
+- `ix_transaction_bank_category_trgm`
+
+The migration is present in the branch. Application to the intended hosted database and actual planner/index usage have not been verified in this review.
+
 ### Last Recorded Backend Regression
 
 The existing project notes record the following full backend test result:
 
-`389 passed, 5 warnings`
+`411 passed, 5 warnings`
 
 This is the last recorded result available in the project documentation, not a result independently reproduced during the latest repository review.
 
@@ -175,18 +246,6 @@ Do not change financial calculations or timestamp behavior merely to make a test
 ---
 
 ## Remaining Phase 3 Work
-
-### Backend Transaction Audit
-
-- [ ] Review meaningful transaction paths that still lack regression coverage.
-- [ ] Investigate non-finite amounts (`NaN` and infinity) in bank transaction creation.
-- [ ] Investigate non-finite amounts (`NaN` and infinity) in credit-card transaction creation.
-- [ ] Where appropriate, assert that invalid input returns a client error, leaves balances unchanged and creates no transaction record.
-- [ ] Review transaction history, ownership checks, validation failures and database side effects for meaningful gaps.
-- [ ] Complete any conservative cleanup justified by the audit.
-- [ ] Re-run the full backend suite after making changes.
-
-The non-finite-amount checks are candidate audit items identified through static code inspection. They are not yet confirmed failing tests. Verify the actual endpoint behavior before treating them as established application defects.
 
 ### Frontend Test Readiness
 
@@ -231,7 +290,7 @@ After Phase 3 is complete, proceed to Phase 3B — RAG and AI Integration, follo
 
 ### Phase 3B — RAG and AI Integration
 
-**Status: Planned. Not implemented in the reviewed repository snapshot.**
+**Status: Planned. Not implemented in the reviewed repository.**
 
 The goal is to develop two related projects:
 
@@ -291,23 +350,27 @@ Personalized financial analysis is a later extension. The backend must calculate
 
 ### Phase 9 — System Design & Scalability
 
-* [ ] Document architecture and trade-offs
-* [ ] Scalability analysis
-* [ ] Caching decisions
-* [ ] Redis evaluation
-* [ ] Background job evaluation
+- [ ] Document architecture and trade-offs
+- [ ] Scalability analysis
+- [x] Add opt-in request and SQL cursor-execution diagnostics for performance investigation
+- [x] Implement optional Redis cache-aside for dashboard summary, spending and asset-allocation responses
+- [x] Add per-user generation-based cache invalidation hooks after successful domain writes
+- [ ] Verify cache behavior and invalidation reliability against a real Redis instance
+- [ ] Verify migration and trigram-index usage with realistic query plans
+- [ ] Compare local/development and production timings under comparable conditions
+- [ ] Evaluate background job execution where a concrete workload requires it
 
 ### Phase 10 — Advanced / Optional Engineering
 
-* [ ] Redis
-* [ ] Background jobs
-* [ ] Caching
-* [ ] Rate limiting
-* [ ] API versioning
-* [ ] Advanced authentication
-* [ ] Performance testing
-* [ ] Load testing
-* [ ] Infrastructure as Code
+- [x] Redis — initial optional dashboard cache integration; broader adoption remains conditional on need
+- [ ] Background jobs
+- [x] Caching — dashboard cache-aside with TTL and per-user generation invalidation
+- [ ] Rate limiting
+- [ ] API versioning
+- [ ] Advanced authentication
+- [ ] Performance testing
+- [ ] Load testing
+- [ ] Infrastructure as Code
 
 Only add these when they solve a real engineering problem.
 
@@ -324,6 +387,8 @@ GitHub Actions CI foundation           ✅
 Phase 3 — Automated Testing            🟡 IN PROGRESS
     Backend module test coverage       ✅ Established
     Backend pytest configured in CI    ✅
+    Bank cursor/filter test cases      ✅ Added; execution not re-verified
+    Dashboard cache test cases         ✅ Added; execution not re-verified
     Transaction-specific audit         ← NEXT
     Frontend test setup                ⏳
     Frontend automated test coverage   ⏳
@@ -340,10 +405,20 @@ Phase 5 — Automated deployment         ⏳
 Phase 6 — Security / configuration     ⏳
 Phase 7 — Reliability                  ⏳
 Phase 8 — Logging / monitoring         ⏳
-Phase 9 — System design / scalability  ⏳
-Phase 10 — Advanced engineering        ⏳ OPTIONAL
+
+Phase 9 — System design / scalability  🟡 IN PROGRESS
+    Request/SQL diagnostics            ✅ Implemented; runtime evidence pending
+    Dashboard Redis cache               ✅ Implemented; runtime verification pending
+    Cache invalidation hooks            ✅ Implemented; integration verification pending
+    Query-plan / benchmark verification ⏳
+    Broader scalability analysis       ⏳
+
+Phase 10 — Advanced engineering        🟡 PARTIALLY COMPLETE
+    Redis dashboard cache               ✅ Initial integration
+    Dashboard cache-aside               ✅ Initial integration
+    Background jobs / load testing      ⏳
 ```
 
-The immediate next step is to complete the meaningful backend transaction audit before moving to the frontend test foundation. Phase 3B begins after Phase 3 is complete and before Phase 4.
+The immediate next step is to complete the baclend security and optimization and verify the new performance-related test cases before moving to the frontend test foundation. Phase 3B begins after Phase 3 is complete and before Phase 4.
 
-Status must be updated again after the relevant tests and CI checks have actually been run.
+Status must be updated again after the relevant tests, migration, query-plan and CI checks have actually been run.

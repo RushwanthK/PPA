@@ -43,10 +43,11 @@ Although initially developed as a personal finance application, the project is p
 * Flask-Migrate
 * Flask-JWT-Extended
 * Flask-CORS
+* Redis (`redis-py`) — optional cache for dashboard aggregates
 
 ## Database
 
-* PostgreSQL
+* PostgreSQL `pg_trgm` extension — trigram indexes for bank transaction description/category substring search
 
 ## Authentication
 
@@ -66,6 +67,7 @@ Although initially developed as a personal finance application, the project is p
 * Frontend: Vercel
 * Backend: Render
 * Database: Supabase PostgreSQL
+* Redis: optional external service configured through `REDIS_URL`; Render
 
 ---
 
@@ -88,11 +90,11 @@ Test modules cover the following areas:
 - Dashboard
 - Database isolation and transaction-related behavior
 
-**Last recorded backend regression result:** `389 passed, 5 warnings`.
+The bank test module has been expanded to cover the new transaction-history API behavior, including cursor pagination, filter scope, legacy page-number compatibility, query-count behavior, text search, amount boundaries, IST date boundaries, invalid filters and authorization. `tests/test_dashboard_cache.py` adds focused tests for cache hits, generation invalidation/user isolation, Redis failure fallback and invalidation after a bank transaction.
 
-This result comes from the existing project notes and has not been independently re-run during the latest documentation review. Re-run the full test suite before treating it as the current verified result.
+**Last recorded full backend regression result:** `411 passed, 5 warnings`.
 
-The remaining backend work is to review transaction-specific edge cases, close meaningful coverage gaps, and perform conservative cleanup where justified by the findings.
+This result comes from the existing project notes and has not been independently re-run against the reviewed branch. The presence of new test cases in the branch does not establish that those tests have passed. Re-run the focused suites and the complete test suite before recording a new result.
 
 ### GitHub Actions CI
 
@@ -108,7 +110,7 @@ The workflow in `.github/workflows/ci.yml` currently:
 
 Backend pytest execution is already configured in CI.
 
-The workflow does not yet run frontend automated tests or build Docker images. A successful recent GitHub Actions run and repository branch-protection settings still need to be verified.
+The workflow does not yet run frontend automated tests or build Docker images. A successful recent GitHub Actions run and repository branch-protection settings still need to be verified. The reviewed performance branch is not evidence of a green CI run merely because the workflow definition exists.
 
 ### Frontend Testing
 
@@ -129,11 +131,10 @@ Planned frontend coverage includes:
 
 ### Immediate Next Steps
 
-1. Complete the backend transaction-specific testing audit.
-2. Resolve the frontend test setup and replace the starter test.
-3. Add meaningful frontend regression tests.
-4. Add frontend test execution to GitHub Actions while retaining the production build check.
-5. Verify the complete pipeline and update the status after successful execution.
+1. Resolve the frontend test setup and replace the starter test.
+2. Add meaningful frontend regression tests.
+3. Add frontend test execution to GitHub Actions while retaining the production build check.
+4. Verify the complete pipeline and update the status after successful execution.
 
 # Current Features
 
@@ -144,6 +145,11 @@ Planned frontend coverage includes:
 * Net worth calculations
 * Spending analysis
 * Asset allocation
+* Optional Redis cache-aside for summary, spending-by-range and asset-allocation responses
+* User-scoped cache keys with generation-token invalidation and configurable TTL
+* Cache diagnostics through the `X-Dashboard-Cache` response header (`HIT`, `MISS` or `BYPASS`)
+
+Redis is optional. When `REDIS_URL` is not configured or Redis is unavailable, dashboard calculations fall back to PostgreSQL. The cache is an optimization layer, not the source of truth. If invalidation fails after a database commit, an older cached result may remain available until its TTL expires.
 
 ## Credit Cards
 
@@ -178,6 +184,30 @@ Planned frontend coverage includes:
 * Multiple bank accounts
 * Bank balances
 * Linked assets and savings
+* Server-side transaction history with cursor/keyset pagination by default
+* Legacy page-number pagination retained temporarily for compatibility
+* Server-side description/category substring search
+* Structured filters for transaction type, IST calendar dates and amount ranges
+* Bounded page size (1–100; default 25)
+* PostgreSQL trigram indexes for description/category substring search
+
+### Bank Transaction Pagination and Filtering
+
+The normal API path uses keyset pagination ordered by `date DESC, id DESC`. It fetches one extra row (`page_size + 1`) to determine `has_more`, avoiding an exact `COUNT(*)` query on each cursor-based page. The older page-number request remains supported as a compatibility path and continues to use `COUNT(*)` and offset pagination.
+
+Search is deliberately limited to `description` and `category`. Transaction type, date and amount are handled by dedicated filters. Date selections represent IST calendar days; the backend converts local-midnight boundaries to naive UTC and applies a half-open interval (`date >= start`, `date < day-after-end`) so the selected end date is inclusive without relying on a fabricated end-of-day timestamp.
+
+Amount ranges use non-overlapping lower-inclusive/upper-exclusive boundaries: `<500`, `500–<1,000`, `1,000–<5,000`, `5,000–<10,000` and `10,000+`.
+
+### Bank Transaction Search Indexes
+
+Migration `7bc2e41d5a90` enables `pg_trgm` and creates partial GIN trigram indexes on bank transaction descriptions and categories. These indexes are intended to support the endpoint's case-insensitive substring predicates. Their presence does not prove that PostgreSQL selects them; verify index usage with representative data and `EXPLAIN (ANALYZE, BUFFERS)`.
+
+## Performance Diagnostics
+
+The backend supports opt-in request and SQL execution timing through `PPA_PERF_DIAGNOSTICS`. It is disabled by default. When enabled, responses include an `X-Request-ID` and the backend logs request duration, time to first SQL execution, SQL execution count and accumulated DBAPI cursor-execution time. The instrumentation avoids logging SQL statements, parameters, request bodies, query strings, user identifiers and financial values.
+
+The SQL timing metric does not include all result fetching, ORM processing, response serialization, browser rendering or network time. Use it with browser timing and database query plans rather than treating it as complete end-to-end latency.
 
 ---
 
@@ -187,9 +217,13 @@ Planned frontend coverage includes:
 PPA
 │
 ├── app/                 # Flask backend
+│   ├── banks/           # Bank APIs, including transaction filters and cursor pagination
+│   ├── dashboard/       # Dashboard API and aggregation services
+│   └── utils/           # Shared utilities, including dashboard_cache.py
 ├── portfolio-app/       # React frontend
-├── migrations/          # Alembic migrations
+├── migrations/          # Alembic migrations, including pg_trgm search indexes
 ├── tests/               # Backend automated tests
+├── .github/workflows/   # GitHub Actions CI
 ├── requirements.txt
 ├── run.py
 ├── config.py
@@ -220,6 +254,14 @@ Backend tests
 pytest -v
 ```
 
+Optional performance diagnostics can be enabled in the backend environment with:
+
+```text
+PPA_PERF_DIAGNOSTICS=true
+```
+
+Optional dashboard caching requires `REDIS_URL`. The reviewed `docker-compose.yml` does not currently pass `REDIS_URL` to the backend container or define a Redis service; the Docker Compose stack therefore bypasses Redis unless that environment wiring is added deliberately. Testing configuration explicitly disables the external Redis dependency.
+
 ---
 
 # Roadmap
@@ -241,9 +283,6 @@ pytest -v
 
 - [x] Backend test modules established for the major application areas
 - [x] Backend pytest step configured in CI
-- [ ] Complete the transaction-specific backend coverage audit
-- [ ] Investigate non-finite transaction amounts (`NaN` and infinity) for bank and credit-card transactions
-- [ ] Address any confirmed validation or regression gaps
 - [ ] Complete conservative backend cleanup where justified
 - [ ] Resolve the frontend test setup and dependency issue
 - [ ] Replace the default frontend starter test with meaningful PPA tests
@@ -251,6 +290,8 @@ pytest -v
 - [ ] Add frontend test execution to GitHub Actions
 - [ ] Verify consistent backend and frontend test execution
 - [ ] Verify the latest successful CI run and the required-check settings for pull requests
+
+The branch includes additional bank transaction and dashboard-cache test cases, but Phase 3 remains in progress until the branch's focused and full test suites have actually been run and the frontend test foundation is established.
 
 Phase 3 is complete when backend and frontend test suites run consistently, meaningful coverage is established, and CI validates both suites alongside the React production build.
 
@@ -313,15 +354,22 @@ Personalized financial analysis using private user transactions must wait until 
 ## Phase 9 — System Design and Scalability
 
 - [ ] Document architecture and important technology trade-offs
-- [ ] Analyze performance bottlenecks
-- [ ] Evaluate caching, Redis and background jobs against real requirements
+- [ ] Analyze performance bottlenecks using request diagnostics, browser timing and database query plans
+- [x] Implement optional Redis cache-aside for dashboard aggregates with TTL and per-user generation-token invalidation
+- [x] Add opt-in request/SQL execution diagnostics without logging sensitive request or SQL data
+- [ ] Verify cache invalidation across all dashboard-affecting write paths, including Redis outage/invalidation-failure behavior
+- [ ] Verify the new trigram indexes and transaction ordering indexes using representative data and `EXPLAIN (ANALYZE, BUFFERS)`
+- [ ] Compare local/development and production measurements under comparable workloads
+- [ ] Evaluate background jobs against actual workload requirements
 - [ ] Document RAG retrieval, financial calculation and LLM-generation boundaries
 - [ ] Evaluate scalability and concurrent workloads
 
 ## Phase 10 — Advanced / Optional Engineering
 
 - [ ] Evaluate rate limiting and API versioning
-- [ ] Evaluate caching and background jobs
+- [x] Redis — initial optional integration for dashboard caching; broader adoption remains conditional on need
+- [ ] Background jobs
+- [x] Caching — cache-aside implementation for dashboard summary, spending and asset-allocation responses
 - [ ] Explore performance and load testing
 - [ ] Consider Infrastructure as Code
 - [ ] Explore additional technologies only when they address an identified engineering need
