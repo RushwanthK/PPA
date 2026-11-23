@@ -732,7 +732,7 @@ The code review confirms that test cases are present; it does not prove that the
 
 # Sprint 13 - Phase 3: Regression, Auth/API Security and Frontend Tests
 
-Phase 3 was widened so that the public app's auth and API security is hardened before testing is declared complete: 3A backend regression, 3B auth/API security, 3C frontend tests, 3D CI and docs. Everything below was verified locally on November 23, 2026. None of it has been deployed yet.
+Phase 3 was widened so that the public app's auth and API security is hardened before testing is declared complete: 3A backend regression, 3B auth/API security, 3C frontend tests, 3D CI and docs. Everything below was verified locally and then deployed to production on November 23, 2026 (migration first, then frontend, then the manual Render deploy).
 
 ## 3A — Backend Regression
 
@@ -788,6 +788,8 @@ Migration lesson: adding a `NOT NULL` column with a constant default is metadata
 ## 3D — CI
 
 - The workflow now runs the frontend tests (`CI=true`, no watch mode) before the build.
+- CI must run on the branch that actually deploys. Production deploys from `perf/add-request-diagnostics`, but the workflow originally triggered only on `main`, so nothing checked production pushes. The triggers now include that branch.
+- CI does not automatically gate deploys: Vercel deploys on push in parallel with CI. Only the manual Render deploy can wait for a green run.
 - The CI JWT key had to be lengthened after the PyJWT upgrade. Warnings jumped from 5 to 708, which is a reminder to read the warnings, not just the pass count.
 
 ## Engineering Habits Reinforced
@@ -806,7 +808,9 @@ JWT logout / revocation (3B)     ✅
 API hardening + deps (3B)        ✅
 Frontend tests (3C)              ✅ 201 passed locally
 CI workflow + docs (3D)          ✅ Updated
-Commit, deploy, real CI run      ← NEXT
+Commit + production deploy      ✅ Nov 23, 2026
+CI triggers for prod branch      ✅
+First green CI run               ← NEXT
 Refresh tokens / token storage   ⏳ Later security work
 RAG and AI learning              ⏳ After Phase 3
 ```

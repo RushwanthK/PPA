@@ -1,12 +1,20 @@
 name: PPA CI
 
+# Production (Vercel and Render) deploys from perf/add-request-diagnostics,
+# so CI must run there as well as on main. Vercel deploys on push in
+# parallel with CI; a red run means the live frontend may be broken and the
+# manual Render deploy must wait until CI is green again.
 on:
   push:
     branches:
       - main
+      - perf/add-request-diagnostics
   pull_request:
     branches:
       - main
+      - perf/add-request-diagnostics
+  # "Run workflow" button in the Actions tab, for any branch.
+  workflow_dispatch:
 
 jobs:
   ci:

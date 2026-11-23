@@ -2,7 +2,7 @@
 
 ## Current Overall Status
 
-Basis: branch `perf/add-request-diagnostics`, last commit `5318acd`, plus the **uncommitted** Phase 3 work described below (status as of November 23, 2026). The test results below were run locally on that working tree. They have not yet been reproduced in GitHub Actions, and nothing in this update has been deployed to Vercel, Render or Supabase.
+Basis: branch `perf/add-request-diagnostics` at commit `306bdb8` (November 23, 2026). **This branch is the production branch** for both Vercel and Render (not `main`, which is 13+ commits behind). The Phase 3 work is committed, pushed and deployed: migration `0557b33bd281` is applied on Supabase, Vercel serves the new frontend and the new backend is deployed manually on Render.
 
 PPA is an established full-stack personal finance application and a structured learning project for Full Stack Engineering and DevOps. It is used daily with real financial data, so every change goes through a manual review, commit and deployment step.
 
@@ -27,7 +27,7 @@ Phase 3 was widened on November 22, 2026 so that the public app's security is ha
 | 3A | Full backend regression and fixes | ✅ Done locally |
 | 3B | Auth/API security: rate limiting, JWT lifecycle, request limits, CORS, error replies, dependencies | ✅ Done locally (refresh tokens deliberately deferred) |
 | 3C | Frontend automated tests | ✅ Done locally |
-| 3D | CI runs both test suites; documentation updated | 🟡 Workflow updated and docs updated; real GitHub Actions run not yet verified |
+| 3D | CI runs both test suites; documentation updated | 🟡 Workflow (including production-branch triggers) and docs updated; first green run not yet confirmed |
 
 **Local verification (November 23, 2026):**
 
@@ -38,12 +38,21 @@ Phase 3 was widened on November 22, 2026 so that the public app's security is ha
 - Rate limiting was also checked against a real local Redis 8 instance (per-IP, per-account and registration limits; every key had a TTL and contained only hashed usernames).
 - Migration `0557b33bd281` was upgraded, downgraded and re-upgraded on a throwaway local database.
 
-**Not yet verified:**
+**Production deployment (November 23, 2026):**
 
-- A green GitHub Actions run of the updated workflow, and branch-protection/required-check settings.
-- The new migration on Supabase, and the new backend on Render.
-- Production values: `JWT_SECRET_KEY` strength, `TRUSTED_PROXY_COUNT`, Render Key Value eviction policy and memory headroom.
-- A visual check of the new Profile dialog field and buttons in a real browser.
+- The owner applied migration `0557b33bd281` on Supabase (`alembic_version` = `0557b33bd281`), set a new 32+ byte `JWT_SECRET_KEY` on Render, deployed the backend manually, and confirmed the live app works.
+- Read-only checks against production (no logins, no rate-limited endpoints):
+  - The deployed frontend bundle calls `rs-ppa-backend-v2.onrender.com`, includes `logout-all` and no longer sets `withCredentials`.
+  - Backend responses carry `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and HSTS.
+  - `GET /me` and `POST /logout` without a token return `401 {"error": "Please log in to continue."}` (the new uniform reply; the old backend had no `/logout`).
+  - A CORS preflight from `https://rs-ppa.vercel.app` is allowed for the `Authorization` header, with no `Access-Control-Allow-Credentials`.
+
+**Still open:**
+
+- **CI on the production branch:** the workflow triggers now include `perf/add-request-diagnostics` (and a manual "Run workflow" button). The first green run there still has to be confirmed. Vercel deploys in parallel with CI, so CI cannot block the frontend deploy; deploy the backend on Render only after a green run.
+- `TRUSTED_PROXY_COUNT` is deliberately unset (0) in production, so all clients share the proxy's IP rate-limit bucket. Determine the real hop count and set it.
+- Rate-limit behavior (429) has not been exercised in production, to avoid locking out the owner through the shared bucket.
+- Branch-protection/required-check settings.
 
 ### Planned After Phase 3 — RAG and AI Integration
 
@@ -111,7 +120,9 @@ All hosting must stay on free tiers.
 * [x] Backend Python validation
 * [x] Backend pytest execution (`pytest -q`)
 * [x] Node 22 setup and `npm ci`
-* [x] Frontend Jest tests (`npm test -- --watchAll=false`) — **added in Phase 3, not yet run on GitHub**
+* [x] Frontend Jest tests (`npm test -- --watchAll=false`) — added in Phase 3
+* [x] CI triggers include the production branch `perf/add-request-diagnostics`, plus `workflow_dispatch`
+* [ ] First green run on the production branch confirmed
 * [x] React production build validation
 * [x] CI-only JWT key of sufficient length (32+ bytes)
 * [x] CI failure/recovery exercise
@@ -240,15 +251,16 @@ Result: `201 passed` in 14 suites (local, November 23, 2026).
 - [x] Workflow defines backend tests, frontend tests and the React build
 - [x] Targeted auth/API security hardening with regression tests
 - [x] Documentation updated
-- [ ] Changes reviewed, committed and pushed to the branch the owner chooses
-- [ ] A real GitHub Actions run passes; required-check settings verified
-- [ ] Production configuration and deployment completed (see checklist below)
+- [x] Changes reviewed, committed and pushed (`306bdb8` on `perf/add-request-diagnostics`)
+- [x] Production configuration and deployment completed (see checklist below)
+- [x] CI triggers cover the production branch
+- [ ] A CI run on the production branch passes; required-check settings verified
 
 ---
 
 ## Deployment Checklist for This Change Set
 
-Order matters because the frontend auto-deploys on push and the backend is deployed manually.
+**Completed on November 23, 2026**, except for `TRUSTED_PROXY_COUNT` (left at 0 on purpose) and the CI item. Kept as the reference order for future backend/frontend changes. Order matters because the frontend auto-deploys on push and the backend is deployed manually.
 
 1. **Generate a strong JWT key** (32+ random bytes), e.g. `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Set it as `JWT_SECRET_KEY` on Render and in the local `.env`. Changing it logs every user out once; they now get a clean 401 and the login page.
 2. **Set `TRUSTED_PROXY_COUNT` on Render** to the real number of proxies that append to `X-Forwarded-For` (check the header first). `0` makes everyone share the proxy's IP bucket; too high lets clients spoof their IP.
@@ -365,16 +377,18 @@ Docker foundation                      ✅
 Git / GitHub workflow                  ✅
 GitHub Actions CI foundation           ✅
 
-Phase 3 — Testing + Auth/API Security  🟡 CODE DONE, NOT YET SHIPPED
+Phase 3 — Testing + Auth/API Security  🟡 DEPLOYED; FIRST CI RUN PENDING
     3A Backend regression              ✅ 465 passed (local)
     3B Rate limiting                   ✅ Verified with local Redis
     3B JWT logout / revocation         ✅ Migration checked locally
     3B API hardening + dependencies    ✅
     3C Frontend tests                  ✅ 201 passed (local)
     3D CI workflow + docs              ✅ Updated
-    Commit / push (owner's branch)     ← NEXT
-    Production config + deploy         ⏳
-    Real GitHub Actions run            ⏳
+    Commit / push                      ✅ 306bdb8
+    Production config + deploy         ✅ Nov 23, 2026
+    CI triggers for production branch  ✅ (uncommitted)
+    First green CI run                 ← NEXT
+    TRUSTED_PROXY_COUNT                ⏳
 
 RAG & AI Integration                   ⏳ PLANNED
 Phase 4 — Docker in CI                 ⏳
@@ -386,4 +400,4 @@ Phase 9 — System design / scalability  🟡 IN PROGRESS
 Phase 10 — Advanced engineering        🟡 PARTIALLY COMPLETE
 ```
 
-The immediate next step is for the owner to review and commit the Phase 3 work to a branch of their choice, then follow the deployment checklist above. Status must be updated again after the GitHub Actions run, the Supabase migration and the Render deployment have actually happened.
+The immediate next steps are to commit the CI trigger change, confirm a green run on the production branch, and set `TRUSTED_PROXY_COUNT` from real request data. Phase 3 is complete after that.

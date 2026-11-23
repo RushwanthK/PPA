@@ -82,7 +82,7 @@ Although initially developed as a personal finance application, the project is p
 
 # Current Status — Phase 3: Testing and Auth/API Security
 
-Phase 3 covers backend regression (3A), targeted auth/API security (3B), frontend tests (3C), and CI plus documentation (3D). The code for all four parts is complete on the working branch but **not yet committed or deployed**. See `PROJECT_STATUS.md` for the full checklist and the deployment order.
+Phase 3 covers backend regression (3A), targeted auth/API security (3B), frontend tests (3C), and CI plus documentation (3D). All four parts are committed (`306bdb8`) and **deployed to production** on November 23, 2026. Production deploys from the `perf/add-request-diagnostics` branch. See `PROJECT_STATUS.md` for the full checklist and the deployment order.
 
 ### Local Verification (November 23, 2026)
 
@@ -93,7 +93,7 @@ Phase 3 covers backend regression (3A), targeted auth/API security (3B), fronten
 | `CI=true npm run build` | Compiled successfully |
 | `pip-audit` | No known vulnerabilities |
 
-These are local results. A real GitHub Actions run of the updated workflow, the Supabase migration and the Render deployment have not happened yet.
+These are local results. The migration is applied on Supabase and the new frontend and backend are live; production checks are listed in `PROJECT_STATUS.md`.
 
 ### Backend Testing
 
@@ -117,12 +117,12 @@ Jest and React Testing Library tests cover the Login, Dashboard, Banks, Savings,
 
 The workflow in `.github/workflows/ci.yml`:
 
-- Runs for pushes to `main` and pull requests targeting `main`.
+- Runs for pushes and pull requests on `main` and on the production branch `perf/add-request-diagnostics`, and manually via "Run workflow" (`workflow_dispatch`).
 - Starts a PostgreSQL 17 service and uses a CI-only JWT key.
 - Uses Python 3.12, installs dependencies, compiles the backend and runs `pytest -q`.
 - Uses Node.js 22, runs `npm ci`, runs the frontend tests and then `npm run build`.
 
-The frontend test step is new and has not yet run on GitHub. Branch-protection and required-check settings still need to be verified.
+Vercel deploys on push at the same time as CI runs, so CI does not block the frontend deploy. It does tell you whether the backend is safe to deploy manually on Render: only deploy after a green run.
 
 ### Security Summary
 
@@ -308,9 +308,11 @@ Dashboard caching uses the Render Redis service in production through `REDIS_URL
 - [x] 3B: Dependency upgrades (`pip-audit` clean)
 - [x] 3C: Frontend test setup fixed and meaningful tests for pages, components and services
 - [x] 3D: Frontend tests added to GitHub Actions; documentation updated
-- [ ] Commit and push to the chosen branch
-- [ ] Apply the migration to Supabase, configure Render, deploy and verify in production
-- [ ] Verify a green GitHub Actions run and the required-check settings for pull requests
+- [x] Commit and push (`306bdb8`)
+- [x] Apply the migration to Supabase, configure Render, deploy and verify in production
+- [x] CI triggers include the production branch
+- [ ] Verify a green run on the production branch
+- [ ] Set `TRUSTED_PROXY_COUNT` from the real proxy hop count
 
 Phase 3 is complete when the work above is deployed and both test suites pass in GitHub Actions. Refresh tokens and a frontend CSP are deliberately deferred to later security work.
 

@@ -573,7 +573,7 @@ GitHub Actions — Ubuntu Runner
             +--> npm run build
 ```
 
-The workflow runs the backend tests, the frontend Jest tests and the React production build. It uses a CI-only `JWT_SECRET_KEY` of at least 32 bytes, because PyJWT 2.15 warns about shorter HMAC keys. The frontend test step was added in Phase 3 and has not yet run on GitHub.
+The workflow runs the backend tests, the frontend Jest tests and the React production build. It uses a CI-only `JWT_SECRET_KEY` of at least 32 bytes, because PyJWT 2.15 warns about shorter HMAC keys. The workflow runs on pushes and pull requests for `main` and for the production branch `perf/add-request-diagnostics`, and can be started manually (`workflow_dispatch`). Vercel deploys in parallel with CI, so CI cannot block the frontend deploy; it gates the manual Render deploy by convention (deploy the backend only after a green run).
 
 The following work is still outstanding:
 
