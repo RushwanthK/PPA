@@ -82,7 +82,7 @@ Although initially developed as a personal finance application, the project is p
 
 # Current Status — Phase 3: Testing and Auth/API Security
 
-Phase 3 covers backend regression (3A), targeted auth/API security (3B), frontend tests (3C), and CI plus documentation (3D). All four parts are committed (`306bdb8`) and **deployed to production** on November 23, 2026. Production deploys from the `perf/add-request-diagnostics` branch. See `PROJECT_STATUS.md` for the full checklist and the deployment order.
+Phase 3 covers backend regression (3A), targeted auth/API security (3B), frontend tests (3C), and CI plus documentation (3D). **Phase 3 is complete.** All four parts are committed and **deployed to production** (November 23, 2026). Production deploys from the `perf/add-request-diagnostics` branch. See `PROJECT_STATUS.md` for the full checklist and the deployment order.
 
 ### Local Verification (November 23, 2026)
 
@@ -133,12 +133,14 @@ Vercel deploys on push at the same time as CI runs, so CI does not block the fro
 - **Dependencies:** Python dependencies were upgraded until `pip-audit` reported no known vulnerabilities. The remaining `npm audit` advisories are only in Create React App build tooling.
 - **Not done yet:** refresh tokens, moving the token out of `localStorage`, a frontend CSP on Vercel, and migrating off CRA.
 
-### Immediate Next Steps
+### Production Configuration Done in Phase 3
 
-1. Review and commit the Phase 3 work to the chosen branch.
-2. Production configuration: a strong `JWT_SECRET_KEY` (32+ random bytes), `TRUSTED_PROXY_COUNT`, and a Redis eviction/memory check.
-3. Apply migration `0557b33bd281` to Supabase, push (Vercel deploys the frontend first), then deploy the backend on Render.
-4. Verify production behavior and the GitHub Actions run, then mark Phase 3 complete.
+- New 32+ byte `JWT_SECRET_KEY` on Render.
+- Migration `0557b33bd281` applied on Supabase before the backend deploy.
+- `TRUSTED_PROXY_COUNT=3`, measured from Render's real `X-Forwarded-For` chain (client, Cloudflare, Render load balancer).
+- CI runs on the production branch; deploy the backend on Render only after a green run.
+
+Next: the RAG and AI Integration phase. Deferred security items are listed under Phase 6.
 
 # Current Features
 
@@ -299,7 +301,7 @@ Dashboard caching uses the Render Redis service in production through `REDIS_URL
 - [x] Backend pytest execution configured in GitHub Actions
 - [x] Frontend dependency installation and production build validation in CI
 
-## Phase 3 — Automated Testing and Auth/API Security (Current Phase)
+## Phase 3 — Automated Testing and Auth/API Security ✅ Complete
 
 - [x] 3A: Full backend regression; credit-card billing summary defect fixed
 - [x] 3B: Rate limiting on login, registration and password change
@@ -312,9 +314,9 @@ Dashboard caching uses the Render Redis service in production through `REDIS_URL
 - [x] Apply the migration to Supabase, configure Render, deploy and verify in production
 - [x] CI triggers include the production branch
 - [x] Green CI run on the production branch (465 backend + 201 frontend tests, build)
-- [ ] Set `TRUSTED_PROXY_COUNT` from the real proxy hop count
+- [x] `TRUSTED_PROXY_COUNT` set to 3 from the measured proxy chain
 
-Phase 3 is complete when the work above is deployed and both test suites pass in GitHub Actions. Refresh tokens and a frontend CSP are deliberately deferred to later security work.
+Phase 3 was completed on November 23, 2026. Refresh tokens and a frontend CSP are deliberately deferred to later security work.
 
 ## RAG and AI Integration (Planned, after Phase 3)
 

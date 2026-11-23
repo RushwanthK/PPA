@@ -24,9 +24,9 @@ Phase 3 was widened on November 22, 2026 so that the public app's security is ha
 
 | Part | Scope | Status |
 |---|---|---|
-| 3A | Full backend regression and fixes | ✅ Done locally |
-| 3B | Auth/API security: rate limiting, JWT lifecycle, request limits, CORS, error replies, dependencies | ✅ Done locally (refresh tokens deliberately deferred) |
-| 3C | Frontend automated tests | ✅ Done locally |
+| 3A | Full backend regression and fixes | ✅ Done and deployed |
+| 3B | Auth/API security: rate limiting, JWT lifecycle, request limits, CORS, error replies, dependencies | ✅ Done and deployed, `TRUSTED_PROXY_COUNT=3` (refresh tokens deliberately deferred) |
+| 3C | Frontend automated tests | ✅ Done and deployed |
 | 3D | CI runs both test suites; documentation updated | ✅ First green run on the production branch (November 23, 2026) |
 
 **Local verification (November 23, 2026):**
@@ -47,11 +47,11 @@ Phase 3 was widened on November 22, 2026 so that the public app's security is ha
   - `GET /me` and `POST /logout` without a token return `401 {"error": "Please log in to continue."}` (the new uniform reply; the old backend had no `/logout`).
   - A CORS preflight from `https://rs-ppa.vercel.app` is allowed for the `Authorization` header, with no `Access-Control-Allow-Credentials`.
 
-**Still open:**
+**Notes and remaining minor items:**
 
 - **CI on the production branch:** the workflow triggers now include `perf/add-request-diagnostics` (and a manual "Run workflow" button). First green run: GitHub Actions run 45152442674 on `558f7b3`: backend `465 passed, 5 warnings`, frontend `201 passed` (14 suites), build compiled. Vercel deploys in parallel with CI, so CI cannot block the frontend deploy; deploy the backend on Render only after a green run.
-- `TRUSTED_PROXY_COUNT` is deliberately unset (0) in production, so all clients share the proxy's IP rate-limit bucket. An opt-in `PROXY_DIAGNOSTICS` flag (off by default, tested) now logs the proxy headers on `GET /` so the real hop count can be read from the Render logs; then set the value and switch the flag off.
-- Rate-limit behavior (429) has not been exercised in production, to avoid locking out the owner through the shared bucket.
+- **`TRUSTED_PROXY_COUNT=3` in production.** Measured on Render on November 23, 2026 with the `PROXY_DIAGNOSTICS` log: every request arrives with three `X-Forwarded-For` entries appended by infrastructure (client IP, then a Cloudflare edge address `104.23.x.x`, then Render's internal load balancer `10.x.x.x`), and a local proxy inside the container connects to gunicorn from `127.0.0.1`. The client IP also matches `True-Client-IP` / `CF-Connecting-IP`. A request with a fake `X-Forwarded-For: 6.6.6.6` showed the fake value as a fourth entry on the far left, so **`TRUSTED_PROXY_COUNT=3`** is set in production. With 3, a shorter-than-expected chain falls back to `127.0.0.1` (the shared bucket) instead of trusting a client value. Residual risk: a client able to reach Render's load balancer without Cloudflare could fake one entry; the per-account login limit still applies. If Render changes its routing, re-measure. `PROXY_DIAGNOSTICS` was switched off again afterwards.
+- Rate-limit behavior (429) has not been exercised in production (it is covered by tests and was checked against a local Redis). Now that clients have separate buckets, a test with a made-up username is safe if wanted.
 - Branch-protection/required-check settings.
 
 ### Planned After Phase 3 — RAG and AI Integration
@@ -255,13 +255,14 @@ Result: `201 passed` in 14 suites (local, November 23, 2026).
 - [x] Production configuration and deployment completed (see checklist below)
 - [x] CI triggers cover the production branch
 - [x] A CI run on the production branch passes
+- [x] `TRUSTED_PROXY_COUNT` measured and set (3)
 - [ ] Required-check / branch-protection settings (optional for a single-developer repo)
 
 ---
 
 ## Deployment Checklist for This Change Set
 
-**Completed on November 23, 2026**, except for `TRUSTED_PROXY_COUNT` (left at 0 on purpose) and the CI item. Kept as the reference order for future backend/frontend changes. Order matters because the frontend auto-deploys on push and the backend is deployed manually.
+**Completed on November 23, 2026** (`TRUSTED_PROXY_COUNT` was set to 3 later the same day, after measuring). Kept as the reference order for future backend/frontend changes. Order matters because the frontend auto-deploys on push and the backend is deployed manually.
 
 1. **Generate a strong JWT key** (32+ random bytes), e.g. `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Set it as `JWT_SECRET_KEY` on Render and in the local `.env`. Changing it logs every user out once; they now get a clean 401 and the login page.
 2. **Set `TRUSTED_PROXY_COUNT` on Render** to the real number of proxies that append to `X-Forwarded-For` (check the header first). `0` makes everyone share the proxy's IP bucket; too high lets clients spoof their IP.
@@ -378,7 +379,7 @@ Docker foundation                      ✅
 Git / GitHub workflow                  ✅
 GitHub Actions CI foundation           ✅
 
-Phase 3 — Testing + Auth/API Security  🟡 DEPLOYED; CI GREEN
+Phase 3 — Testing + Auth/API Security  ✅ COMPLETE (Nov 23, 2026)
     3A Backend regression              ✅ 465 passed (local)
     3B Rate limiting                   ✅ Verified with local Redis
     3B JWT logout / revocation         ✅ Migration checked locally
@@ -389,9 +390,9 @@ Phase 3 — Testing + Auth/API Security  🟡 DEPLOYED; CI GREEN
     Production config + deploy         ✅ Nov 23, 2026
     CI triggers for production branch  ✅ 558f7b3
     First green CI run                 ✅ 465 + 201 passed
-    TRUSTED_PROXY_COUNT                ← NEXT
+    TRUSTED_PROXY_COUNT                ✅ 3 (measured on Render)
 
-RAG & AI Integration                   ⏳ PLANNED
+RAG & AI Integration                   ← NEXT (planned)
 Phase 4 — Docker in CI                 ⏳
 Phase 5 — Automated deployment         ⏳
 Phase 6 — Security / configuration     🟡 Started (Phase 3B)
@@ -401,4 +402,4 @@ Phase 9 — System design / scalability  🟡 IN PROGRESS
 Phase 10 — Advanced engineering        🟡 PARTIALLY COMPLETE
 ```
 
-The remaining Phase 3 step is to set `TRUSTED_PROXY_COUNT` from real request data. Phase 3 is complete after that.
+Phase 3 is complete. Deferred security items (refresh tokens, token storage, frontend CSP, leaving Create React App) are tracked under Phase 6. The next planned phase is RAG and AI Integration.

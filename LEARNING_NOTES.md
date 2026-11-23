@@ -748,6 +748,7 @@ Concepts:
 - **Order matters:** Flask-Limiter checks limits in `before_request`, before the view and before PBKDF2 hashing (~0.4 s of CPU each). With one Gunicorn worker, an unlimited `/login` is also a denial-of-service vector.
 - **Moving window vs fixed window:** a fixed window allows a burst of 2× the limit across a window boundary; moving window stores each hit's timestamp and has no boundary burst.
 - **Real client IP behind a proxy:** without `ProxyFix`, every request appears to come from Render's proxy, so all users share one bucket. `ProxyFix(x_for=N)` trusts exactly N hops from the right of `X-Forwarded-For`. Values further left are client-controlled and ignored. N must match the real infrastructure (`TRUSTED_PROXY_COUNT`).
+- **Measure, don't guess, the hop count:** an opt-in diagnostic logged the headers Flask actually received on Render. The chain was client → Cloudflare → Render load balancer (three `X-Forwarded-For` entries), plus a local proxy on `127.0.0.1`, so the answer was 3, not the commonly assumed 1. Sending a fake `X-Forwarded-For` showed where client-controlled values land (far left). Choosing a count that is too low keeps everyone in one bucket; too high lets clients spoof their IP. With the right count, a shorter-than-expected chain falls back safely to the shared bucket.
 - **Hashing usernames in keys:** keeps Redis keys short and fixed-length, and avoids storing usernames in plain text.
 - **Timing side channel:** for unknown usernames, the password is checked against a dummy hash so "no such user" takes as long as "wrong password".
 - **Fail-open choices:** if Redis is down, limits fall back to per-process memory, and storage errors are swallowed so a normal 401 never becomes a 500.
@@ -811,9 +812,10 @@ CI workflow + docs (3D)          ✅ Updated
 Commit + production deploy      ✅ Nov 23, 2026
 CI triggers for prod branch      ✅
 First green CI run               ✅ Same counts as local
-TRUSTED_PROXY_COUNT              ← NEXT
+TRUSTED_PROXY_COUNT              ✅ 3 (measured)
+Phase 3                          ✅ Complete
 Refresh tokens / token storage   ⏳ Later security work
-RAG and AI learning              ⏳ After Phase 3
+RAG and AI learning              ← NEXT
 ```
 
 # Next Learning Goals
