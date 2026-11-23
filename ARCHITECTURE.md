@@ -238,6 +238,7 @@ Not implemented yet: refresh tokens (access tokens still last one day) and movin
 - Limits run before the view, so a blocked request never reaches PBKDF2 password hashing (about 0.4 s of CPU on the single Gunicorn worker).
 - Unknown usernames are checked against a dummy hash, so the login response time does not reveal whether an account exists.
 - `TRUSTED_PROXY_COUNT` must match the real number of proxies on Render. If it is `0`, every user shares the proxy's IP bucket. If it is too high, clients can spoof their IP with `X-Forwarded-For`.
+- To find the right value, set `PROXY_DIAGNOSTICS=true` temporarily. Every `GET /` then logs one `ppa_proxy_diagnostics` WARNING line containing the socket peer, the `X-Forwarded-For` list and its length, `True-Client-IP` / `CF-Connecting-IP` / `X-Real-IP` if present, and the address the rate limiter would use. Send a request with a fake `X-Forwarded-For` value: the real client IP's position counted from the right is the hop count. The log contains IP addresses, so switch the flag off afterwards.
 
 ## Error replies, size limit, CORS
 

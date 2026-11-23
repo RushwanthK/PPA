@@ -27,7 +27,7 @@ Phase 3 was widened on November 22, 2026 so that the public app's security is ha
 | 3A | Full backend regression and fixes | ✅ Done locally |
 | 3B | Auth/API security: rate limiting, JWT lifecycle, request limits, CORS, error replies, dependencies | ✅ Done locally (refresh tokens deliberately deferred) |
 | 3C | Frontend automated tests | ✅ Done locally |
-| 3D | CI runs both test suites; documentation updated | 🟡 Workflow (including production-branch triggers) and docs updated; first green run not yet confirmed |
+| 3D | CI runs both test suites; documentation updated | ✅ First green run on the production branch (November 23, 2026) |
 
 **Local verification (November 23, 2026):**
 
@@ -49,8 +49,8 @@ Phase 3 was widened on November 22, 2026 so that the public app's security is ha
 
 **Still open:**
 
-- **CI on the production branch:** the workflow triggers now include `perf/add-request-diagnostics` (and a manual "Run workflow" button). The first green run there still has to be confirmed. Vercel deploys in parallel with CI, so CI cannot block the frontend deploy; deploy the backend on Render only after a green run.
-- `TRUSTED_PROXY_COUNT` is deliberately unset (0) in production, so all clients share the proxy's IP rate-limit bucket. Determine the real hop count and set it.
+- **CI on the production branch:** the workflow triggers now include `perf/add-request-diagnostics` (and a manual "Run workflow" button). First green run: GitHub Actions run 45152442674 on `558f7b3`: backend `465 passed, 5 warnings`, frontend `201 passed` (14 suites), build compiled. Vercel deploys in parallel with CI, so CI cannot block the frontend deploy; deploy the backend on Render only after a green run.
+- `TRUSTED_PROXY_COUNT` is deliberately unset (0) in production, so all clients share the proxy's IP rate-limit bucket. An opt-in `PROXY_DIAGNOSTICS` flag (off by default, tested) now logs the proxy headers on `GET /` so the real hop count can be read from the Render logs; then set the value and switch the flag off.
 - Rate-limit behavior (429) has not been exercised in production, to avoid locking out the owner through the shared bucket.
 - Branch-protection/required-check settings.
 
@@ -122,7 +122,7 @@ All hosting must stay on free tiers.
 * [x] Node 22 setup and `npm ci`
 * [x] Frontend Jest tests (`npm test -- --watchAll=false`) — added in Phase 3
 * [x] CI triggers include the production branch `perf/add-request-diagnostics`, plus `workflow_dispatch`
-* [ ] First green run on the production branch confirmed
+* [x] First green run on the production branch (GitHub Actions run 45152442674 on `558f7b3`: backend `465 passed, 5 warnings`, frontend `201 passed` (14 suites), build compiled)
 * [x] React production build validation
 * [x] CI-only JWT key of sufficient length (32+ bytes)
 * [x] CI failure/recovery exercise
@@ -254,7 +254,8 @@ Result: `201 passed` in 14 suites (local, November 23, 2026).
 - [x] Changes reviewed, committed and pushed (`306bdb8` on `perf/add-request-diagnostics`)
 - [x] Production configuration and deployment completed (see checklist below)
 - [x] CI triggers cover the production branch
-- [ ] A CI run on the production branch passes; required-check settings verified
+- [x] A CI run on the production branch passes
+- [ ] Required-check / branch-protection settings (optional for a single-developer repo)
 
 ---
 
@@ -377,7 +378,7 @@ Docker foundation                      ✅
 Git / GitHub workflow                  ✅
 GitHub Actions CI foundation           ✅
 
-Phase 3 — Testing + Auth/API Security  🟡 DEPLOYED; FIRST CI RUN PENDING
+Phase 3 — Testing + Auth/API Security  🟡 DEPLOYED; CI GREEN
     3A Backend regression              ✅ 465 passed (local)
     3B Rate limiting                   ✅ Verified with local Redis
     3B JWT logout / revocation         ✅ Migration checked locally
@@ -386,9 +387,9 @@ Phase 3 — Testing + Auth/API Security  🟡 DEPLOYED; FIRST CI RUN PENDING
     3D CI workflow + docs              ✅ Updated
     Commit / push                      ✅ 306bdb8
     Production config + deploy         ✅ Nov 23, 2026
-    CI triggers for production branch  ✅ (uncommitted)
-    First green CI run                 ← NEXT
-    TRUSTED_PROXY_COUNT                ⏳
+    CI triggers for production branch  ✅ 558f7b3
+    First green CI run                 ✅ 465 + 201 passed
+    TRUSTED_PROXY_COUNT                ← NEXT
 
 RAG & AI Integration                   ⏳ PLANNED
 Phase 4 — Docker in CI                 ⏳
@@ -400,4 +401,4 @@ Phase 9 — System design / scalability  🟡 IN PROGRESS
 Phase 10 — Advanced engineering        🟡 PARTIALLY COMPLETE
 ```
 
-The immediate next steps are to commit the CI trigger change, confirm a green run on the production branch, and set `TRUSTED_PROXY_COUNT` from real request data. Phase 3 is complete after that.
+The remaining Phase 3 step is to set `TRUSTED_PROXY_COUNT` from real request data. Phase 3 is complete after that.

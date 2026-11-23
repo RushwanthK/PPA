@@ -115,6 +115,50 @@ def apply_proxy_fix(app):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=count)
 
 
+# Headers that reverse proxies / CDNs commonly add with the client address.
+_PROXY_HEADERS = (
+    "X-Forwarded-For",
+    "X-Real-IP",
+    "True-Client-IP",
+    "CF-Connecting-IP",
+    "X-Forwarded-Proto",
+)
+
+
+def log_proxy_headers():
+    """Log what the proxies in front of Flask send (PROXY_DIAGNOSTICS only).
+
+    Used once to choose TRUSTED_PROXY_COUNT: request GET / with a fake
+    X-Forwarded-For value and see where the fake value and the real client
+    IP end up in the list. Only GET / is logged (the frontend never calls it),
+    and header values are truncated so the log line stays small.
+    """
+    if not current_app.config.get("PROXY_DIAGNOSTICS", False):
+        return
+    if request.method != "GET" or request.path != "/":
+        return
+
+    # ProxyFix (when enabled) rewrites REMOTE_ADDR and keeps the original here.
+    original = request.environ.get("werkzeug.proxy_fix.orig", {})
+    socket_peer = original.get("REMOTE_ADDR", request.environ.get("REMOTE_ADDR"))
+
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    entries = [part.strip() for part in forwarded_for.split(",") if part.strip()]
+
+    details = {
+        "socket_peer": socket_peer,
+        "remote_addr_used": request.remote_addr,
+        "trusted_proxy_count": current_app.config.get("TRUSTED_PROXY_COUNT", 0),
+        "x_forwarded_for_entries": len(entries),
+    }
+    for name in _PROXY_HEADERS:
+        value = request.headers.get(name)
+        if value is not None:
+            details[name] = value[:300]
+
+    current_app.logger.warning("ppa_proxy_diagnostics %s", details)
+
+
 def _format_wait(seconds):
     if seconds < 60:
         unit = "second" if seconds == 1 else "seconds"
@@ -151,5 +195,6 @@ def rate_limit_exceeded(error):
 
 def init_rate_limiting(app):
     apply_proxy_fix(app)
+    app.before_request(log_proxy_headers)
     limiter.init_app(app)
     app.register_error_handler(RateLimitExceeded, rate_limit_exceeded)

@@ -810,7 +810,8 @@ Frontend tests (3C)              ✅ 201 passed locally
 CI workflow + docs (3D)          ✅ Updated
 Commit + production deploy      ✅ Nov 23, 2026
 CI triggers for prod branch      ✅
-First green CI run               ← NEXT
+First green CI run               ✅ Same counts as local
+TRUSTED_PROXY_COUNT              ← NEXT
 Refresh tokens / token storage   ⏳ Later security work
 RAG and AI learning              ⏳ After Phase 3
 ```

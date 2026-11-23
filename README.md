@@ -311,7 +311,7 @@ Dashboard caching uses the Render Redis service in production through `REDIS_URL
 - [x] Commit and push (`306bdb8`)
 - [x] Apply the migration to Supabase, configure Render, deploy and verify in production
 - [x] CI triggers include the production branch
-- [ ] Verify a green run on the production branch
+- [x] Green CI run on the production branch (465 backend + 201 frontend tests, build)
 - [ ] Set `TRUSTED_PROXY_COUNT` from the real proxy hop count
 
 Phase 3 is complete when the work above is deployed and both test suites pass in GitHub Actions. Refresh tokens and a frontend CSP are deliberately deferred to later security work.

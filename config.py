@@ -51,6 +51,11 @@ class Config:
     # client appears to have the proxy's IP (or clients can spoof their IP).
     TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0"))
 
+    # Temporary diagnostic for choosing TRUSTED_PROXY_COUNT: when on, every
+    # GET / logs the proxy-related headers Flask received (one WARNING line).
+    # The log contains client IP addresses, so switch it off afterwards.
+    PROXY_DIAGNOSTICS = _env_bool("PROXY_DIAGNOSTICS", False)
+
     # ---- Rate limiting (Flask-Limiter) ----
     # Counters live in the existing Redis under their own key prefix. If Redis
     # is unreachable, Flask-Limiter falls back to per-process memory with the
@@ -101,6 +106,7 @@ class TestingConfig(Config):
     REDIS_URL = None
     RATELIMIT_STORAGE_URI = "memory://"
     TRUSTED_PROXY_COUNT = 0
+    PROXY_DIAGNOSTICS = False
     # Fixed limits for the rate-limit tests, independent of local env vars.
     LOGIN_RATE_LIMIT = "10 per minute;50 per hour"
     LOGIN_FAILURE_RATE_LIMIT = "5 per 15 minutes"

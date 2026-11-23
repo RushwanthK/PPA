@@ -325,3 +325,41 @@ def test_proxy_fix_trusts_only_the_proxy_appended_address():
 
 def test_no_trusted_proxies_means_forwarded_headers_are_ignored():
     assert _remote_addr_seen(0, "6.6.6.6, 203.0.113.7") == "10.0.0.1"
+
+
+# ============================================================
+# Proxy diagnostics (used once to choose TRUSTED_PROXY_COUNT)
+# ============================================================
+
+
+def test_proxy_diagnostics_are_off_by_default(app, client, caplog):
+    client.get("/", headers={"X-Forwarded-For": "6.6.6.6, 203.0.113.7"})
+
+    assert "ppa_proxy_diagnostics" not in caplog.text
+
+
+def test_proxy_diagnostics_log_forwarded_headers_on_home(
+    app, client, caplog, monkeypatch
+):
+    monkeypatch.setitem(app.config, "PROXY_DIAGNOSTICS", True)
+
+    response = client.get(
+        "/",
+        headers={"X-Forwarded-For": "6.6.6.6, 203.0.113.7", "True-Client-IP": "203.0.113.7"},
+        environ_base={"REMOTE_ADDR": "10.0.0.1"},
+    )
+
+    assert response.status_code == 200
+    assert "ppa_proxy_diagnostics" in caplog.text
+    assert "'x_forwarded_for_entries': 2" in caplog.text
+    assert "6.6.6.6, 203.0.113.7" in caplog.text
+    assert "'True-Client-IP': '203.0.113.7'" in caplog.text
+    assert "'socket_peer': '10.0.0.1'" in caplog.text
+
+
+def test_proxy_diagnostics_ignore_other_paths(app, client, caplog, monkeypatch):
+    monkeypatch.setitem(app.config, "PROXY_DIAGNOSTICS", True)
+
+    client.get("/me", headers={"X-Forwarded-For": "6.6.6.6"})
+
+    assert "ppa_proxy_diagnostics" not in caplog.text
