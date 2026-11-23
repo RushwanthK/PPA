@@ -8,6 +8,7 @@ import './TransactionTableDialog.css';
 function TransactionTableDialog({
   open,
   title = 'Transactions',
+  modalClassName = '',
   transactions = [],
   columns = [],
   loading = false,
@@ -16,9 +17,17 @@ function TransactionTableDialog({
   addTransactionDisabled = false,
   emptyMessage = 'No transactions found.',
   searchText = '',
+  searchPlaceholder = 'Search transactions...',
   onSearchChange,
   transactionType = '',
   onTransactionTypeChange,
+  startDate = '',
+  endDate = '',
+  onStartDateChange,
+  onEndDateChange,
+  amountRange = '',
+  onAmountRangeChange,
+  onClearFilters,
   transactionTypeOptions = [
     { value: 'income', label: 'Income' },
     { value: 'expense', label: 'Expense' },
@@ -26,22 +35,39 @@ function TransactionTableDialog({
   page = 1,
   totalPages = 1,
   totalTransactions = 0,
+  hasMore = false,
+  cursorPagination = false,
   pageSize = 25,
   onPageChange,
   onPageSizeChange,
   error = null,
   onDismissError,
 }) {
-  const hasFilters = Boolean(onSearchChange || onTransactionTypeChange);
+  const hasFilters = Boolean(
+    onSearchChange ||
+    onTransactionTypeChange ||
+    onStartDateChange ||
+    onEndDateChange ||
+    onAmountRangeChange
+  );
+  const hasActiveFilters = Boolean(
+    searchText ||
+    transactionType ||
+    startDate ||
+    endDate ||
+    amountRange
+  );
   const canGoPrevious = page > 1 && !loading;
-  const canGoNext = page < totalPages && !loading;
+  const canGoNext = cursorPagination
+    ? hasMore && !loading
+    : page < totalPages && !loading;
 
   return (
     <Modal
       open={open}
       title={title}
       onClose={onClose}
-      className="transaction-table-modal"
+      className={`transaction-table-modal ${modalClassName}`.trim()}
     >
       {error && (
         <div className="transaction-table-dialog-error" role="alert">
@@ -64,13 +90,15 @@ function TransactionTableDialog({
         {hasFilters && (
           <div className="transaction-table-filters">
             {onSearchChange && (
-              <SearchBar
-                value={searchText}
-                onChange={onSearchChange}
-                placeholder="Search transactions..."
-                ariaLabel="Search transactions"
-                disabled={loading}
-              />
+              <div className="transaction-table-search">
+                <SearchBar
+                  value={searchText}
+                  onChange={onSearchChange}
+                  placeholder={searchPlaceholder}
+                  ariaLabel="Search transactions"
+                  disabled={loading}
+                />
+              </div>
             )}
 
             {onTransactionTypeChange && (
@@ -81,13 +109,73 @@ function TransactionTableDialog({
                 disabled={loading}
                 className="transaction-type-filter"
               >
-                <option value="">All types</option>
+                <option value="">Income/Expense</option>
                 {transactionTypeOptions.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
+            )}
+
+            {onStartDateChange && (
+              <label className="transaction-date-filter-group">
+                <span>From Date</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={onStartDateChange}
+                  max={endDate || undefined}
+                  aria-label="Filter transactions from date (IST)"
+                  disabled={loading}
+                  className="transaction-date-filter"
+                />
+              </label>
+            )}
+
+            {onEndDateChange && (
+              <label className="transaction-date-filter-group">
+                <span>To Date</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={onEndDateChange}
+                  min={startDate || undefined}
+                  aria-label="Filter transactions through date (IST)"
+                  disabled={loading}
+                  className="transaction-date-filter"
+                />
+              </label>
+            )}
+
+            {onAmountRangeChange && (
+              <select
+                value={amountRange}
+                onChange={onAmountRangeChange}
+                aria-label="Filter transactions by amount range"
+                disabled={loading}
+                className="transaction-amount-filter"
+              >
+                <option value="">Amount Range</option>
+                <option value="under_500">₹0 to &lt;₹500</option>
+                <option value="500_1000">₹500 to &lt;₹1,000</option>
+                <option value="1000_5000">₹1,000 to &lt;₹5,000</option>
+                <option value="5000_10000">₹5,000 to &lt;₹10,000</option>
+                <option value="10000_plus">₹10,000+</option>
+              </select>
+            )}
+
+            {onClearFilters && (
+              <div className="transaction-clear-filters">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onClearFilters}
+                  disabled={loading || !hasActiveFilters}
+                >
+                  Clear Filters
+                </Button>
+              </div>
             )}
           </div>
         )}
@@ -111,12 +199,16 @@ function TransactionTableDialog({
         emptyMessage={emptyMessage}
       />
 
-      {(totalPages > 0 || totalTransactions > 0) && (
+      {(cursorPagination
+        ? (transactions.length > 0 || page > 1)
+        : (totalPages > 0 || totalTransactions > 0)) && (
         <div className="transaction-pagination" aria-label="Transaction pagination">
           <div className="transaction-pagination-summary">
-            {totalTransactions === 0
-              ? 'No transactions'
-              : `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, totalTransactions)} of ${totalTransactions}`}
+            {cursorPagination
+              ? `Showing ${transactions.length} transaction${transactions.length === 1 ? '' : 's'} on this page`
+              : (totalTransactions === 0
+                ? 'No transactions'
+                : `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, totalTransactions)} of ${totalTransactions}`)}
           </div>
 
           <div className="transaction-pagination-controls">
@@ -142,7 +234,9 @@ function TransactionTableDialog({
             </Button>
 
             <span className="transaction-page-number">
-              Page {page} of {Math.max(totalPages, 1)}
+              {cursorPagination
+                ? `Page ${page}`
+                : `Page ${page} of ${Math.max(totalPages, 1)}`}
             </span>
 
             <Button

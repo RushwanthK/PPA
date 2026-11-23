@@ -1,12 +1,20 @@
 name: PPA CI
 
+# Production (Vercel and Render) deploys from perf/add-request-diagnostics,
+# so CI must run there as well as on main. Vercel deploys on push in
+# parallel with CI; a red run means the live frontend may be broken and the
+# manual Render deploy must wait until CI is green again.
 on:
   push:
     branches:
       - main
+      - perf/add-request-diagnostics
   pull_request:
     branches:
       - main
+      - perf/add-request-diagnostics
+  # "Run workflow" button in the Actions tab, for any branch.
+  workflow_dispatch:
 
 jobs:
   ci:
@@ -30,7 +38,7 @@ jobs:
     env:
       FLASK_ENV: testing
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ppa_test
-      JWT_SECRET_KEY: ci-test-secret
+      JWT_SECRET_KEY: ci-only-test-jwt-key-not-a-real-secret-0123456789abcdef
       SECRET_KEY: ci-test-secret
       CORS_ORIGINS: http://localhost:3000
 
@@ -60,6 +68,14 @@ jobs:
       - name: Install frontend dependencies
         working-directory: ./portfolio-app
         run: npm ci
+
+      # Runs every frontend Jest test once (no watch mode) and fails the
+      # workflow if any test fails, before the production build step.
+      - name: Run frontend tests
+        working-directory: ./portfolio-app
+        env:
+          CI: "true"
+        run: npm test -- --watchAll=false
 
       - name: Build frontend
         working-directory: ./portfolio-app

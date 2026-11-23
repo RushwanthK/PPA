@@ -6,9 +6,10 @@ import { startBackendRequest } from './backendStatus';
 //const API_URL = 'http://localhost:5000';
 
 // Create an axios instance with base URL
+// Auth uses the Authorization header (see the interceptor below), not
+// cookies, so cross-origin credentials are not requested.
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL,
-  withCredentials: true
 });
 
 // Attach token from localStorage
@@ -48,6 +49,19 @@ export default api;
 export const getUsers = async () => {
   const response = await api.get('/users');  // now returns only the logged-in user
   return response.data; // already an array with one user
+};
+
+// Revokes one token on the backend (this device). The token is passed in
+// explicitly because the caller clears localStorage right after calling.
+export const logoutSession = async (token) => {
+  return api.post('/logout', null, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+};
+
+// Ends every session of the current user, on every device.
+export const logoutAllDevices = async () => {
+  return api.post('/logout-all');
 };
 
 export const updateUser = async (id, userData) => {
@@ -200,35 +214,45 @@ export const getBankBalance = async (bankId) => {
 };
 
 // Asset API calls
+//
+// Like the bank helpers, these throw an Error whose message is the backend's
+// own error text (e.g. "Asset name already exists"), so every caller can show
+// err.message directly instead of axios's generic
+// "Request failed with status code 400".
+const assetError = (error, fallback) =>
+  new Error(error.response?.data?.error || fallback);
+
 export const createAsset = async (assetData) => {
   try {
     const response = await api.post('/assets', assetData);
     return response.data;
   } catch (error) {
-    console.error("Error creating asset:", error.response?.data || error.message);
-    throw error;
+    const err = assetError(error, 'Failed to create asset');
+    console.error('Error creating asset:', err.message);
+    throw err;
   }
 };
 
 export const getAssets = async () => {
   try {
     const response = await api.get('/assets');
-    console.log("Fetched assets:", response.data);
     return response.data;
   } catch (error) {
-    console.error("Error fetching assets:", error);
-    throw error;
+    const err = assetError(error, 'Failed to fetch assets');
+    console.error('Error fetching assets:', err.message);
+    throw err;
   }
 };
 
 export const updateAsset = async (id, assetData) => {
-  const { balance, ...safeData } = assetData; 
+  const { balance, ...safeData } = assetData;
   try {
     const response = await api.put(`/assets/${id}`, safeData);
     return response.data;
   } catch (error) {
-    console.error("Error updating asset:", error.response?.data || error.message);
-    throw error;
+    const err = assetError(error, 'Failed to update asset');
+    console.error('Error updating asset:', err.message);
+    throw err;
   }
 };
 
@@ -237,8 +261,9 @@ export const deleteAsset = async (id) => {
     const response = await api.delete(`/assets/${id}`);
     return response.data;
   } catch (error) {
-    console.error("Error deleting asset:", error.response?.data || error.message);
-    throw error;
+    const err = assetError(error, 'Failed to delete asset');
+    console.error('Error deleting asset:', err.message);
+    throw err;
   }
 };
 
@@ -568,10 +593,6 @@ export const getUserCreditCards = async (userId) => {
   }
 };
 
-// Transfer API calls
-export const createTransfer = async (transferData) => {
-  return api.post('/transfers', transferData);
-};
 
 
 

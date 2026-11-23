@@ -27,6 +27,7 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       FLASK_ENV: ${FLASK_ENV}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      PPA_PERF_DIAGNOSTICS: ${PPA_PERF_DIAGNOSTICS:-false}
 
     ports:
       - "5000:5000"

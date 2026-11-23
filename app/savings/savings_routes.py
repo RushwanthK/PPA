@@ -8,7 +8,9 @@ import pytz
 
 from ..models import Bank, Saving, SavingTransaction
 from .. import db
+from ..utils.errors import server_error
 from ..utils.financial_util import money
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 savings_routes = Blueprint("savings_routes", __name__)
 
@@ -61,6 +63,7 @@ def create_saving():
     try:
         db.session.add(saving)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Saving account created!",
@@ -88,9 +91,7 @@ def create_saving():
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            "error": f"Server error: {str(e)}"
-        }), 500
+        return server_error()
 
 @savings_routes.route('/savings', methods=['GET'])
 @jwt_required()
@@ -205,6 +206,7 @@ def update_saving(saving_id):
             saving.name = data['name'].strip()
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Saving account updated successfully",
@@ -232,9 +234,7 @@ def update_saving(saving_id):
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            "error": f"Server error: {str(e)}"
-        }), 500
+        return server_error()
 
 @savings_routes.route('/savings/<int:saving_id>/transactions', methods=['POST'])
 @jwt_required()
@@ -350,6 +350,7 @@ def add_saving_transaction(saving_id):
 
         db.session.add(transaction)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Transaction added",
@@ -360,9 +361,7 @@ def add_saving_transaction(saving_id):
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            "error": f"Server error: {str(e)}"
-        }), 500
+        return server_error()
 
 @savings_routes.route('/savings/<int:saving_id>/transactions', methods=['GET'])
 @jwt_required()
@@ -516,6 +515,7 @@ def delete_saving(saving_id):
 
         db.session.delete(saving)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             'message': 'Saving account deleted successfully'
@@ -524,6 +524,4 @@ def delete_saving(saving_id):
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            'error': f'Server error: {str(e)}'
-        }), 500
+        return server_error()

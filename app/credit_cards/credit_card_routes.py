@@ -7,7 +7,9 @@ import pytz
 
 from ..models import CreditCard, CreditCardTransaction
 from .. import db
+from ..utils.errors import server_error
 from ..utils.financial_util import money 
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 from .credit_card_util import (
     calculate_current_cycle_start,
@@ -62,6 +64,7 @@ def create_credit_card():
         
         db.session.add(card)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
         
         return jsonify({
             "message": "Credit card created successfully",
@@ -86,7 +89,7 @@ def create_credit_card():
         return jsonify({"error": "Database integrity error"}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return server_error()
 
 
 @credit_card_routes.route('/credit_cards', methods=['GET'])
@@ -209,6 +212,7 @@ def update_credit_card(card_id):
             card.unbilled_spends = money(max(0,card.unbilled_spends - payments_applied))
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
         return jsonify({
             "message": "Credit card updated successfully",
             "card": {
@@ -235,7 +239,7 @@ def update_credit_card(card_id):
         return jsonify({"error": "Database integrity error"}), 400
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return server_error()
 
 @credit_card_routes.route('/credit_cards/<int:card_id>', methods=['DELETE'])
 @jwt_required()
@@ -262,12 +266,13 @@ def delete_credit_card(card_id):
         # Now delete the card
         db.session.delete(card)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
         
         return jsonify({"message": "Credit card and all associated transactions deleted successfully"}), 200
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return server_error()
 
 @credit_card_routes.route('/credit_cards/<int:card_id>/transactions', methods=['GET'])
 @jwt_required()
@@ -524,6 +529,7 @@ def add_credit_card_transaction(card_id):
 
         db.session.add(transaction)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Transaction added successfully",
@@ -553,7 +559,7 @@ def add_credit_card_transaction(card_id):
     except ValueError as e:
         return jsonify({"error": f"Invalid data format: {str(e)}"}), 400
     except Exception as e:
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return server_error()
 
 #When to Call This Endpoint /process_billing
 #When a user views their statement (trigger it first)
@@ -603,6 +609,11 @@ def process_billing(card_id):
             card.billed_unpaid + card.unbilled_spends
         )
 
+        # Billing summary for the response: the expenses that fall before the
+        # current cycle, captured before payments are re-applied below.
+        transactions_billed = len(billed_expenses)
+        total_amount_billed = card.billed_unpaid
+
         # Reapply payments
         payments_applied = 0
         payment_remaining = sum(p.amount for p in payments)
@@ -631,9 +642,12 @@ def process_billing(card_id):
             card.last_payment_amount = last_payment.amount
 
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Billing processed successfully",
+            "transactions_billed": transactions_billed,
+            "total_amount_billed": total_amount_billed,
             "card": {
                 "id": card.id,
                 "billed_unpaid": card.billed_unpaid,
@@ -651,4 +665,4 @@ def process_billing(card_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return server_error()

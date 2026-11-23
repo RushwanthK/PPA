@@ -1,5 +1,5 @@
 // src/pages/bank.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 import {
   getBanks,
@@ -34,8 +34,11 @@ export default function Bank() {
   const [transactionSearchInput, setTransactionSearchInput] = useState('');
   const [transactionSearch, setTransactionSearch] = useState('');
   const [transactionType, setTransactionType] = useState('');
-  const [transactionTotal, setTransactionTotal] = useState(0);
-  const [transactionTotalPages, setTransactionTotalPages] = useState(0);
+  const [transactionStartDate, setTransactionStartDate] = useState('');
+  const [transactionEndDate, setTransactionEndDate] = useState('');
+  const [transactionAmountRange, setTransactionAmountRange] = useState('');
+  const [transactionHasMore, setTransactionHasMore] = useState(false);
+  const transactionCursorHistoryRef = useRef([null]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionRefreshKey, setTransactionRefreshKey] = useState(0);
   const [formData, setFormData] = useState({ id: '', name: '' });
@@ -101,10 +104,17 @@ export default function Bank() {
     return () => window.clearTimeout(timer);
   }, [transactionSearchInput]);
 
-  // Transaction history is server-paginated and server-filtered. Only the
-  // current page is kept in React state.
+  // Transaction history is server-paginated using cursors. The ref stores
+  // the cursor required to request each page so updating the next cursor does
+  // not itself trigger a duplicate fetch.
   useEffect(() => {
     if (!showTransactions || !selectedBankId) {
+      return undefined;
+    }
+
+    // Wait until the debounced search value catches up with the input. This
+    // avoids issuing an intermediate request with the previous search term.
+    if (transactionSearchInput.trim() !== transactionSearch) {
       return undefined;
     }
 
@@ -113,41 +123,49 @@ export default function Bank() {
     const fetchTransactions = async () => {
       try {
         setTransactionsLoading(true);
+        setTransactionHasMore(false);
         setTransactionTableError(null);
 
+        const cursor = transactionCursorHistoryRef.current[transactionPage - 1];
         const response = await getBankTransactions(
           selectedBankId,
           {
-            page: transactionPage,
+            cursor: cursor || undefined,
             page_size: transactionPageSize,
             search: transactionSearch,
             type: transactionType,
+            start_date: transactionStartDate || undefined,
+            end_date: transactionEndDate || undefined,
+            amount_range: transactionAmountRange || undefined,
           }
         );
 
         if (cancelled) return;
 
-        setTransactions(Array.isArray(response?.transactions) ? response.transactions : []);
-        setTransactionTotal(Number(response?.total) || 0);
-        setTransactionTotalPages(Number(response?.total_pages) || 0);
+        const pageTransactions = Array.isArray(response?.transactions)
+          ? response.transactions
+          : [];
+        const hasMore = Boolean(response?.has_more && response?.next_cursor);
 
-        // The API can move a request back to the last valid page after a
-        // filter reduces the result set. Keep the UI state in sync.
-        if (response?.page && response.page !== transactionPage) {
-          setTransactionPage(response.page);
+        // Invalidate any previously cached cursors beyond the page we just
+        // loaded, then remember the cursor that starts the following page.
+        transactionCursorHistoryRef.current.length = transactionPage;
+        if (hasMore) {
+          transactionCursorHistoryRef.current[transactionPage] = response.next_cursor;
         }
+
+        setTransactions(pageTransactions);
+        setTransactionHasMore(hasMore);
       } catch (err) {
-          if (cancelled) return;
+        if (cancelled) return;
 
-          console.error('Error fetching transactions:', err);
-          setTransactionTableError(
-            err.message || 'Failed to fetch transactions'
-          );
-
-          setTransactions([]);
-          setTransactionTotal(0);
-          setTransactionTotalPages(0);
-        } finally {
+        console.error('Error fetching transactions:', err);
+        setTransactionTableError(
+          err.message || 'Failed to fetch transactions'
+        );
+        setTransactions([]);
+        setTransactionHasMore(false);
+      } finally {
         if (!cancelled) {
           setTransactionsLoading(false);
         }
@@ -164,8 +182,12 @@ export default function Bank() {
     selectedBankId,
     transactionPage,
     transactionPageSize,
+    transactionSearchInput,
     transactionSearch,
     transactionType,
+    transactionStartDate,
+    transactionEndDate,
+    transactionAmountRange,
     transactionRefreshKey,
   ]);
 
@@ -301,7 +323,9 @@ export default function Bank() {
         selectedBankId &&
         String(selectedBankId) === String(transactionData.bankId)
       ) {
+        transactionCursorHistoryRef.current = [null];
         setTransactionPage(1);
+        setTransactionHasMore(false);
         setTransactionRefreshKey(prev => prev + 1);
       }
 
@@ -561,40 +585,82 @@ export default function Bank() {
     setShowTransactionForm(true);
   };
 
+  const resetTransactionPagination = () => {
+    transactionCursorHistoryRef.current = [null];
+    setTransactionPage(1);
+    setTransactionHasMore(false);
+  };
+
   const handleViewTransactions = (bankId) => {
     setTransactionTableError(null);
     setSelectedBankId(bankId);
+    transactionCursorHistoryRef.current = [null];
     setTransactionPage(1);
     setTransactionPageSize(25);
     setTransactionSearchInput('');
     setTransactionSearch('');
     setTransactionType('');
-    setTransactionTotal(0);
-    setTransactionTotalPages(0);
+    setTransactionStartDate('');
+    setTransactionEndDate('');
+    setTransactionAmountRange('');
+    setTransactionHasMore(false);
     setTransactions([]);
     setShowTransactions(true);
   };
 
   const handleTransactionSearchChange = (e) => {
     setTransactionSearchInput(e.target.value);
-    setTransactionPage(1);
+    resetTransactionPagination();
   };
 
   const handleTransactionTypeChange = (e) => {
     setTransactionType(e.target.value);
-    setTransactionPage(1);
+    resetTransactionPagination();
+  };
+
+  const handleTransactionStartDateChange = (e) => {
+    setTransactionStartDate(e.target.value);
+    resetTransactionPagination();
+  };
+
+  const handleTransactionEndDateChange = (e) => {
+    setTransactionEndDate(e.target.value);
+    resetTransactionPagination();
+  };
+
+  const handleTransactionAmountRangeChange = (e) => {
+    setTransactionAmountRange(e.target.value);
+    resetTransactionPagination();
   };
 
   const handleTransactionPageChange = (page) => {
-    if (page < 1 || (transactionTotalPages > 0 && page > transactionTotalPages)) {
+    if (page < 1 || Math.abs(page - transactionPage) !== 1) {
       return;
     }
+
+    if (page > transactionPage) {
+      // Next is only available when the current response supplied a cursor.
+      if (!transactionHasMore || !transactionCursorHistoryRef.current[page - 1]) {
+        return;
+      }
+    }
+
     setTransactionPage(page);
   };
 
   const handleTransactionPageSizeChange = (e) => {
     setTransactionPageSize(Number(e.target.value));
-    setTransactionPage(1);
+    resetTransactionPagination();
+  };
+
+  const handleClearTransactionFilters = () => {
+    setTransactionSearchInput('');
+    setTransactionSearch('');   // reset immediately, skipping the 300ms debounce
+    setTransactionType('');
+    setTransactionStartDate('');
+    setTransactionEndDate('');
+    setTransactionAmountRange('');
+    resetTransactionPagination();
   };
 
   const resetForm = () => {
@@ -826,6 +892,7 @@ export default function Bank() {
       {/* Transactions Modal */}
       <TransactionTableDialog
         open={showTransactions}
+        modalClassName="bank-transaction-table-modal"
         title={
           <>
             Transactions for{' '}
@@ -843,12 +910,20 @@ export default function Bank() {
           setTransactionTableError(null);
         }}
         searchText={transactionSearchInput}
+        searchPlaceholder="Search description or category..."
         onSearchChange={handleTransactionSearchChange}
         transactionType={transactionType}
         onTransactionTypeChange={handleTransactionTypeChange}
+        startDate={transactionStartDate}
+        endDate={transactionEndDate}
+        onStartDateChange={handleTransactionStartDateChange}
+        onEndDateChange={handleTransactionEndDateChange}
+        amountRange={transactionAmountRange}
+        onAmountRangeChange={handleTransactionAmountRangeChange}
+        onClearFilters={handleClearTransactionFilters}
         page={transactionPage}
-        totalPages={transactionTotalPages}
-        totalTransactions={transactionTotal}
+        hasMore={transactionHasMore}
+        cursorPagination
         pageSize={transactionPageSize}
         onPageChange={handleTransactionPageChange}
         onPageSizeChange={handleTransactionPageSizeChange}

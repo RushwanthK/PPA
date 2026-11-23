@@ -521,124 +521,317 @@ Only change production code for genuine defects
 Run full regression suite
 ```
 
-## Current Testing Position
+# Sprint 12 - Backend Performance and Transaction History Optimization
 
-The backend testing foundation is established, and testing now needs to progress from module-by-module coverage to a systematic audit of remaining transaction behaviors.
+This sprint records the engineering concepts introduced in the current performance branch. The code is present in the reviewed branch, but runtime measurements, migration execution and the new tests still need to be verified in the target environments.
 
-### Backend Testing Status
+## Request-Level and SQL Performance Diagnostics
 
-The existing backend suite covers:
-
-- Authentication and users
-- Banks
-- Savings
-- Assets
-- Transaction exports and backup
-- Credit cards
-- Dashboard
-
-The last recorded full backend regression result in the project notes is:
-
-`389 passed, 5 warnings`
-
-This result has not been independently re-run during the latest repository review.
-
-### CI Testing Status
-
-The current `.github/workflows/ci.yml` already contains:
-
-- A PostgreSQL 17 test database service
-- Python 3.12 dependency installation
-- Backend Python validation
-- Backend pytest execution
-- Node.js 22 setup
-- Frontend dependency installation
-- React production build validation
-
-The missing CI component is frontend automated test execution.
-
-The workflow definition does not prove that the latest remote run is green, so actual GitHub Actions results must still be checked.
-
-### Frontend Testing Readiness
-
-The frontend has a test script and React Testing Library dependency, but the current `App.test.js` is a default starter test rather than a PPA test.
-
-`setupTests.js` imports `@testing-library/jest-dom`, but that dependency is absent from the committed frontend package manifest and lockfile. The test setup must be corrected before useful frontend testing can begin.
-
-### Immediate Learning Position
+The Flask application factory supports opt-in diagnostics through:
 
 ```text
-Backend module testing           ✅ Established
-Backend test execution in CI     ✅ Configured
-Transaction coverage audit       ← NEXT
-Frontend test setup               ⏳
-Frontend component/form tests     ⏳
-Frontend tests in CI              ⏳
-Full Phase 3 verification         ⏳
-RAG and AI learning               ⏳ Planned for Phase 3B
+PPA_PERF_DIAGNOSTICS=true
 ```
 
-The purpose of the remaining work is to learn how to find meaningful behavioral gaps, construct reliable tests and use CI as regression protection—not merely to increase the test count.
+The setting is disabled by default. When enabled, the application creates a request ID and records:
+
+- HTTP method, Flask endpoint and response status
+- Total Flask request elapsed time (`app_ms`)
+- Time from request start until the first SQL cursor execution begins (`first_sql_start_ms`)
+- SQL cursor execution count (`sql_count`)
+- Accumulated DBAPI cursor execution time (`sql_execute_ms`)
+
+The request ID is also exposed in the `X-Request-ID` response header so a browser request can be correlated with the server log.
+
+### Important measurement boundaries
+
+`sql_execute_ms` measures DBAPI cursor execution. It does not include all result fetching, SQLAlchemy object processing, JSON serialization, frontend rendering or browser-to-server network latency. It is therefore not equivalent to total database time or end-to-end request latency.
+
+A useful performance investigation separates the request into layers:
+
+```text
+Browser / network time
+        ↓
+Flask request processing
+        ↓
+SQL execution
+        ↓
+Result fetching and ORM processing
+        ↓
+Serialization and response transfer
+        ↓
+Frontend rendering
+```
+
+Do not conclude that a request is database-bound from one timing value. Compare request elapsed time, SQL count, SQL execution time, query plans and browser timings. Keep local/development and production measurements separate unless the workloads and network conditions are comparable.
+
+### Logging safety
+
+The implementation intentionally avoids logging SQL text, SQL parameters, query strings, request bodies, user IDs and financial values. Diagnostics should remain opt-in and should not become a channel for exposing personal financial data.
+
+SQLAlchemy event listeners are attached during app creation only when the setting is enabled. Changing the environment variable therefore requires an application restart/recreation.
+
+## Bank Transaction API — Search and Structured Filters
+
+The bank transaction endpoint now retrieves filtered data on the server. Its free-text search contract is limited to:
+
+- Transaction description
+- Transaction category
+
+Other fields have dedicated behavior:
+
+- `type`: `income` or `expense`
+- `start_date`: inclusive start of the selected IST calendar date
+- `end_date`: inclusive end of the selected IST calendar date
+- `amount_range`: one of the five supported amount bands
+- `page_size`: requested result count, clamped to 1–100 (default 25)
+
+Text search intentionally does not include amount, date, balance-after or transaction type. This keeps the free-text contract explicit and allows the other dimensions to use typed filters.
+
+### Amount range boundaries
+
+The ranges use half-open intervals to avoid overlap:
+
+- `under_500`: amount `>= 0` and `< 500`
+- `500_1000`: amount `>= 500` and `< 1,000`
+- `1000_5000`: amount `>= 1,000` and `< 5,000`
+- `5000_10000`: amount `>= 5,000` and `< 10,000`
+- `10000_plus`: amount `>= 10,000`
+
+A transaction worth exactly ₹500 belongs to the ₹500–less-than-₹1,000 range; exactly ₹1,000 belongs to the next range. Half-open intervals remove ambiguity at boundaries.
+
+### IST calendar filtering over naive UTC timestamps
+
+The application's stored transaction timestamps follow a naive-UTC convention. The user selects calendar dates in IST. The backend converts IST midnight to naive UTC and filters using a half-open interval:
+
+```text
+start_utc = IST midnight on start_date converted to UTC
+end_utc_exclusive = IST midnight on (end_date + 1 day) converted to UTC
+
+WHERE transaction.date >= start_utc
+  AND transaction.date < end_utc_exclusive
+```
+
+This makes the user's end date inclusive without constructing an artificial last instant such as `23:59:59.999999`. For IST, midnight corresponds to 18:30 on the previous UTC date. The filter leaves the database timestamp column unwrapped, preserving the opportunity to use a normal index on that column.
+
+Keep the timezone convention consistent. Do not mix timezone-aware and naive timestamps casually, especially around credit-card transaction behavior, which the existing project notes identify as sensitive.
+
+## PostgreSQL Trigram Search Indexes
+
+Migration `7bc2e41d5a90` enables the `pg_trgm` extension if needed and adds two partial GIN indexes:
+
+- `ix_transaction_bank_description_trgm` on `description` using `gin_trgm_ops`
+- `ix_transaction_bank_category_trgm` on `category` using `gin_trgm_ops`
+
+Both indexes apply only to rows where `type = 'bank_transaction'`. The transaction table is shared by multiple transaction subclasses; the partial predicate avoids including unrelated transaction rows in these indexes.
+
+Trigram indexes can help with suitable `LIKE`/`ILIKE` substring patterns. They are not a guarantee of faster queries: index selection depends on data volume, selectivity, pattern length and the PostgreSQL planner's estimates. Run the migration against the intended database and inspect real plans with:
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT ...;
+```
+
+Check both the normal ordered transaction page and description/category searches. Record the dataset size and plan; do not document an index as beneficial solely because it exists.
+
+## Cursor / Keyset Pagination
+
+### Why move away from offset pagination?
+
+Offset pagination commonly requires the database to walk past earlier rows for later pages. The old API also calculated an exact `COUNT(*)` for page metadata. As the transaction history grows, the work can increase even when the client only needs the next small page.
+
+The new-client path uses keyset pagination ordered by:
+
+```sql
+ORDER BY date DESC, id DESC
+```
+
+The ID is a deterministic tie-breaker when two transactions share the same timestamp. The next page uses the lexicographic predicate:
+
+```sql
+(date, id) < (:cursor_date, :cursor_id)
+```
+
+The endpoint fetches `page_size + 1` rows. The extra row determines whether another page exists, so the normal cursor path does not need an exact total count. The older page-number path remains available when a request supplies `page`; it continues to use offset pagination and `COUNT(*)` for compatibility during frontend/backend rollout.
+
+### Cursor contents and scope
+
+The URL-safe Base64 cursor stores the precise timestamp, transaction ID, a version and a SHA-256 digest of the active filter scope. The digest prevents a client from accidentally reusing a cursor with a different bank, user, page size or filter set.
+
+The digest is not a keyed signature, and Base64 is not encryption. The cursor is not an authorization credential. The route independently verifies that the authenticated user owns the requested bank. If tamper resistance becomes a requirement, evaluate an HMAC-signed cursor as a separate API-security decision.
+
+### Pagination consistency
+
+Keyset pagination avoids the row-shifting behavior that can occur when newer rows are inserted ahead of an offset between requests. The branch tests include a case that inserts a newer transaction after page one and verifies that the subsequent cursor page continues from the prior boundary.
+
+It does not create a database snapshot spanning multiple HTTP requests. Updates/deletes to rows and concurrent writes still need to be understood in the context of the endpoint's intended consistency model.
+
+## Dashboard Cache-Aside with Redis
+
+Redis is an optional cache for dashboard aggregates. PostgreSQL remains the source of truth. The cache is enabled through `REDIS_URL`; the configured defaults include a 60-second payload TTL and a maximum Redis connection pool size of 5.
+
+Cached dashboard resources:
+
+- Summary
+- Spending for each supported range (`30d`, `3m`, `6m`, `1y`, `all`)
+- Asset allocation
+
+### Cache-aside read flow
+
+```text
+Authenticated dashboard request
+        ↓
+Read the user's generation token
+        ↓
+Build a user + generation + resource cache key
+        ↓
+Cache HIT? ── Yes ──> Return cached payload
+        │
+        No
+        ↓
+Calculate from PostgreSQL
+        ↓
+Store under the generation observed before calculation
+        ↓
+Return database result
+```
+
+The response includes `X-Dashboard-Cache` with `HIT`, `MISS` or `BYPASS`, which helps observe which path ran. It does not itself measure the speedup.
+
+### Generation-token invalidation
+
+Each user has a generation key. A successful database write rotates that user's generation value. New dashboard requests therefore build a new key namespace and do not find cached values from the prior generation. This avoids scanning or deleting every old resource key. Old values expire under their own short TTL.
+
+The reviewed branch adds invalidation hooks after successful writes in bank, savings, asset, credit-card and user route modules. When extending or changing a financial write path, check whether it can affect summary, spending or asset allocation and whether the invalidation hook is present after commit.
+
+### Failure behavior and consistency trade-off
+
+Redis is fail-open: missing configuration or cache read/write failures fall back to the database. A Redis outage should not make ordinary financial writes fail. If invalidation fails after the PostgreSQL transaction has committed, an older cached dashboard response can remain accessible until the cache TTL expires. This is bounded staleness, not immediate consistency.
+
+The production backend has a Redis service deployed on Render alongside it and uses `REDIS_URL` to connect. The current Docker Compose backend environment does not pass `REDIS_URL` and the Compose file does not define a Redis service, so local Compose bypasses Redis by default. Use the `X-Dashboard-Cache` response header (`HIT`, `MISS` or `BYPASS`) to observe the runtime path without recording the connection URL or credentials in project documentation.
+
+The testing configuration explicitly sets `REDIS_URL = None`, so the regular backend test suite does not require an external Redis service. `tests/test_dashboard_cache.py` uses deterministic fake Redis clients to cover a cache hit, generation invalidation/user isolation, Redis failure fallback and invalidation following a bank transaction. These test cases are present in the branch; their execution must still be verified.
+
+## Frontend Transaction Table and Navigation
+
+The bank page now maintains search input and debounced search state separately. A 300 ms debounce avoids issuing a request for every keystroke. Cursor history is stored in a React ref so remembering the next cursor does not itself trigger another fetch. Page, page size and filter changes reset or use the appropriate cursor boundary.
+
+An effect cleanup flag prevents stale results from updating the component after the relevant request effect has been cancelled. After a transaction is added, the cursor history resets and page one is refreshed; a partial page is not manually modified on the client.
+
+The shared `TransactionTableDialog` supports both cursor pagination and the legacy page-number display, and exposes search, type, date, amount and clear-filter controls with loading/error feedback.
+
+The desktop navigation sidebar uses CSS `position: sticky` below a calculated header offset. It has its own vertical scrolling container and is not viewport-fixed. The mobile navigation retains overlay behavior and closes after navigation.
+
+## Tests Added for the Performance Changes
+
+The reviewed `tests/test_banks.py` adds cases for cursor validation/scope, concurrent insertion between cursor pages, combined filters, legacy pagination, avoiding exact count queries on the cursor path, search contract, amount boundaries, IST boundaries, invalid filters and authorization.
+
+`tests/test_dashboard_cache.py` adds four tests for cache hit, generation invalidation and user separation, Redis outage fallback, and bank-transaction invalidation.
+
+The code review confirms that test cases are present; it does not prove that they pass. Run focused tests first, then the complete backend regression suite, and record the actual command, environment and output. The previous `389 passed, 5 warnings` result remains historical until rerun.
+
+# Sprint 13 - Phase 3: Regression, Auth/API Security and Frontend Tests
+
+Phase 3 was widened so that the public app's auth and API security is hardened before testing is declared complete: 3A backend regression, 3B auth/API security, 3C frontend tests, 3D CI and docs. Everything below was verified locally and then deployed to production on November 23, 2026 (migration first, then frontend, then the manual Render deploy).
+
+## 3A — Backend Regression
+
+- Re-ran the full suite before adding anything, to get an honest baseline (`414 passed`).
+- Found one real defect: the credit-card page showed "transactions billed" and "total amount billed" after processing billing, but the backend never returned those fields. The fix adds them to the response without touching the billing calculation.
+- Lesson: a frontend reading a field the backend never sends fails silently (it shows `undefined`). Contract tests on both sides catch this.
+
+## 3B — Rate Limiting
+
+Concepts:
+
+- **Two keys for login:** one per client IP counts every attempt (brute force and CPU protection). One per account counts only failed attempts (`deduct_when` the reply is 401), so a distributed attack on one account is capped even across many IPs, while a user who logs in successfully uses nothing.
+- **Order matters:** Flask-Limiter checks limits in `before_request`, before the view and before PBKDF2 hashing (~0.4 s of CPU each). With one Gunicorn worker, an unlimited `/login` is also a denial-of-service vector.
+- **Moving window vs fixed window:** a fixed window allows a burst of 2× the limit across a window boundary; moving window stores each hit's timestamp and has no boundary burst.
+- **Real client IP behind a proxy:** without `ProxyFix`, every request appears to come from Render's proxy, so all users share one bucket. `ProxyFix(x_for=N)` trusts exactly N hops from the right of `X-Forwarded-For`. Values further left are client-controlled and ignored. N must match the real infrastructure (`TRUSTED_PROXY_COUNT`).
+- **Hashing usernames in keys:** keeps Redis keys short and fixed-length, and avoids storing usernames in plain text.
+- **Timing side channel:** for unknown usernames, the password is checked against a dummy hash so "no such user" takes as long as "wrong password".
+- **Fail-open choices:** if Redis is down, limits fall back to per-process memory, and storage errors are swallowed so a normal 401 never becomes a 500.
+
+Verification lesson: the first Redis key scan used the wrong pattern (the library adds its own `LIMITS:LIMITER/` prefix). It found zero keys, and the "every key has a TTL" check passed while checking nothing. **A check that inspects zero items proves nothing.** Always assert that the sample is non-empty.
+
+## 3B — JWT Lifecycle
+
+- **Problem:** a stateless JWT stays valid until it expires (one day). Logout only deleted it in the browser, and a stolen token kept working.
+- **Two revocation mechanisms:**
+  - `token_version` on the user is copied into each token as `ver`. Incrementing it invalidates every earlier token at once (logout-all, password change).
+  - The `revoked_token` table holds individual `jti` values for single-device logout. Rows are pruned after the token's own expiry.
+- **Cost:** one combined indexed query per authenticated request. This is acceptable at PPA's scale, and the bank query-count test was updated (2 → 3 SELECTs) with an explanation instead of being loosened.
+- **Where security state lives:** the Redis instance is a disposable cache with `allkeys-lru`. An evicted revocation would silently re-enable a logged-out token, so revocation lives in PostgreSQL. Cache data can be lost; security state cannot.
+- **Backward compatibility:** tokens issued before the change have no `ver` claim and are treated as 0. The migration gives existing users 0, so deploying logs nobody out.
+- **Status codes are a contract:** Flask-JWT-Extended returns 422 for malformed or wrongly signed tokens, but the frontend only logs out on 401. Rotating the secret would have left users stuck with a dead token. All token problems now return 401.
+- **Password change:** requires the current password, and wrong attempts are rate-limited. A wrong attempt returns 403, not 401, so the frontend does not log the user out for a typo. A successful change ends other sessions and returns a new token for this device.
+- **Key length:** HS256 keys under 32 bytes can be brute-forced offline from any captured token, which would allow forging tokens for any user. PyJWT 2.15 warns about this, and the app now logs a warning at startup.
+
+Migration lesson: adding a `NOT NULL` column with a constant default is metadata-only on PostgreSQL 11+ (no table rewrite). An additive migration can be applied before the new code ships, which makes the deploy order safe. The migration was tested with upgrade → downgrade → upgrade on a throwaway database.
+
+## 3B — API Hardening
+
+- **Request size limit:** `MAX_CONTENT_LENGTH` rejects large bodies with 413 before they are parsed.
+- **Error replies:** returning `str(e)` can leak table names, constraint names or SQL. The client now gets a generic message, and the server log gets the full traceback, so the app stays debuggable.
+- **Route-coverage test:** iterate over `app.url_map`, call every route without a token, and expect 401 unless the endpoint is on an explicit public allowlist. A future route that forgets `@jwt_required` fails CI. The sweep also showed that a suspected unauthenticated `/transfers` endpoint was inside a dead commented-out string, so it was never live. Lesson: verify by running the app, not by reading code that may not execute.
+- **CORS credentials:** only needed for cookies. PPA sends the token in a header, so `supports_credentials` was turned off. Deploy order then matters, because the old frontend still requests credentials.
+- **Security headers on an API:** `default-src 'none'` and `frame-ancestors 'none'` are safe for JSON responses. A CSP for the React site itself is a separate, riskier change.
+- **Dependency audits:** `pip-audit` guided Python upgrades until it reported nothing. `npm audit` findings must be read by where the package runs: CRA build tooling never reaches the browser bundle, so those advisories are lower priority than runtime packages.
+
+## 3C — Frontend Tests
+
+- Fixed the setup first. `@testing-library/jest-dom` was imported but not declared, and jsdom lacks `TextEncoder`, `matchMedia` and `ResizeObserver`.
+- Used `moduleNameMapper` so ESM-only builds of axios and react-router v7 load under CRA's Jest.
+- Tested observable behavior: what the user sees and which API call is made, not component internals. API modules are mocked at the service boundary.
+- The tests found a real accessibility bug: every modal used the same `id="modal-title"`, so stacked modals announced the wrong title. `useId()` gives each instance its own id.
+
+## 3D — CI
+
+- The workflow now runs the frontend tests (`CI=true`, no watch mode) before the build.
+- CI must run on the branch that actually deploys. Production deploys from `perf/add-request-diagnostics`, but the workflow originally triggered only on `main`, so nothing checked production pushes. The triggers now include that branch.
+- CI does not automatically gate deploys: Vercel deploys on push in parallel with CI. Only the manual Render deploy can wait for a green run.
+- The CI JWT key had to be lengthened after the PyJWT upgrade. Warnings jumped from 5 to 708, which is a reminder to read the warnings, not just the pass count.
+
+## Engineering Habits Reinforced
+
+- Inspect the real code before changing it, and correct claims publicly when evidence disproves them.
+- State what was verified and what was not: local tests are not a GitHub Actions run, and a local Redis is not production Redis.
+- Keep line endings consistent. Mixed CRLF/LF made git show whole-file rewrites and hid the real diff.
+- Do not inflate test counts. Every new test protects a specific behavior.
+
+## Current Learning Position
+
+```text
+Backend regression (3A)          ✅ 465 passed locally
+Rate limiting (3B)               ✅ Verified with real local Redis
+JWT logout / revocation (3B)     ✅
+API hardening + deps (3B)        ✅
+Frontend tests (3C)              ✅ 201 passed locally
+CI workflow + docs (3D)          ✅ Updated
+Commit + production deploy      ✅ Nov 23, 2026
+CI triggers for prod branch      ✅
+First green CI run               ← NEXT
+Refresh tokens / token storage   ⏳ Later security work
+RAG and AI learning              ⏳ After Phase 3
+```
 
 # Next Learning Goals
 
-## Phase 3 — Backend Transaction Audit
+## Shipping Phase 3 Safely
 
-The immediate learning goal is to identify meaningful gaps in the existing transaction tests.
+- Order a deploy across auto-deploying (Vercel) and manually deployed (Render) services so that no old/new combination breaks.
+- Apply an additive migration ahead of the code that needs it.
+- Configure production secrets and proxy settings, and verify behavior in production rather than assuming it.
+- Read a real GitHub Actions run, and understand required status checks and branch protection.
 
-Focus on:
+## Later Security Work
 
-- Reviewing active transaction routes and their validation branches.
-- Understanding how input validation affects balances and database records.
-- Testing invalid inputs and confirming that rejected operations have no unwanted side effects.
-- Checking ownership, missing-resource behavior, transaction history and error responses.
-- Distinguishing a test setup problem from a genuine application defect.
-- Re-running the complete regression suite after changes.
+- Short-lived access tokens with refresh tokens and rotation
+- Trade-offs of `localStorage` versus httpOnly cookies (XSS versus CSRF)
+- A Content-Security-Policy for the React site
+- Migrating from Create React App to a maintained build tool
 
-### Initial Audit Candidate: Non-Finite Amounts
-
-Static inspection identified a candidate area to investigate in:
-
-- `app/banks/bank_routes.py`
-- `app/credit_cards/credit_card_routes.py`
-
-Review how these endpoints handle `NaN` and positive or negative infinity.
-
-A useful test should verify the API response and the resulting database state, including whether any balance changes or transaction records are created.
-
-This is an investigation target, not a confirmed defect. Run the tests and determine the actual behavior before changing production code.
-
-The existing savings and asset transaction implementations provide useful comparison points because they already contain explicit finite-number validation.
-
-## Frontend Automated Testing
-
-Once the backend audit is sufficiently complete:
-
-- Resolve the frontend test dependency/setup mismatch.
-- Replace the default Create React App starter test.
-- Learn to render components and query the resulting UI.
-- Test form input, validation and error messages.
-- Mock API requests where appropriate.
-- Test loading, successful and failed API interactions.
-- Test important transaction, deletion and backup/export workflows.
-
-The goal is to test observable behavior rather than internal implementation details wherever practical.
-
-## CI Testing
-
-The backend pytest command is already configured in GitHub Actions.
-
-Remaining learning goals:
-
-- Understand how PostgreSQL is provisioned as a CI service.
-- Verify that backend tests run against the isolated test database.
-- Add frontend automated test execution to CI.
-- Retain React production build validation.
-- Understand how failed test commands prevent a workflow from passing.
-- Verify actual workflow results in GitHub Actions.
-- Learn how GitHub branch protection and required status checks relate to the CI workflow.
-
-## Phase 3B — RAG and AI Learning
+## RAG and AI Learning (after Phase 3)
 
 After Phase 3, learn RAG through a separate document chatbot before extending PPA.
 
@@ -668,9 +861,11 @@ GitHub Actions CI
         ↓
 Automated backend and frontend testing
         ↓
+Targeted auth/API security
+        ↓
 Phase 3 complete
         ↓
-Phase 3B — RAG and AI learning
+RAG and AI learning
         ↓
 Docker build in CI
         ↓

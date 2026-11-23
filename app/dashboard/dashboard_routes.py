@@ -6,6 +6,10 @@ from .dashboard_service import (
     get_spending_by_category,
     get_asset_allocation
 )
+from ..utils.dashboard_cache import (
+    get_cached_dashboard_payload,
+    set_cached_dashboard_payload,
+)
 
 dashboard_routes = Blueprint(
     "dashboard_routes",
@@ -19,9 +23,22 @@ def dashboard_summary():
 
     user_id = int(get_jwt_identity())
 
-    summary = get_dashboard_summary(user_id)
+    cached, generation, cache_status = get_cached_dashboard_payload(
+        user_id, "summary"
+    )
+    if cached is not None:
+        response = jsonify(cached), 200
+        # Set a small diagnostic header so local cache behavior is observable.
+        response[0].headers["X-Dashboard-Cache"] = cache_status
+        return response
 
-    return jsonify(summary), 200
+    summary = get_dashboard_summary(user_id)
+    set_cached_dashboard_payload(
+        user_id, "summary", generation, summary
+    )
+    response = jsonify(summary), 200
+    response[0].headers["X-Dashboard-Cache"] = cache_status
+    return response
 
 
 @dashboard_routes.route("/dashboard/spending", methods=["GET"])
@@ -52,12 +69,24 @@ def dashboard_spending():
             )
         }), 400
 
+    cached, generation, cache_status = get_cached_dashboard_payload(
+        user_id, "spending", range_key
+    )
+    if cached is not None:
+        response = jsonify(cached), 200
+        response[0].headers["X-Dashboard-Cache"] = cache_status
+        return response
+
     spending = get_spending_by_category(
         user_id,
         range_key
     )
-
-    return jsonify(spending), 200
+    set_cached_dashboard_payload(
+        user_id, "spending", generation, spending, range_key
+    )
+    response = jsonify(spending), 200
+    response[0].headers["X-Dashboard-Cache"] = cache_status
+    return response
 
 @dashboard_routes.route("/dashboard/asset-allocation",methods=["GET"])
 @jwt_required()
@@ -67,10 +96,20 @@ def dashboard_asset_allocation():
         get_jwt_identity()
     )
 
+    cached, generation, cache_status = get_cached_dashboard_payload(
+        user_id, "asset-allocation"
+    )
+    if cached is not None:
+        response = jsonify(cached), 200
+        response[0].headers["X-Dashboard-Cache"] = cache_status
+        return response
+
     allocation = get_asset_allocation(
         user_id
     )
-
-    return jsonify(
-        allocation
-    ), 200
+    set_cached_dashboard_payload(
+        user_id, "asset-allocation", generation, allocation
+    )
+    response = jsonify(allocation), 200
+    response[0].headers["X-Dashboard-Cache"] = cache_status
+    return response

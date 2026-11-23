@@ -18,11 +18,13 @@ from sqlalchemy import String, cast, or_
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
+from ..utils.errors import server_error
 from ..models import (
     Asset,
     AssetTransaction,
 )
 from ..utils.financial_util import money
+from ..utils.dashboard_cache import invalidate_dashboard_cache
 
 
 assets_routes = Blueprint(
@@ -181,6 +183,7 @@ def create_asset():
     try:
         db.session.add(asset)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Asset created!",
@@ -211,11 +214,7 @@ def create_asset():
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()
 
 
 @assets_routes.route(
@@ -328,6 +327,7 @@ def update_asset(asset_id):
 
     try:
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": (
@@ -360,11 +360,7 @@ def update_asset(asset_id):
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()
 
 
 @assets_routes.route(
@@ -459,6 +455,7 @@ def add_asset_transaction(asset_id):
     try:
         db.session.add(transaction)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": "Transaction added",
@@ -468,11 +465,7 @@ def add_asset_transaction(asset_id):
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()
 
 
 @assets_routes.route(
@@ -625,6 +618,7 @@ def delete_asset(asset_id):
 
         db.session.delete(asset)
         db.session.commit()
+        invalidate_dashboard_cache(user_id)
 
         return jsonify({
             "message": (
@@ -635,8 +629,4 @@ def delete_asset(asset_id):
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()

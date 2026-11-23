@@ -178,8 +178,15 @@
   width: 100%;
   margin-top: auto;
   padding-top: 24px;
+  flex-direction: column;
   justify-content: space-between;
   gap: 12px;
+}
+
+.profile-edit-hint {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  opacity: 0.75;
 }
 
 .profile-logout-button {

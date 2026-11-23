@@ -16,6 +16,10 @@ class User(db.Model):
     savings = db.relationship('Saving', backref='user', lazy=True, cascade="all, delete-orphan")
     transactions = db.relationship('Transaction', backref='user', lazy=True)
     password_hash = Column(String(128), nullable=False)
+    # Copied into every access token as the "ver" claim. Incrementing it
+    # (password change, "log out of all devices") invalidates every token
+    # issued before, without having to list those tokens anywhere.
+    token_version = Column(Integer, nullable=False, default=0, server_default="0")
 
     def set_password(self, password):
         # Using pbkdf2:sha256 with reduced salt length
@@ -189,3 +193,17 @@ class TransferTransaction(db.Model):
 
     def __repr__(self):
         return f'<Transfer {self.amount} from {self.from_account_type}:{self.from_account_id} to {self.to_account_type}:{self.from_account_id}>'
+
+class RevokedToken(db.Model):
+    """Access tokens ended early by POST /logout (one device).
+
+    Rows are only useful until the token would have expired anyway, so
+    expires_at is indexed and expired rows are deleted on every logout.
+    Kept in Postgres rather than Redis: the Redis instance evicts keys under
+    memory pressure (allkeys-lru), and an evicted entry would silently make a
+    revoked token valid again.
+    """
+    __tablename__ = 'revoked_token'
+
+    jti = Column(String(36), primary_key=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
