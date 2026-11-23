@@ -1,70 +1,86 @@
-# Getting Started with Create React App
+# PPA Frontend (`portfolio-app`)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React single-page app for the Personal Portfolio Application. It talks to the Flask backend over a JSON REST API. See the root `README.md`, `ARCHITECTURE.md` and `PROJECT_STATUS.md` for the whole system.
 
-## Available Scripts
+- **Build tooling:** Create React App (`react-scripts` 5)
+- **UI:** React 19, React Router 7, MUI, Recharts
+- **HTTP:** axios (`src/services/api.js`)
+- **Tests:** Jest + React Testing Library (`react-scripts test`)
+- **Hosting:** Vercel, which deploys automatically on every push. Anything pushed goes live, so keep the frontend compatible with the backend version that is currently deployed on Render (Render is deployed manually).
 
-In the project directory, you can run:
+## Configuration
 
-### `npm start`
+| Variable | Purpose |
+|---|---|
+| `REACT_APP_API_URL` | Base URL of the Flask backend |
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+`.env.development` is used by `npm start`, and `.env.production` by `npm run build`. CRA bakes `REACT_APP_*` values into the bundle at build time, so they are public. Never put secrets in them.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Scripts
 
-### `npm test`
+Run these from `portfolio-app/`.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```bash
+npm ci                          # install exactly what package-lock.json specifies
+npm start                       # dev server on http://localhost:3000
+npm test                        # Jest in watch mode
+npm test -- --watchAll=false    # run every test once (what CI does, with CI=true)
+npm run build                   # production build into build/
+```
 
-### `npm run build`
+## Structure
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```text
+src/
+├── App.js                 # routes, layout, navigation
+├── AuthContext.js         # current user + token, login/logout, /me check
+├── pages/                 # Dashboard, Banks, Savings, Assets, Credit Cards, Login
+├── components/
+│   ├── dialogs/           # Profile, entity/transaction forms, transaction table
+│   └── ui/                # Modal, DataTable, Button, SearchBar
+├── services/
+│   ├── api.js             # axios instance + all API calls
+│   ├── authEvents.js      # app-wide "session expired" event (raised on 401)
+│   └── backendStatus.js   # tracks slow "backend waking up" requests (Render cold start)
+└── setupTests.js          # global Jest setup
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Authentication
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- The JWT returned by `/login` is stored in `localStorage` and sent as `Authorization: Bearer <token>` by the axios interceptor in `api.js`.
+- Any **401** reply logs the user out. The backend returns 401 for every token problem: missing, expired, revoked, bad signature or malformed.
+- Requests do **not** send cookies (`withCredentials` was removed). The backend no longer allows cross-site credentials, so do not add it back.
+- **Logout** calls `POST /logout` to revoke the token on the server (without waiting for it) and then clears local state.
+- **Log out of all devices** (Profile dialog) calls `POST /logout-all` and waits for it, showing an error if it fails.
+- **Changing the password** requires the current password. The backend ends all other sessions and returns a new `token`, which the Profile dialog stores so this device stays logged in. A wrong current password returns 403, not 401, so the user is not logged out for a typo.
+- Login, registration and password change are rate limited. A 429 reply has an `error` message (with the wait time) that the UI displays as-is.
 
-### `npm run eject`
+Planned later: short-lived access tokens with refresh tokens, and possibly moving the token out of `localStorage`.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Tests
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+There are 14 test suites (`*.test.js` next to the code they cover). The last local run (November 23, 2026) gave `201 passed`.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+- **Pages:** Login, Dashboard, Banks, Savings, Assets, Credit Cards
+- **Components:** Modal, DataTable, delete confirmation, transaction table, Profile dialog
+- **Services:** `api.js` (token header, 401 logout, session helpers) and `backendStatus.js`
+- **App:** login/dashboard routing, session restore via `/me`, logout on 401 or a session-expired event
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Conventions:
 
-## Learn More
+- Test what the user sees and which API call is made, not component internals.
+- Mock `services/api` at the module boundary; don't make real network calls.
+- `setupTests.js` loads `@testing-library/jest-dom` and adds the jsdom polyfills (`TextEncoder`/`TextDecoder`, `matchMedia`, `ResizeObserver`). It also clears `localStorage` after each test.
+- The `jest.moduleNameMapper` entries in `package.json` point axios and react-router v7 at builds CRA's Jest can load. Check them after upgrading either package.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci`, then the tests with `CI=true`, then `npm run build`. A failing test fails the workflow.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Dependency Audit
 
-### Code Splitting
+`npm audit` still reports advisories in Create React App's build tooling (webpack dev server, svgo, etc.). Those packages run only at build time and are not part of the browser bundle. No runtime dependency is flagged. Fully removing them means migrating off CRA (for example to Vite), which is tracked as separate future work.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Deploy Notes
 
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Vercel builds with `npm run build` on every push.
+- When a change needs a new backend endpoint or response field, deploy the backend first, or make the frontend tolerate the old backend. When the backend removes something the old frontend relies on, push the frontend first. For the Phase 3 changes the order is: migration, then push (frontend), then backend deploy on Render.
+- A Content-Security-Policy for the site (for example via `vercel.json`) has not been added yet.

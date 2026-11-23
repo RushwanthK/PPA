@@ -78,7 +78,34 @@ def create_app():
     if app.config.get("PERF_DIAGNOSTICS_ENABLED", False):
         app.logger.setLevel(logging.INFO)
 
-    JWTManager(app)
+    jwt = JWTManager(app)
+
+    # HS256 tokens are only as strong as this key: anyone holding one token
+    # can try to guess a short key offline and then forge tokens for any
+    # user. RFC 7518 requires at least 32 bytes. Warn loudly (Render logs)
+    # rather than refuse to start, so a weak key cannot take the site down.
+    if len(str(app.config["JWT_SECRET_KEY"]).encode()) < 32:
+        app.logger.warning(
+            "JWT_SECRET_KEY is shorter than 32 bytes; set a long random value "
+            "(e.g. python -c \"import secrets; print(secrets.token_urlsafe(48))\")"
+        )
+
+    # Token revocation checks and uniform 401 replies (see utils/auth_tokens.py).
+    from .utils.auth_tokens import register_jwt_callbacks
+
+    register_jwt_callbacks(jwt)
+
+    # ProxyFix + Flask-Limiter. Must run before the blueprints are used so the
+    # limiter's before_request hook rejects excess requests before any view
+    # (and its password hashing) runs.
+    from .utils.rate_limit import init_rate_limiting
+
+    init_rate_limiting(app)
+
+    # JSON 413 for oversized bodies and a generic JSON 500 (no internals).
+    from .utils.errors import register_error_handlers
+
+    register_error_handlers(app)
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -112,8 +139,11 @@ def create_app():
                 "origins": app.config["CORS_ORIGINS"]
             }
         },
-        supports_credentials=True,
-        expose_headers=["Authorization"],
+        # Auth uses the Authorization header, not cookies, so browsers are
+        # not asked to send credentials cross-origin (no
+        # Access-Control-Allow-Credentials). The frontend's axios client
+        # matches this (no withCredentials).
+        supports_credentials=False,
         allow_headers=["Content-Type", "Authorization"],
         max_age=600,
     )
@@ -162,6 +192,19 @@ def create_app():
                 response.headers["Expires"] = "0"
 
         response.headers["X-Content-Type-Options"] = "nosniff"
+
+        # This is a JSON/file API: it never needs to be framed, load scripts
+        # or styles, or leak its URL in a Referer header.
+        response.headers.setdefault(
+            "Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'"
+        )
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        # Browsers ignore HSTS on plain-HTTP responses (local development),
+        # so it only takes effect on Render's HTTPS URL.
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000"
+        )
 
         if (
             app.config.get("PERF_DIAGNOSTICS_ENABLED", False)

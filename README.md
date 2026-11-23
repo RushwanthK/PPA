@@ -43,15 +43,24 @@ Although initially developed as a personal finance application, the project is p
 * Flask-Migrate
 * Flask-JWT-Extended
 * Flask-CORS
-* Redis (`redis-py`) — optional cache for dashboard aggregates
+* Flask-Limiter — rate limiting for login, registration and password change
+* Redis (`redis-py`) — optional cache for dashboard aggregates and storage for rate-limit counters
 
 ## Database
 
 * PostgreSQL `pg_trgm` extension — trigram indexes for bank transaction description/category substring search
 
-## Authentication
+## Authentication and API Security
 
-* JWT Authentication
+* JWT access tokens (Flask-JWT-Extended) sent in the `Authorization` header
+* Server-side logout, "log out of all devices" and logout on password change (token version + revocation list in PostgreSQL)
+* Rate limiting on login, registration and password change
+* Request size limit, generic 500 replies, CORS without credentials, API security headers
+
+## Testing
+
+* Backend: pytest against a dedicated PostgreSQL test database
+* Frontend: Jest + React Testing Library (`react-scripts test`)
 
 ## Version Control
 
@@ -71,70 +80,65 @@ Although initially developed as a personal finance application, the project is p
 
 ---
 
-# Current Testing Status
+# Current Status — Phase 3: Testing and Auth/API Security
 
-## Phase 3 — Automated Testing
+Phase 3 covers backend regression (3A), targeted auth/API security (3B), frontend tests (3C), and CI plus documentation (3D). The code for all four parts is complete on the working branch but **not yet committed or deployed**. See `PROJECT_STATUS.md` for the full checklist and the deployment order.
 
-Backend automated testing is well established. The remaining work is to complete the transaction-specific coverage review, establish meaningful frontend tests, and verify that both test suites are enforced consistently through CI.
+### Local Verification (November 23, 2026)
+
+| Check | Result |
+|---|---|
+| Backend `pytest` | `465 passed, 5 warnings` (known `datetime.utcnow()` deprecations) |
+| Frontend `npm test -- --watchAll=false` | `201 passed`, 14 suites |
+| `CI=true npm run build` | Compiled successfully |
+| `pip-audit` | No known vulnerabilities |
+
+These are local results. A real GitHub Actions run of the updated workflow, the Supabase migration and the Render deployment have not happened yet.
 
 ### Backend Testing
 
-Test modules cover the following areas:
+Test modules cover:
 
-- Authentication, registration, login, and user APIs
-- Banks
-- Savings
-- Assets
-- Transaction exports and backup
-- Credit Cards
-- Dashboard
-- Database isolation and transaction-related behavior
+- Authentication, registration, login and user APIs
+- Banks (cursor pagination, filters, query counts, IST date and amount boundaries)
+- Savings, assets, credit cards and transaction exports/backup
+- Dashboard and the dashboard Redis cache
+- Rate limiting (`test_rate_limiting.py`)
+- Token lifecycle: logout, logout-all, password change, revoked/expired/invalid tokens (`test_token_lifecycle.py`)
+- API hardening: every non-public route requires a token, 413 size limit, no exception text in 500 replies, CORS and security headers (`test_api_hardening.py`)
 
-The bank test module has been expanded to cover the new transaction-history API behavior, including cursor pagination, filter scope, legacy page-number compatibility, query-count behavior, text search, amount boundaries, IST date boundaries, invalid filters and authorization. `tests/test_dashboard_cache.py` adds focused tests for cache hits, generation invalidation/user isolation, Redis failure fallback and invalidation after a bank transaction.
-
-**Last recorded full backend regression result:** `411 passed, 5 warnings`.
-
-This result comes from the existing project notes and has not been independently re-run against the reviewed branch. The presence of new test cases in the branch does not establish that those tests have passed. Re-run the focused suites and the complete test suite before recording a new result.
-
-### GitHub Actions CI
-
-The workflow in `.github/workflows/ci.yml` currently:
-
-- Runs for pushes to `main` and pull requests targeting `main`.
-- Starts a PostgreSQL 17 service for backend testing.
-- Uses Python 3.12 and installs backend dependencies.
-- Performs Python validation.
-- Runs the backend test suite using `pytest -q`.
-- Uses Node.js 22 and installs frontend dependencies using `npm ci`.
-- Validates the React production build using `npm run build`.
-
-Backend pytest execution is already configured in CI.
-
-The workflow does not yet run frontend automated tests or build Docker images. A successful recent GitHub Actions run and repository branch-protection settings still need to be verified. The reviewed performance branch is not evidence of a green CI run merely because the workflow definition exists.
+The regression found one real defect. Credit-card billing did not return `transactions_billed` and `total_amount_billed`, which the billing-details panel displays. The backend now returns both.
 
 ### Frontend Testing
 
-The frontend has an `npm test` script and a React Testing Library dependency, but meaningful PPA frontend testing has not yet been established.
+Jest and React Testing Library tests cover the Login, Dashboard, Banks, Savings, Assets and Credit Cards pages, shared components (Modal, DataTable, delete confirmation, transaction table, Profile dialog), and the API service layer. The tests found an accessibility bug: every open modal shared the same title id. Each modal now gets a unique id.
 
-The existing `src/App.test.js` is still the Create React App starter test. In addition, `src/setupTests.js` imports `@testing-library/jest-dom`, but that package is not declared in the frontend `package.json` or its lockfile.
+### GitHub Actions CI
 
-The test setup must be corrected before the frontend test suite can be relied upon.
+The workflow in `.github/workflows/ci.yml`:
 
-Planned frontend coverage includes:
+- Runs for pushes to `main` and pull requests targeting `main`.
+- Starts a PostgreSQL 17 service and uses a CI-only JWT key.
+- Uses Python 3.12, installs dependencies, compiles the backend and runs `pytest -q`.
+- Uses Node.js 22, runs `npm ci`, runs the frontend tests and then `npm run build`.
 
-- Component rendering and routing
-- Form validation
-- API interactions and error feedback
-- Transaction workflows
-- Deletion confirmation
-- Backup and export flows
+The frontend test step is new and has not yet run on GitHub. Branch-protection and required-check settings still need to be verified.
+
+### Security Summary
+
+- **Rate limits:** `/login` per IP (`10/min`, `50/hour`) and per account (5 failed attempts per 15 minutes), `/register` (3 per hour per IP), wrong current passwords (5 per 15 minutes). Counters are stored in Redis with a TTL; if Redis is unavailable, the limits fall back to per-process memory.
+- **Logout:** logout revokes the current token on the server, "Log out of all devices" invalidates every token, and a password change requires the current password and ends other sessions. All of this state lives in PostgreSQL.
+- **Uniform 401:** every token problem returns 401 with `{"error": ...}`, so the frontend always logs out cleanly.
+- **Request hardening:** requests over 256 KB get a JSON 413, 500 replies never include exception text, CORS no longer advertises credentials, and API responses carry CSP, frame, referrer and HSTS headers.
+- **Dependencies:** Python dependencies were upgraded until `pip-audit` reported no known vulnerabilities. The remaining `npm audit` advisories are only in Create React App build tooling.
+- **Not done yet:** refresh tokens, moving the token out of `localStorage`, a frontend CSP on Vercel, and migrating off CRA.
 
 ### Immediate Next Steps
 
-1. Resolve the frontend test setup and replace the starter test.
-2. Add meaningful frontend regression tests.
-3. Add frontend test execution to GitHub Actions while retaining the production build check.
-4. Verify the complete pipeline and update the status after successful execution.
+1. Review and commit the Phase 3 work to the chosen branch.
+2. Production configuration: a strong `JWT_SECRET_KEY` (32+ random bytes), `TRUSTED_PROXY_COUNT`, and a Redis eviction/memory check.
+3. Apply migration `0557b33bd281` to Supabase, push (Vercel deploys the frontend first), then deploy the backend on Render.
+4. Verify production behavior and the GitHub Actions run, then mark Phase 3 complete.
 
 # Current Features
 
@@ -219,9 +223,9 @@ PPA
 ├── app/                 # Flask backend
 │   ├── banks/           # Bank APIs, including transaction filters and cursor pagination
 │   ├── dashboard/       # Dashboard API and aggregation services
-│   └── utils/           # Shared utilities, including dashboard_cache.py
+│   └── utils/           # Shared utilities: dashboard_cache, auth_tokens, rate_limit, errors
 ├── portfolio-app/       # React frontend
-├── migrations/          # Alembic migrations, including pg_trgm search indexes
+├── migrations/          # Alembic migrations (pg_trgm search indexes, token revocation)
 ├── tests/               # Backend automated tests
 ├── .github/workflows/   # GitHub Actions CI
 ├── requirements.txt
@@ -229,7 +233,9 @@ PPA
 ├── config.py
 ├── README.md
 ├── ARCHITECTURE.md
-└── .env
+├── PROJECT_STATUS.md
+├── LEARNING_NOTES.md
+└── .env                 # local only, never committed
 ```
 
 ---
@@ -248,11 +254,25 @@ Frontend
 npm start
 ```
 
-Backend tests
+Backend tests (local PostgreSQL test database from `.env.test`)
 
 ```bash
-pytest -v
+pytest -q
 ```
+
+Frontend tests (from `portfolio-app/`)
+
+```bash
+npm test -- --watchAll=false
+```
+
+Database migrations
+
+```bash
+flask db upgrade
+```
+
+Python dependencies are installed into the project's existing `venv`. `JWT_SECRET_KEY` should be at least 32 random bytes; the backend logs a warning at startup if it is shorter.
 
 Optional performance diagnostics can be enabled in the backend environment with:
 
@@ -279,23 +299,22 @@ Dashboard caching uses the Render Redis service in production through `REDIS_URL
 - [x] Backend pytest execution configured in GitHub Actions
 - [x] Frontend dependency installation and production build validation in CI
 
-## Phase 3 — Automated Testing (Current Phase)
+## Phase 3 — Automated Testing and Auth/API Security (Current Phase)
 
-- [x] Backend test modules established for the major application areas
-- [x] Backend pytest step configured in CI
-- [ ] Complete conservative backend cleanup where justified
-- [ ] Resolve the frontend test setup and dependency issue
-- [ ] Replace the default frontend starter test with meaningful PPA tests
-- [ ] Add component, form, API interaction, transaction and error-feedback tests
-- [ ] Add frontend test execution to GitHub Actions
-- [ ] Verify consistent backend and frontend test execution
-- [ ] Verify the latest successful CI run and the required-check settings for pull requests
+- [x] 3A: Full backend regression; credit-card billing summary defect fixed
+- [x] 3B: Rate limiting on login, registration and password change
+- [x] 3B: Server-side logout, logout of all devices, password change ends other sessions
+- [x] 3B: Request size limit, generic 500 replies, route-coverage test, CORS without credentials, security headers
+- [x] 3B: Dependency upgrades (`pip-audit` clean)
+- [x] 3C: Frontend test setup fixed and meaningful tests for pages, components and services
+- [x] 3D: Frontend tests added to GitHub Actions; documentation updated
+- [ ] Commit and push to the chosen branch
+- [ ] Apply the migration to Supabase, configure Render, deploy and verify in production
+- [ ] Verify a green GitHub Actions run and the required-check settings for pull requests
 
-The branch includes additional bank transaction and dashboard-cache test cases, but Phase 3 remains in progress until the branch's focused and full test suites have actually been run and the frontend test foundation is established.
+Phase 3 is complete when the work above is deployed and both test suites pass in GitHub Actions. Refresh tokens and a frontend CSP are deliberately deferred to later security work.
 
-Phase 3 is complete when backend and frontend test suites run consistently, meaningful coverage is established, and CI validates both suites alongside the React production build.
-
-## Phase 3B — RAG and AI Integration (Planned)
+## RAG and AI Integration (Planned, after Phase 3)
 
 This phase will follow Phase 3 and precede Phase 4.
 
@@ -330,6 +349,10 @@ Personalized financial analysis using private user transactions must wait until 
 
 - [ ] Establish clear Local, Docker, CI and Production configuration boundaries
 - [ ] Review secrets and environment-variable management
+- [x] Initial API security hardening (done in Phase 3B)
+- [ ] Refresh tokens and safer token storage
+- [ ] Frontend CSP / security headers on Vercel
+- [ ] Migrate off Create React App build tooling (its remaining `npm audit` advisories)
 - [ ] Harden production configuration and access controls
 - [ ] Protect AI endpoints with appropriate authentication, authorization and rate limits
 - [ ] Enforce user-level data isolation for any future financial-analysis tools
@@ -366,7 +389,8 @@ Personalized financial analysis using private user transactions must wait until 
 
 ## Phase 10 — Advanced / Optional Engineering
 
-- [ ] Evaluate rate limiting and API versioning
+- [x] Rate limiting for authentication endpoints (Phase 3B)
+- [ ] Evaluate API versioning
 - [x] Redis — initial optional integration for dashboard caching; broader adoption remains conditional on need
 - [ ] Background jobs
 - [x] Caching — cache-aside implementation for dashboard summary, spending and asset-allocation responses

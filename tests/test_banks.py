@@ -1249,7 +1249,10 @@ def test_bank_transaction_page_does_not_run_an_exact_count_query(
         statement for statement in captured_statements
         if statement.lstrip().startswith("select")
     ]
-    assert len(select_statements) == 2  # bank ownership + one page query
+    # Token revocation check (every authenticated request, see
+    # utils/auth_tokens.py) + bank ownership + one page query.
+    assert len(select_statements) == 3
+    assert "revoked_token" in select_statements[0]
     assert not any("count(" in statement for statement in select_statements)
 
 

@@ -7,6 +7,8 @@ import {
   canDeleteUser,
   exportUserTransactionsExcel,
   exportUserTransactionsPdf,
+  logoutSession,
+  logoutAllDevices,
 } from '../../services/api';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
@@ -19,6 +21,7 @@ const EMPTY_FORM = {
   name: '',
   dob: '',
   place: '',
+  currentPassword: '',
   password: '',
   confirmPassword: '',
 };
@@ -61,6 +64,8 @@ function ProfileDialog({ open, onClose }) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [profileError, setProfileError] = useState('');
+  const [sessionError, setSessionError] = useState('');
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
   const [deleteCheckError, setDeleteCheckError] = useState('');
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -79,6 +84,7 @@ function ProfileDialog({ open, onClose }) {
     }
 
     setProfileError('');
+    setSessionError('');
     setDeleteCheckError('');
     setDeleteError('');
     setShowDeleteModal(false);
@@ -98,6 +104,7 @@ function ProfileDialog({ open, onClose }) {
       name: user.name || '',
       dob: (user.dob || '').slice(0, 10),
       place: user.place || '',
+      currentPassword: '',
       password: '',
       confirmPassword: '',
     });
@@ -156,6 +163,7 @@ function ProfileDialog({ open, onClose }) {
       name: user.name || '',
       dob: (user.dob || '').slice(0, 10),
       place: user.place || '',
+      currentPassword: '',
       password: '',
       confirmPassword: '',
     });
@@ -175,15 +183,58 @@ function ProfileDialog({ open, onClose }) {
     setDeleteCheckError('');
   }, [isSaving]);
 
+  const isBusy =
+    isSaving || isDeleting || isDownloadingBackup || isLoggingOutAll;
+
   const handleLogout = useCallback(() => {
-    if (isSaving || isDeleting || isDownloadingBackup) {
+    if (isBusy) {
       return;
+    }
+
+    /*
+     * Ask the backend to revoke this token, without waiting: logging out
+     * locally must never depend on the backend being awake. The token is
+     * passed explicitly because logout() removes it from localStorage
+     * before the request is sent.
+     */
+    const token = localStorage.getItem('token');
+
+    if (token) {
+      logoutSession(token).catch(() => {});
     }
 
     logout();
     onClose?.();
     navigate('/', { replace: true });
-  }, [isDeleting, isDownloadingBackup, isSaving, logout, navigate, onClose]);
+  }, [isBusy, logout, navigate, onClose]);
+
+  const handleLogoutAll = useCallback(async () => {
+    if (isBusy) {
+      return;
+    }
+
+    try {
+      setIsLoggingOutAll(true);
+      setSessionError('');
+
+      // Wait for this one: the user needs to know other devices are out.
+      await logoutAllDevices();
+    } catch (error) {
+      console.error('Failed to log out of all devices:', error);
+
+      setSessionError(
+        error.response?.data?.error ||
+          'Could not log out of all devices. Please try again.'
+      );
+      setIsLoggingOutAll(false);
+      return;
+    }
+
+    setIsLoggingOutAll(false);
+    logout();
+    onClose?.();
+    navigate('/', { replace: true });
+  }, [isBusy, logout, navigate, onClose]);
 
   const handleUpdateUser = useCallback(
     async event => {
@@ -201,6 +252,11 @@ function ProfileDialog({ open, onClose }) {
         return;
       }
 
+      if (updatedUser.password && !updatedUser.currentPassword) {
+        setProfileError('Enter your current password to set a new one.');
+        return;
+      }
+
       try {
         setIsSaving(true);
         setProfileError('');
@@ -213,11 +269,23 @@ function ProfileDialog({ open, onClose }) {
 
         if (updatedUser.password) {
           updatePayload.password = updatedUser.password;
+          updatePayload.current_password = updatedUser.currentPassword;
         }
 
         const response = await updateUser(user.id, updatePayload);
 
-        setUser(response.data);
+        /*
+         * A password change ends every existing session, including this
+         * one; the backend returns a fresh token so this device stays
+         * logged in.
+         */
+        const { token, ...profile } = response.data;
+
+        if (token) {
+          localStorage.setItem('token', token);
+        }
+
+        setUser(profile);
         setIsEditing(false);
       } catch (error) {
         console.error('Failed to update user:', error);
@@ -528,6 +596,12 @@ function ProfileDialog({ open, onClose }) {
           </span>
         </div>
       </div>
+
+      {sessionError && (
+        <div className="profile-message profile-message-error" role="alert">
+          {sessionError}
+        </div>
+      )}
     </div>
   );
 
@@ -586,7 +660,24 @@ function ProfileDialog({ open, onClose }) {
             Change Password
           </h3>
 
+          <p className="profile-edit-hint">
+            Changing your password logs you out on all other devices.
+          </p>
+
           <div className="profile-edit-fields">
+            <label className="profile-field">
+              <span>Current Password</span>
+              <input
+                type="password"
+                name="currentPassword"
+                value={updatedUser.currentPassword}
+                onChange={handleFieldChange}
+                disabled={isSaving}
+                autoComplete="current-password"
+                placeholder="Required to set a new password"
+              />
+            </label>
+
             <label className="profile-field">
               <span>New Password</span>
               <input
@@ -680,15 +771,29 @@ function ProfileDialog({ open, onClose }) {
           !isSaving && !isDeleting && !isDownloadingBackup
         }
         footer={
-          <Button
-            type="button"
-            variant="danger"
-            className="profile-logout-button"
-            onClick={handleLogout}
-            disabled={isSaving || isDeleting || isDownloadingBackup}
-          >
-            Logout
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              className="profile-logout-button"
+              onClick={handleLogoutAll}
+              disabled={isBusy}
+            >
+              {isLoggingOutAll
+                ? 'Logging out everywhere...'
+                : 'Log out of all devices'}
+            </Button>
+
+            <Button
+              type="button"
+              variant="danger"
+              className="profile-logout-button"
+              onClick={handleLogout}
+              disabled={isBusy}
+            >
+              Logout
+            </Button>
+          </>
         }
       >
         {profileContent}

@@ -1,10 +1,19 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 from ..models import User, Transaction, TransferTransaction
 from .. import db
+from ..utils.errors import server_error
 from ..utils.date_util import calculate_age,parse_date
 from ..utils.dashboard_cache import invalidate_dashboard_cache
+from ..utils.auth_tokens import create_user_token
+from ..utils.rate_limit import (
+    PASSWORD_CHANGE_MESSAGE,
+    account_path_key,
+    is_failed_password_check,
+    limiter,
+    password_change_failure_rate_limit,
+)
 
 users_routes = Blueprint("users_routes", __name__)
 
@@ -42,7 +51,16 @@ def get_current_user():
         'age': user.age
     }), 200
 
+# Changing the password needs the current one, so a stolen token alone
+# cannot lock the owner out. Wrong current passwords are rate limited per
+# account (only failed checks count), like failed logins.
 @users_routes.route('/users/<int:id>', methods=['PUT'])
+@limiter.limit(
+    password_change_failure_rate_limit,
+    key_func=account_path_key,
+    deduct_when=is_failed_password_check,
+    error_message=PASSWORD_CHANGE_MESSAGE,
+)
 @jwt_required()
 def update_user(id):
     user_id = int(get_jwt_identity())
@@ -65,18 +83,43 @@ def update_user(id):
         user.age = calculate_age(dob)
         user.place = data['place']
 
-        if 'password' in data and data['password'].strip():
-            user.set_password(data['password'])
+        new_password = data.get('password')
+        password_changed = isinstance(new_password, str) and bool(new_password.strip())
+
+        if password_changed:
+            current_password = data.get('current_password')
+
+            if not isinstance(current_password, str) or not current_password:
+                db.session.rollback()
+                return jsonify({"error": "Current password is required to set a new password."}), 400
+
+            if not user.check_password(current_password):
+                db.session.rollback()
+                g.password_check_failed = True
+                # 403, not 401: the session itself is still valid, and the
+                # frontend logs the user out on any 401.
+                return jsonify({"error": "Current password is incorrect."}), 403
+
+            user.set_password(new_password)
+            # Ends every existing session (other devices included).
+            user.token_version = user.token_version + 1
 
         db.session.commit()
 
-        return jsonify({
+        body = {
             'id': user.id,
             'name': user.name,
             'age': user.age,
             'dob': user.dob.strftime("%Y-%m-%d"),
             'place': user.place
-        }), 200
+        }
+
+        if password_changed:
+            # The token used for this request is now invalid; hand back a new
+            # one so this device stays logged in.
+            body['token'] = create_user_token(user)
+
+        return jsonify(body), 200
 
     except ValueError:
         db.session.rollback()
@@ -90,7 +133,7 @@ def update_user(id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return server_error()
 
 @users_routes.route('/users/<int:id>', methods=['DELETE'])
 @jwt_required()

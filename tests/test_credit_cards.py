@@ -1438,6 +1438,8 @@ def test_process_billing_with_no_transactions_is_stable(
     assert data["card"]["used"] == 0
     assert data["card"]["available_limit"] == test_credit_card.limit
     assert data["card"]["total_payable"] == 0
+    assert data["transactions_billed"] == 0
+    assert data["total_amount_billed"] == 0
 
 
 def test_process_billing_reclassifies_expenses_and_reapplies_payments(
@@ -1509,6 +1511,11 @@ def test_process_billing_reclassifies_expenses_and_reapplies_payments(
     assert data["card"]["used"] == 400
     assert data["card"]["available_limit"] == 9600
     assert data["card"]["total_payable"] == 100
+
+    # Billing summary: only the expense before the current cycle is billed,
+    # and the total is reported before payments are applied.
+    assert data["transactions_billed"] == 1
+    assert data["total_amount_billed"] == 500
 
     db_session.expire_all()
 

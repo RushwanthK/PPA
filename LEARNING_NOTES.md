@@ -730,109 +730,104 @@ The reviewed `tests/test_banks.py` adds cases for cursor validation/scope, concu
 
 The code review confirms that test cases are present; it does not prove that they pass. Run focused tests first, then the complete backend regression suite, and record the actual command, environment and output. The previous `389 passed, 5 warnings` result remains historical until rerun.
 
-## Current Testing Position
+# Sprint 13 - Phase 3: Regression, Auth/API Security and Frontend Tests
 
-The backend testing foundation is established, and testing now needs to progress from module-by-module coverage to a systematic audit of remaining transaction behaviors.
+Phase 3 was widened so that the public app's auth and API security is hardened before testing is declared complete: 3A backend regression, 3B auth/API security, 3C frontend tests, 3D CI and docs. Everything below was verified locally on November 23, 2026. None of it has been deployed yet.
 
-### Backend Testing Status
+## 3A — Backend Regression
 
-The existing backend suite covers:
+- Re-ran the full suite before adding anything, to get an honest baseline (`414 passed`).
+- Found one real defect: the credit-card page showed "transactions billed" and "total amount billed" after processing billing, but the backend never returned those fields. The fix adds them to the response without touching the billing calculation.
+- Lesson: a frontend reading a field the backend never sends fails silently (it shows `undefined`). Contract tests on both sides catch this.
 
-- Authentication and users
-- Banks
-- Savings
-- Assets
-- Transaction exports and backup
-- Credit cards
-- Dashboard
+## 3B — Rate Limiting
 
-The last recorded full backend regression result in the project notes is:
+Concepts:
 
-`389 passed, 5 warnings`
+- **Two keys for login:** one per client IP counts every attempt (brute force and CPU protection). One per account counts only failed attempts (`deduct_when` the reply is 401), so a distributed attack on one account is capped even across many IPs, while a user who logs in successfully uses nothing.
+- **Order matters:** Flask-Limiter checks limits in `before_request`, before the view and before PBKDF2 hashing (~0.4 s of CPU each). With one Gunicorn worker, an unlimited `/login` is also a denial-of-service vector.
+- **Moving window vs fixed window:** a fixed window allows a burst of 2× the limit across a window boundary; moving window stores each hit's timestamp and has no boundary burst.
+- **Real client IP behind a proxy:** without `ProxyFix`, every request appears to come from Render's proxy, so all users share one bucket. `ProxyFix(x_for=N)` trusts exactly N hops from the right of `X-Forwarded-For`. Values further left are client-controlled and ignored. N must match the real infrastructure (`TRUSTED_PROXY_COUNT`).
+- **Hashing usernames in keys:** keeps Redis keys short and fixed-length, and avoids storing usernames in plain text.
+- **Timing side channel:** for unknown usernames, the password is checked against a dummy hash so "no such user" takes as long as "wrong password".
+- **Fail-open choices:** if Redis is down, limits fall back to per-process memory, and storage errors are swallowed so a normal 401 never becomes a 500.
 
-This result has not been independently re-run during the latest repository review.
+Verification lesson: the first Redis key scan used the wrong pattern (the library adds its own `LIMITS:LIMITER/` prefix). It found zero keys, and the "every key has a TTL" check passed while checking nothing. **A check that inspects zero items proves nothing.** Always assert that the sample is non-empty.
 
-### CI Testing Status
+## 3B — JWT Lifecycle
 
-The current `.github/workflows/ci.yml` already contains:
+- **Problem:** a stateless JWT stays valid until it expires (one day). Logout only deleted it in the browser, and a stolen token kept working.
+- **Two revocation mechanisms:**
+  - `token_version` on the user is copied into each token as `ver`. Incrementing it invalidates every earlier token at once (logout-all, password change).
+  - The `revoked_token` table holds individual `jti` values for single-device logout. Rows are pruned after the token's own expiry.
+- **Cost:** one combined indexed query per authenticated request. This is acceptable at PPA's scale, and the bank query-count test was updated (2 → 3 SELECTs) with an explanation instead of being loosened.
+- **Where security state lives:** the Redis instance is a disposable cache with `allkeys-lru`. An evicted revocation would silently re-enable a logged-out token, so revocation lives in PostgreSQL. Cache data can be lost; security state cannot.
+- **Backward compatibility:** tokens issued before the change have no `ver` claim and are treated as 0. The migration gives existing users 0, so deploying logs nobody out.
+- **Status codes are a contract:** Flask-JWT-Extended returns 422 for malformed or wrongly signed tokens, but the frontend only logs out on 401. Rotating the secret would have left users stuck with a dead token. All token problems now return 401.
+- **Password change:** requires the current password, and wrong attempts are rate-limited. A wrong attempt returns 403, not 401, so the frontend does not log the user out for a typo. A successful change ends other sessions and returns a new token for this device.
+- **Key length:** HS256 keys under 32 bytes can be brute-forced offline from any captured token, which would allow forging tokens for any user. PyJWT 2.15 warns about this, and the app now logs a warning at startup.
 
-- A PostgreSQL 17 test database service
-- Python 3.12 dependency installation
-- Backend Python validation
-- Backend pytest execution
-- Node.js 22 setup
-- Frontend dependency installation
-- React production build validation
+Migration lesson: adding a `NOT NULL` column with a constant default is metadata-only on PostgreSQL 11+ (no table rewrite). An additive migration can be applied before the new code ships, which makes the deploy order safe. The migration was tested with upgrade → downgrade → upgrade on a throwaway database.
 
-The missing CI component is frontend automated test execution.
+## 3B — API Hardening
 
-The workflow definition does not prove that the latest remote run is green, so actual GitHub Actions results must still be checked.
+- **Request size limit:** `MAX_CONTENT_LENGTH` rejects large bodies with 413 before they are parsed.
+- **Error replies:** returning `str(e)` can leak table names, constraint names or SQL. The client now gets a generic message, and the server log gets the full traceback, so the app stays debuggable.
+- **Route-coverage test:** iterate over `app.url_map`, call every route without a token, and expect 401 unless the endpoint is on an explicit public allowlist. A future route that forgets `@jwt_required` fails CI. The sweep also showed that a suspected unauthenticated `/transfers` endpoint was inside a dead commented-out string, so it was never live. Lesson: verify by running the app, not by reading code that may not execute.
+- **CORS credentials:** only needed for cookies. PPA sends the token in a header, so `supports_credentials` was turned off. Deploy order then matters, because the old frontend still requests credentials.
+- **Security headers on an API:** `default-src 'none'` and `frame-ancestors 'none'` are safe for JSON responses. A CSP for the React site itself is a separate, riskier change.
+- **Dependency audits:** `pip-audit` guided Python upgrades until it reported nothing. `npm audit` findings must be read by where the package runs: CRA build tooling never reaches the browser bundle, so those advisories are lower priority than runtime packages.
 
-### Frontend Testing Readiness
+## 3C — Frontend Tests
 
-The frontend has a test script and React Testing Library dependency, but the current `App.test.js` is a default starter test rather than a PPA test.
+- Fixed the setup first. `@testing-library/jest-dom` was imported but not declared, and jsdom lacks `TextEncoder`, `matchMedia` and `ResizeObserver`.
+- Used `moduleNameMapper` so ESM-only builds of axios and react-router v7 load under CRA's Jest.
+- Tested observable behavior: what the user sees and which API call is made, not component internals. API modules are mocked at the service boundary.
+- The tests found a real accessibility bug: every modal used the same `id="modal-title"`, so stacked modals announced the wrong title. `useId()` gives each instance its own id.
 
-`setupTests.js` imports `@testing-library/jest-dom`, but that dependency is absent from the committed frontend package manifest and lockfile. The test setup must be corrected before useful frontend testing can begin.
+## 3D — CI
 
-### Immediate Learning Position
+- The workflow now runs the frontend tests (`CI=true`, no watch mode) before the build.
+- The CI JWT key had to be lengthened after the PyJWT upgrade. Warnings jumped from 5 to 708, which is a reminder to read the warnings, not just the pass count.
+
+## Engineering Habits Reinforced
+
+- Inspect the real code before changing it, and correct claims publicly when evidence disproves them.
+- State what was verified and what was not: local tests are not a GitHub Actions run, and a local Redis is not production Redis.
+- Keep line endings consistent. Mixed CRLF/LF made git show whole-file rewrites and hid the real diff.
+- Do not inflate test counts. Every new test protects a specific behavior.
+
+## Current Learning Position
 
 ```text
-Backend module testing           ✅ Established
-Backend test execution in CI     ✅ Configured
-Transaction coverage audit       ← NEXT
-Frontend test setup               ⏳
-Frontend component/form tests     ⏳
-Frontend tests in CI              ⏳
-Full Phase 3 verification         ⏳
-RAG and AI learning               ⏳ Planned for Phase 3B
+Backend regression (3A)          ✅ 465 passed locally
+Rate limiting (3B)               ✅ Verified with real local Redis
+JWT logout / revocation (3B)     ✅
+API hardening + deps (3B)        ✅
+Frontend tests (3C)              ✅ 201 passed locally
+CI workflow + docs (3D)          ✅ Updated
+Commit, deploy, real CI run      ← NEXT
+Refresh tokens / token storage   ⏳ Later security work
+RAG and AI learning              ⏳ After Phase 3
 ```
-
-The purpose of the remaining work is to learn how to find meaningful behavioral gaps, construct reliable tests and use CI as regression protection—not merely to increase the test count.
 
 # Next Learning Goals
 
-## Phase 3 — Backend Transaction Audit
+## Shipping Phase 3 Safely
 
-The immediate learning goal is to identify meaningful gaps in the existing transaction tests.
+- Order a deploy across auto-deploying (Vercel) and manually deployed (Render) services so that no old/new combination breaks.
+- Apply an additive migration ahead of the code that needs it.
+- Configure production secrets and proxy settings, and verify behavior in production rather than assuming it.
+- Read a real GitHub Actions run, and understand required status checks and branch protection.
 
-Focus on:
+## Later Security Work
 
-- Reviewing active transaction routes and their validation branches.
-- Understanding how input validation affects balances and database records.
-- Testing invalid inputs and confirming that rejected operations have no unwanted side effects.
-- Checking ownership, missing-resource behavior, transaction history and error responses.
-- Distinguishing a test setup problem from a genuine application defect.
-- Re-running the complete regression suite after changes.
+- Short-lived access tokens with refresh tokens and rotation
+- Trade-offs of `localStorage` versus httpOnly cookies (XSS versus CSRF)
+- A Content-Security-Policy for the React site
+- Migrating from Create React App to a maintained build tool
 
-## Frontend Automated Testing
-
-Once the backend audit is sufficiently complete:
-
-- Resolve the frontend test dependency/setup mismatch.
-- Replace the default Create React App starter test.
-- Learn to render components and query the resulting UI.
-- Test form input, validation and error messages.
-- Mock API requests where appropriate.
-- Test loading, successful and failed API interactions.
-- Test important transaction, deletion and backup/export workflows.
-
-The goal is to test observable behavior rather than internal implementation details wherever practical.
-
-## CI Testing
-
-The backend pytest command is already configured in GitHub Actions.
-
-Remaining learning goals:
-
-- Understand how PostgreSQL is provisioned as a CI service.
-- Verify that backend tests run against the isolated test database.
-- Add frontend automated test execution to CI.
-- Retain React production build validation.
-- Understand how failed test commands prevent a workflow from passing.
-- Verify actual workflow results in GitHub Actions.
-- Learn how GitHub branch protection and required status checks relate to the CI workflow.
-
-## Phase 3B — RAG and AI Learning
+## RAG and AI Learning (after Phase 3)
 
 After Phase 3, learn RAG through a separate document chatbot before extending PPA.
 
@@ -862,9 +857,11 @@ GitHub Actions CI
         ↓
 Automated backend and frontend testing
         ↓
+Targeted auth/API security
+        ↓
 Phase 3 complete
         ↓
-Phase 3B — RAG and AI learning
+RAG and AI learning
         ↓
 Docker build in CI
         ↓

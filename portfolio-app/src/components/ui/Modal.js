@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import './Modal.css';
 
@@ -14,6 +14,10 @@ function Modal({
   footer = null,
 }) {
   const contentRef = useRef(null);
+
+  // Unique per modal instance, so two open modals never share a title id
+  // (a shared id makes screen readers announce the wrong title).
+  const titleId = useId();
 
   useEffect(() => {
     if (!open || !closeOnEscape) {
@@ -76,12 +80,12 @@ function Modal({
         className={`modal-content ${className}`.trim()}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? 'modal-title' : undefined}
+        aria-labelledby={title ? titleId : undefined}
         tabIndex="-1"
       >
         {title && (
           <div className="modal-header">
-            <h2 id="modal-title">{title}</h2>
+            <h2 id={titleId}>{title}</h2>
 
             <button
               type="button"

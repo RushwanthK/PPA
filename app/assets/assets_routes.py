@@ -18,6 +18,7 @@ from sqlalchemy import String, cast, or_
 from sqlalchemy.exc import IntegrityError
 
 from .. import db
+from ..utils.errors import server_error
 from ..models import (
     Asset,
     AssetTransaction,
@@ -213,11 +214,7 @@ def create_asset():
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()
 
 
 @assets_routes.route(
@@ -363,11 +360,7 @@ def update_asset(asset_id):
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()
 
 
 @assets_routes.route(
@@ -472,11 +465,7 @@ def add_asset_transaction(asset_id):
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()
 
 
 @assets_routes.route(
@@ -640,8 +629,4 @@ def delete_asset(asset_id):
     except Exception as exc:
         db.session.rollback()
 
-        return jsonify({
-            "error": (
-                f"Server error: {str(exc)}"
-            )
-        }), 500
+        return server_error()

@@ -55,6 +55,13 @@ def app():
 
     assert app.config["TESTING"] is True
 
+    # The limiter is initialized (in-memory storage) but switched off for the
+    # suite: authenticated_client logs in once per test, which would otherwise
+    # trip the login limit. tests/test_rate_limiting.py switches it back on.
+    from app.utils.rate_limit import limiter
+
+    limiter.enabled = False
+
     with app.app_context():
         db.create_all()
 
@@ -63,6 +70,27 @@ def app():
     with app.app_context():
         db.session.remove()
         db.drop_all()
+
+
+def _reset_rate_limit_counters():
+    from app.utils.rate_limit import limiter
+
+    limiter.reset()
+    fallback = getattr(limiter, "_fallback_storage", None)
+    if fallback is not None:
+        fallback.reset()
+
+
+@pytest.fixture()
+def rate_limited(app):
+    """Switch the limiter on for one test, with clean in-memory counters."""
+    from app.utils.rate_limit import limiter
+
+    limiter.enabled = True
+    _reset_rate_limit_counters()
+    yield
+    _reset_rate_limit_counters()
+    limiter.enabled = False
 
 
 @pytest.fixture()

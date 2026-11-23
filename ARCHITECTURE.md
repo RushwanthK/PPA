@@ -18,11 +18,12 @@
           ┌──────────┴──────────┐
           │                     │
           ▼                     ▼
-   PostgreSQL Database    Optional Redis Cache
-                          (dashboard aggregates)
+   PostgreSQL Database    Optional Redis
+   (source of truth,      (dashboard cache +
+    token revocation)      rate-limit counters)
 ```
 
-PostgreSQL remains the source of truth. Redis is an optional cache layer used only when `REDIS_URL` is configured and reachable.
+PostgreSQL remains the source of truth, including all security state (token versions and revoked tokens). Redis is used only when `REDIS_URL` is configured and reachable. It holds disposable data: dashboard cache entries and rate-limit counters, both with expiry times.
 
 ---
 
@@ -41,10 +42,13 @@ PostgreSQL remains the source of truth. Redis is an optional cache layer used on
           │                │
           ▼                ▼
   Supabase PostgreSQL   Render Redis
-  (source of truth)     (dashboard cache)
+  (source of truth)     (dashboard cache,
+                         rate-limit counters)
 ```
 
-The production deployment includes a Redis service on Render alongside the Flask backend. The backend connects through `REDIS_URL`; PostgreSQL remains the source of truth and Redis caches dashboard aggregates. Runtime connectivity should be confirmed from the dashboard response's `X-Dashboard-Cache` header (`HIT`, `MISS` or `BYPASS`). If Redis is missing or unavailable, dashboard calculations fall back to PostgreSQL.
+Vercel deploys the frontend automatically on every push. The Render backend is deployed manually. Supabase needs no deployment, but migrations are applied to it by hand.
+
+The production deployment includes a Redis service on Render alongside the Flask backend. The backend connects through `REDIS_URL`; PostgreSQL remains the source of truth. Redis caches dashboard aggregates and, once the Phase 3 changes are deployed, also stores rate-limit counters under a separate `ppa:ratelimit` key prefix. Runtime connectivity should be confirmed from the dashboard response's `X-Dashboard-Cache` header (`HIT`, `MISS` or `BYPASS`). If Redis is missing or unavailable, dashboard calculations fall back to PostgreSQL.
 
 ---
 
@@ -59,10 +63,14 @@ create_app()
     ▼
 Flask Application
     │
-    ├── JWT Authentication
+    ├── JWT Authentication (+ revocation check, uniform 401 replies)
     ├── SQLAlchemy
     ├── Flask-Migrate
-    ├── CORS
+    ├── CORS (no credentials)
+    ├── ProxyFix (only when TRUSTED_PROXY_COUNT > 0)
+    ├── Rate limiting (Flask-Limiter)
+    ├── JSON error handlers (413, generic 500)
+    ├── Security response headers
     ├── Optional Redis client
     ├── Optional request / SQL diagnostics
     └── Routes / Blueprints
@@ -102,7 +110,10 @@ app/
     ├── date_util.py
     ├── financial_util.py
     ├── transaction_export_util.py
-    └── dashboard_cache.py
+    ├── dashboard_cache.py
+    ├── auth_tokens.py     # token creation, revocation, JWT error callbacks
+    ├── rate_limit.py      # Flask-Limiter setup, keys, ProxyFix, JSON 429
+    └── errors.py          # JSON 413 / generic 500 handlers, server_error()
 
 migrations/           # Flask-Migrate / Alembic migrations
 tests/                # Backend pytest suite
@@ -128,6 +139,10 @@ The bank transaction screen delegates search, filters and pagination to the back
 
 The desktop navigation sidebar uses `position: sticky` below the header and has its own vertical scroll container. It is not viewport-fixed. Mobile navigation retains overlay/close-on-navigation behavior.
 
+`src/services/api.js` attaches the stored token as `Authorization: Bearer ...`, logs the user out on any 401, and does not send cookies (`withCredentials` was removed). It also provides `logoutSession(token)` and `logoutAllDevices()`. The Profile dialog uses them for Logout (server revocation that does not block the UI) and for "Log out of all devices". A password change requires the current password and stores the new token returned by the backend.
+
+Frontend tests use Jest and React Testing Library through `react-scripts test`. They have 14 suites covering pages, shared components and the API service layer. `src/setupTests.js` provides the jsdom polyfills, and the `jest.moduleNameMapper` entries in `package.json` let axios and react-router v7 load under CRA's Jest.
+
 ---
 
 # Database
@@ -148,7 +163,96 @@ Shared transaction table
 ├── Bank transactions
 ├── Credit-card transactions
 └── Other transaction subclasses
+
+Auth state
+│
+├── user.token_version   (integer, default 0)
+└── revoked_token        (jti PK, expires_at indexed)
 ```
+
+---
+
+# Authentication and API Security
+
+Added in Phase 3B. Code: `app/utils/auth_tokens.py`, `app/utils/rate_limit.py`, `app/utils/errors.py`, `app/__init__.py`.
+
+## Request path
+
+```text
+Request
+   │
+   ▼
+ProxyFix (TRUSTED_PROXY_COUNT hops) ── real client IP
+   │
+   ▼
+Body larger than MAX_CONTENT_LENGTH? ──yes──> 413 JSON
+   │
+   ▼
+Rate-limit check (before_request, before the view) ──over──> 429 JSON
+   │
+   ▼
+@jwt_required: signature + expiry
+   │
+   ▼
+Revocation check: one query
+   SELECT user.token_version, EXISTS(revoked_token.jti = token jti)
+   │
+   ├── user missing / jti revoked / ver != token_version ──> 401
+   ▼
+View
+   │
+   ▼
+after_request: security headers (CSP, X-Frame-Options, nosniff,
+               Referrer-Policy, HSTS)
+```
+
+Every token problem (missing, expired, revoked, bad signature, malformed) returns **401** with `{"error": "..."}`. The frontend logs the user out on 401. Flask-JWT-Extended answers invalid tokens with 422 by default, and the frontend did not handle that.
+
+## Token lifecycle
+
+| Action | Mechanism | Effect |
+|---|---|---|
+| Login | Access token with claims `sub`, `jti`, `ver` | `ver` = current `user.token_version` |
+| `POST /logout` | Insert the token's `jti` into `revoked_token` (expired rows pruned first) | Only this device is logged out |
+| `POST /logout-all` | Atomic `token_version = token_version + 1` | Every earlier token fails the `ver` check |
+| Password change (`PUT /users/<id>` with `password`) | Requires `current_password`; increments `token_version`; returns a new `token` | Other devices are logged out; this device continues with the new token |
+| Account deleted | User row is missing | Token rejected |
+
+Tokens issued before this design have no `ver` claim and are treated as version 0. Because the migration gives existing users `token_version = 0`, deploying it does not log anyone out.
+
+**Why PostgreSQL and not Redis:** the Redis instance is a cache with `allkeys-lru` eviction. If a revocation entry were evicted, a logged-out token would silently become valid again. Security state therefore lives in PostgreSQL, at the cost of one small indexed query per authenticated request.
+
+Not implemented yet: refresh tokens (access tokens still last one day) and moving the token out of `localStorage`.
+
+## Rate limits
+
+| Endpoint | Key | Default limit | What counts |
+|---|---|---|---|
+| `POST /login` | Client IP | `10 per minute;50 per hour` | Every attempt |
+| `POST /login` | SHA-256 of submitted username | `5 per 15 minutes` | Only 401 replies |
+| `POST /register` | Client IP | `3 per hour` | Every attempt |
+| `PUT /users/<id>` | Account id in the URL | `5 per 15 minutes` | Only wrong current passwords |
+
+- Limits are configured through environment variables (`LOGIN_RATE_LIMIT`, `LOGIN_FAILURE_RATE_LIMIT`, `REGISTER_RATE_LIMIT`, `PASSWORD_CHANGE_FAILURE_RATE_LIMIT`).
+- The strategy is moving-window, and counters are stored in Redis under `ppa:ratelimit` with a TTL. If Redis is unreachable, Flask-Limiter falls back to per-process memory with the same limits. Storage errors are swallowed, so they never turn a normal reply into a 500.
+- Limits run before the view, so a blocked request never reaches PBKDF2 password hashing (about 0.4 s of CPU on the single Gunicorn worker).
+- Unknown usernames are checked against a dummy hash, so the login response time does not reveal whether an account exists.
+- `TRUSTED_PROXY_COUNT` must match the real number of proxies on Render. If it is `0`, every user shares the proxy's IP bucket. If it is too high, clients can spoof their IP with `X-Forwarded-For`.
+
+## Error replies, size limit, CORS
+
+- `MAX_CONTENT_LENGTH` (default 256 KB, set with `MAX_REQUEST_KB`) rejects larger bodies with a JSON 413.
+- Handled server errors call `server_error()`, which logs the full traceback and returns `{"error": "Something went wrong on our side. Please try again."}`. Unhandled exceptions get the same generic JSON 500. Exception text is never sent to the client.
+- CORS allows only `CORS_ORIGINS`, without `Access-Control-Allow-Credentials`. The token is sent in the `Authorization` header, not a cookie, so cross-site credentials are not needed.
+- `tests/test_api_hardening.py` calls every registered route without a token. Only `/`, `/login`, `/register` and static files may answer with something other than 401.
+
+## Deployment ordering for these changes
+
+1. Apply migration `0557b33bd281` to Supabase. It is additive, and the running old backend keeps working.
+2. Push. Vercel deploys the new frontend, which no longer sends credentials and works with both backends.
+3. Deploy the backend on Render.
+
+Deploying the backend before the frontend would break every request from the old frontend, because the old frontend still asks for credentials and the new backend no longer allows them.
 
 ---
 
@@ -349,7 +453,7 @@ The SQLAlchemy event listeners are attached during app creation only when the di
 
 ---
 
-# Planned RAG / AI Extension — Phase 3B
+# Planned RAG / AI Extension (after Phase 3)
 
 **Status: Planned; not implemented in the reviewed repository.**
 
@@ -465,14 +569,15 @@ GitHub Actions — Ubuntu Runner
     +--> Node.js 22
             |
             +--> npm ci
+            +--> npm test -- --watchAll=false   (CI=true)
             +--> npm run build
 ```
 
-The current workflow executes backend tests and validates the React production build.
+The workflow runs the backend tests, the frontend Jest tests and the React production build. It uses a CI-only `JWT_SECRET_KEY` of at least 32 bytes, because PyJWT 2.15 warns about shorter HMAC keys. The frontend test step was added in Phase 3 and has not yet run on GitHub.
 
 The following work is still outstanding:
 
-- Frontend automated test execution
+- Verifying a green GitHub Actions run and the required-check settings
 - Docker image builds within CI
 - Automated cloud deployment
 

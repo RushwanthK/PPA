@@ -8,6 +8,7 @@ import pytz
 
 from ..models import Bank, Saving, SavingTransaction
 from .. import db
+from ..utils.errors import server_error
 from ..utils.financial_util import money
 from ..utils.dashboard_cache import invalidate_dashboard_cache
 
@@ -90,9 +91,7 @@ def create_saving():
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            "error": f"Server error: {str(e)}"
-        }), 500
+        return server_error()
 
 @savings_routes.route('/savings', methods=['GET'])
 @jwt_required()
@@ -235,9 +234,7 @@ def update_saving(saving_id):
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            "error": f"Server error: {str(e)}"
-        }), 500
+        return server_error()
 
 @savings_routes.route('/savings/<int:saving_id>/transactions', methods=['POST'])
 @jwt_required()
@@ -364,9 +361,7 @@ def add_saving_transaction(saving_id):
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            "error": f"Server error: {str(e)}"
-        }), 500
+        return server_error()
 
 @savings_routes.route('/savings/<int:saving_id>/transactions', methods=['GET'])
 @jwt_required()
@@ -529,6 +524,4 @@ def delete_saving(saving_id):
     except Exception as e:
         db.session.rollback()
 
-        return jsonify({
-            'error': f'Server error: {str(e)}'
-        }), 500
+        return server_error()
