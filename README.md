@@ -86,6 +86,14 @@ Although initially developed as a personal finance application, the project is p
 * Backend: Render
 * Database: Supabase PostgreSQL
 * Redis: Render Redis service alongside the backend, configured through `REDIS_URL`
+* AI service: Render (free web service, Docker), with the `ai` schema in the same Supabase project
+
+**Update, November 27, 2026: everything is deployed from `feature/ai-assistant`.**
+
+- **What is live from that branch:** Vercel (frontend with the PPA Assistant), the Flask backend on Render, the new AI service on Render (`https://ppa-ai-service.onrender.com`, Docker, free instance), and the Supabase `ai` schema with its restricted login `ppa_ai_app`.
+- **Branches:** `perf/add-request-diagnostics` was the production branch until then; the owner decides later whether to merge `feature/ai-assistant` into it. CI is **not** triggered automatically on `feature/ai-assistant`, by the owner's choice; it is run manually with Actions → PPA CI → Run workflow on that branch.
+- **Status:** the owner is testing the live assistant for a few days.
+
 
 ---
 
@@ -127,6 +135,7 @@ Jest and React Testing Library tests cover the Login, Dashboard, Banks, Savings,
 The workflow in `.github/workflows/ci.yml`:
 
 - Runs for pushes and pull requests on `main` and on the production branch `perf/add-request-diagnostics`, and manually via "Run workflow" (`workflow_dispatch`).
+  - Since November 27, 2026 the live deployment comes from `feature/ai-assistant`. CI does not trigger on that branch automatically (the owner's choice): run it with "Run workflow" on the branch before each manual Render deploy.
 - Starts a PostgreSQL 17 service and uses a CI-only JWT key.
 - Uses Python 3.12, installs dependencies, compiles the backend and runs `pytest -q`.
 - Uses Node.js 22, runs `npm ci`, runs the frontend tests and then `npm run build`.

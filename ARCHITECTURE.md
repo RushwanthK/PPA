@@ -745,6 +745,8 @@ GitHub Actions — Ubuntu Runner
 
 The workflow runs the backend tests, the frontend Jest tests and the React production build. It uses a CI-only `JWT_SECRET_KEY` of at least 32 bytes, because PyJWT 2.15 warns about shorter HMAC keys. The workflow runs on pushes and pull requests for `main` and for the production branch `perf/add-request-diagnostics`, and can be started manually (`workflow_dispatch`). Vercel deploys in parallel with CI, so CI cannot block the frontend deploy; it gates the manual Render deploy by convention (deploy the backend only after a green run).
 
+*Update, November 27, 2026:* the live deployment (Vercel, Render Flask, Render AI service, Supabase) comes from `feature/ai-assistant`, and CI runs there only manually ("Run workflow"). The workflow also has an `ai-service` job (AI service tests against pgvector, and its Docker image build).
+
 The following work is still outstanding:
 
 - Verifying a green GitHub Actions run and the required-check settings

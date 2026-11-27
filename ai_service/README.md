@@ -925,6 +925,8 @@ A help answer about a PPA page now ends with buttons such as "Click here: Add a 
 
 *Update, November 27, 2026 (first CI run):* 382 passed, 4 failed in `test_database_integration.py`: no `vector` extension and no `ai` schema in the CI database. Locally, Docker runs `db/init/001_extensions.sql` on the container's first start; a CI service container can't mount it. The `ai-service` job now runs that file with `psql` before the tests (rehearsed on a fresh local database: 386 passed).
 
+*Update, November 27, 2026 (live):* deployed and running from `feature/ai-assistant` at `https://ppa-ai-service.onrender.com`. The first deploy failed with `(EAUTHQUERY) user not found in the database` from Supabase's pooler, because the `ppa_ai_app` login was not present yet. Once it was, `start.sh` applied migrations 0001–0005 and synced the help notes. On Vercel, `REACT_APP_AI_API_URL` is a **Config** variable, not a Secret: a `REACT_APP_` value is built into the browser bundle anyway, and it is only the service's public address.
+
 ## Deploying: Render (free) + Supabase (step 6, November 27, 2026)
 
 **Same pattern as the Flask backend.** Flask's `Dockerfile` runs `start.sh`, which runs `flask db upgrade` and then starts the app. The AI service's `ai_service/Dockerfile` runs `ai_service/start.sh`, which on every deploy:

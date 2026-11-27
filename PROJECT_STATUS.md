@@ -4,6 +4,13 @@
 
 Basis: branch `perf/add-request-diagnostics` at commit `306bdb8` (November 23, 2026). **This branch is the production branch** for both Vercel and Render (not `main`, which is 13+ commits behind). The Phase 3 work is committed, pushed and deployed: migration `0557b33bd281` is applied on Supabase, Vercel serves the new frontend and the new backend is deployed manually on Render.
 
+**Update, November 27, 2026: everything is deployed from `feature/ai-assistant`.**
+
+- **What is live from that branch:** Vercel (frontend with the PPA Assistant), the Flask backend on Render, the new AI service on Render (`https://ppa-ai-service.onrender.com`, Docker, free instance), and the Supabase `ai` schema with its restricted login `ppa_ai_app`.
+- **Branches:** `perf/add-request-diagnostics` was the production branch until then; the owner decides later whether to merge `feature/ai-assistant` into it. CI is **not** triggered automatically on `feature/ai-assistant`, by the owner's choice; it is run manually with Actions → PPA CI → Run workflow on that branch.
+- **Status:** the owner is testing the live assistant for a few days.
+
+
 PPA is an established full-stack personal finance application and a structured learning project for Full Stack Engineering and DevOps. It is used daily with real financial data, so every change goes through a manual review, commit and deployment step.
 
 ### Completed Foundations
