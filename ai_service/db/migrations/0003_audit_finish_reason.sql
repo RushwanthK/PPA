@@ -1,0 +1,3 @@
+-- Why the model stopped writing: "stop", "length" (hit ANSWER_MAX_TOKENS), "content_filter", ...
+-- Lets us measure how often answers are cut short before changing the output limit.
+ALTER TABLE ai.audit_log ADD COLUMN finish_reason text;

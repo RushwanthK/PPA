@@ -1,0 +1,30 @@
+# Local-only database for the PPA AI service.
+# Separate from the Flask database: the AI service owns only the `ai` schema
+# and never reads finance tables directly (it calls the Flask API instead).
+#
+# Start:  docker compose -f ai_service/docker-compose.yml up -d
+# Stop:   docker compose -f ai_service/docker-compose.yml stop
+services:
+  ai-postgres:
+    # Postgres 17 with the pgvector extension; tag pinned for reproducible builds.
+    image: pgvector/pgvector:0.8.1-pg17
+    container_name: ppa-ai-postgres
+    environment:
+      POSTGRES_DB: ppa_ai
+      POSTGRES_USER: ppa_ai
+      POSTGRES_PASSWORD: ${AI_POSTGRES_PASSWORD:?Set AI_POSTGRES_PASSWORD in ai_service/.env}
+    ports:
+      # Bound to localhost only, so the database is not reachable from the network.
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - ppa-ai-pgdata:/var/lib/postgresql/data
+      # Runs once, on the first start with an empty volume.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ppa_ai -d ppa_ai"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ppa-ai-pgdata:

@@ -11,6 +11,7 @@ import {
   NavLink,
   Navigate,
   useLocation,
+  useNavigate,
 } from 'react-router-dom';
 
 import { AuthProvider, useAuth } from './AuthContext';
@@ -26,6 +27,10 @@ const Savings = lazy(() => import('./pages/savings'));
 const CreditCard = lazy(() => import('./pages/creditcard'));
 const Bank = lazy(() => import('./pages/bank'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+// PPA Assistant: on every signed-in page (Nov 27; it was on the dashboard only). Mounted once
+// in the app shell, so the conversation stays open while the user moves between pages, and
+// it unmounts on logout, which clears the conversation. Hidden when REACT_APP_AI_API_URL is unset.
+const AssistantChat = lazy(() => import('./components/AssistantChat'));
 
 const NAV_LINKS = [
   { to: '/dashboard', label: 'Overview' },
@@ -68,6 +73,7 @@ function AppContent() {
 
   const backendStatus = useBackendStatus();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -308,6 +314,12 @@ function AppContent() {
           </Suspense>
         </main>
       </div>
+
+      {user && (
+        <Suspense fallback={null}>
+          <AssistantChat onNavigate={navigate} />
+        </Suspense>
+      )}
 
       <ProfileDialog
         open={profileOpen}

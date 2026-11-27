@@ -13,6 +13,7 @@ import {
   exportUserTransactionsPdf,
 } from '../services/api';
 import { useAuth } from '../AuthContext';
+import useAssistantLink from '../hooks/useAssistantLink';
 
 import Button from '../components/ui/Button';
 import SearchBar from '../components/ui/SearchBar';
@@ -760,6 +761,33 @@ export default function CreditCard() {
     card => String(card.id) === String(transactionData.cardId)
   )?.name;
 
+  const openAddForm = () => {
+    setFormError(null);
+    setSuccess(null);
+    setFormData({
+      id: '',
+      name: '',
+      limit: '',
+      billing_cycle_start: '1',
+    });
+    setShowForm(true);
+  };
+
+  // PPA Assistant "Click here" links (Nov 27): open the form the link asked for, for one of
+  // the accounts this page loaded for the logged-in user (see hooks/useAssistantLink.js).
+  useAssistantLink({
+    ready: !loading,
+    items: cards,
+    actions: {
+      add: openAddForm,
+      'add-transaction': card => handleAddTransaction(card.id),
+      'view-transactions': card => handleViewTransactions(card),
+      delete: card => handleDeleteCard(card.id),
+      details: card => handleViewCardDetails(card),
+    },
+    onMissing: setError,
+  });
+
   if (loading && cards.length === 0) {
     return (
       <div className="credit-card-container">
@@ -806,17 +834,7 @@ export default function CreditCard() {
         <Button
           type="button"
           variant="primary"
-          onClick={() => {
-            setFormError(null);
-            setSuccess(null);
-            setFormData({
-              id: '',
-              name: '',
-              limit: '',
-              billing_cycle_start: '1',
-            });
-            setShowForm(true);
-          }}
+          onClick={openAddForm}
           disabled={loading}
         >
           Add Credit Card

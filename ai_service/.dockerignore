@@ -1,0 +1,11 @@
+# Keep the image small and free of secrets: only app/, db/, knowledge/, requirements.txt
+# and start.sh are copied, but the build context should not carry these either.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.*
+tests/
+eval/
+e2e/

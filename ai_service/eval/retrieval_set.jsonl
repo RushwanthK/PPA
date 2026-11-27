@@ -1,0 +1,46 @@
+{"question": "How do I record a credit card payment?", "expected": ["ppa/04-credit-cards.md"]}
+{"question": "Why can't I delete my bank account?", "expected": ["ppa/02-banks.md"]}
+{"question": "What happens to my bank balance when I deposit into savings?", "expected": ["ppa/03-savings.md"]}
+{"question": "How is net worth calculated on the dashboard?", "expected": ["ppa/06-dashboard.md"]}
+{"question": "What does billed unpaid mean on my card?", "expected": ["ppa/04-credit-cards.md"]}
+{"question": "Which asset categories can I choose?", "expected": ["ppa/05-assets.md"]}
+{"question": "Does PPA fetch live stock prices?", "expected": ["ppa/05-assets.md"]}
+{"question": "How do I log out from every device?", "expected": ["ppa/01-getting-started.md"]}
+{"question": "Can I export my transactions to Excel?", "expected": ["ppa/02-banks.md", "ppa/03-savings.md"]}
+{"question": "What does Process billing do?", "expected": ["ppa/04-credit-cards.md"]}
+{"question": "Why does paying my card bill not show up as spending?", "expected": ["ppa/06-dashboard.md"]}
+{"question": "Can the assistant buy or sell investments for me?", "expected": ["ppa/07-copilot-scope.md"]}
+{"question": "Is my data visible to other users?", "expected": ["ppa/01-getting-started.md", "ppa/07-copilot-scope.md"]}
+{"question": "What happens after I change my password?", "expected": ["ppa/01-getting-started.md"]}
+{"question": "Why was my expense rejected with insufficient balance?", "expected": ["ppa/02-banks.md", "ppa/03-savings.md"]}
+{"question": "What is the 50/30/20 rule?", "expected": ["finance/01-budgeting-basics.md"]}
+{"question": "How much money should I keep for emergencies?", "expected": ["finance/02-emergency-fund.md"]}
+{"question": "Should my emergency fund be invested in stocks?", "expected": ["finance/02-emergency-fund.md"]}
+{"question": "Is paying only the minimum due on a credit card a good idea?", "expected": ["finance/03-credit-cards-and-credit-score.md"]}
+{"question": "What is credit utilisation?", "expected": ["finance/03-credit-cards-and-credit-score.md"]}
+{"question": "How can I improve my CIBIL score?", "expected": ["finance/03-credit-cards-and-credit-score.md"]}
+{"question": "Difference between FD and RD", "expected": ["finance/04-fixed-and-recurring-deposits.md"]}
+{"question": "Are bank deposits insured by DICGC?", "expected": ["finance/04-fixed-and-recurring-deposits.md"]}
+{"question": "What is an expense ratio in a mutual fund?", "expected": ["finance/05-mutual-funds-etfs-stocks.md"]}
+{"question": "How is an ETF different from a mutual fund?", "expected": ["finance/05-mutual-funds-etfs-stocks.md"]}
+{"question": "What is a SIP and why use it?", "expected": ["finance/05-mutual-funds-etfs-stocks.md"]}
+{"question": "What is UAN in EPF?", "expected": ["finance/06-provident-fund.md"]}
+{"question": "How long is the PPF lock-in?", "expected": ["finance/06-provident-fund.md"]}
+{"question": "What does rebalancing a portfolio mean?", "expected": ["finance/07-net-worth-and-asset-allocation.md"]}
+{"question": "Why should I diversify my investments?", "expected": ["finance/07-net-worth-and-asset-allocation.md"]}
+{"question": "Avalanche or snowball, which debt payoff method is better?", "expected": ["finance/08-debt-management.md"]}
+{"question": "How much of my salary can go to EMIs?", "expected": ["finance/08-debt-management.md"]}
+{"question": "What is the rule of 72?", "expected": ["finance/09-inflation-and-compounding.md"]}
+{"question": "Why does money in a savings account lose value over time?", "expected": ["finance/09-inflation-and-compounding.md"]}
+{"question": "How do I stop overspending every month?", "expected": ["finance/01-budgeting-basics.md"]}
+{"question": "I keep running out of money before payday, what can I do?", "expected": ["finance/01-budgeting-basics.md"]}
+{"question": "what is credit and debit", "expected": ["finance/10-money-basics.md"]}
+{"question": "difference between a debit card and a credit card", "expected": ["finance/10-money-basics.md"]}
+{"question": "what are assets and liabilities", "expected": ["finance/10-money-basics.md"]}
+{"question": "what is an EMI", "expected": ["finance/10-money-basics.md"]}
+{"question": "what is UPI", "expected": ["finance/11-payments-in-india.md"]}
+{"question": "NEFT vs IMPS vs RTGS", "expected": ["finance/11-payments-in-india.md"]}
+{"question": "what does unbilled spends mean", "expected": ["ppa/08-terms-and-how-figures-are-counted.md", "ppa/04-credit-cards.md"]}
+{"question": "why are transfers left out of my spending total", "expected": ["ppa/08-terms-and-how-figures-are-counted.md"]}
+{"question": "how to delete an asset in assets page", "expected": ["ppa/05-assets.md"]}
+{"question": "why can't I delete my asset", "expected": ["ppa/05-assets.md"]}

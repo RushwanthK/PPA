@@ -56,7 +56,58 @@ Phase 3 was widened on November 22, 2026 so that the public app's security is ha
 
 ### Planned After Phase 3 — RAG and AI Integration
 
-A separate project-document learning chatbot and the PPA Knowledge Copilot are planned after Phase 3 and before Phase 4. Earlier documents called this "Phase 3B"; it is now listed as the RAG/AI phase to avoid confusion with the security work above. The code does not contain any RAG implementation.
+A separate project-document learning chatbot and the PPA Knowledge Copilot are planned after Phase 3 and before Phase 4. Earlier documents called this "Phase 3B"; it is now listed as the RAG/AI phase to avoid confusion with the security work above.
+
+**Status: in progress, local development only (not committed or deployed).**
+
+- Design: a separate async **FastAPI AI service** in `ai_service/`, with its own venv and requirements. Flask is unchanged.
+- RAG answers questions about PPA and general financial education.
+- Agent tools fetch the user's own data by calling Flask with the user's token. pandas computes the numbers.
+- Groq generates the answers, with Gemini for embeddings and as fallback.
+- [x] Step 1 (Nov 23, 2026): skeleton, local Postgres 17 + pgvector 0.8.1 in Docker (`127.0.0.1:5434`), `ai` schema, `/health/live` and `/health/ready`. 16 tests pass. Baseline: ~59 MB RAM, ~47.5 MB of packages.
+- [x] Step 2 (Nov 23, 2026): 16 knowledge documents (PPA user guide + finance notes with sources), heading-aware chunking (94 chunks, about 8.4k tokens), Gemini embedding client, incremental ingestion, `ai.documents` / `ai.chunks` with HNSW and full-text indexes, hybrid retrieval (vector + keyword, RRF), 36-question evaluation set, own migration runner. Ingested with real Gemini embeddings (Nov 24): hybrid retrieval hit@5 1.00, hit@1 0.94, MRR 0.97 on 36 questions. A free-tier 429 on the first run led to a client-side rate limiter and single-batch ingestion. 77 tests pass.
+- [x] Step 3 (Nov 24, 2026): `POST /v1/ask` and `GET /v1/usage`.
+  - Auth through Flask `/me` (no JWT secret in the AI service; fails closed).
+  - Groq `openai/gpt-oss-120b` with Gemini `gemini-3.5-flash-lite` fallback.
+  - Deterministic advice and injection refusals, and a relevance gate (0.61, calibrated).
+  - Citation verification; ungrounded answers are blocked.
+  - Per-user daily and per-minute limits with atomic quota reservation.
+  - Audit log that stores no question text, and a kill switch.
+  - Live smoke test: 11 questions behaved as designed, about 7.2k tokens. 197 tests pass. About 64 MB RAM.
+- [x] Step 3 follow-ups (Nov 24, 2026):
+  - Checked real provider limits: Groq 1,000 requests/day and 8,000 tokens/minute (from its response headers); Gemini Flash Lite 15/minute, 500/day; Gemini embeddings 100/minute, 1,000/day (AI Studio).
+  - Quota day now resets with Gemini (midnight Pacific), shown to users in IST (1:30 PM IST in winter). `/v1/usage` returns `resets_at`. Added `tzdata`.
+  - 503s say how long to wait (busy for N seconds, or until the daily reset), using the providers' own retry information.
+  - A request that fails because every provider is down no longer uses up the user's daily request.
+  - Answers cut off at 700 tokens carry a notice; `finish_reason` is audited (migration `0003`).
+  - Accepted and documented: Gemini is a single point of failure for search.
+  - 216 tests pass (Flask's 468 unchanged). Overall write-up: `AI_AND_RAG.md`.
+- [ ] Step 4: agent tools that call Flask, plus pandas analysis
+- [x] Step 5: chat panel in React (CRA), end-to-end tests. Done on Nov 25, 2026 (AssistantChat, CORS, a real-login end-to-end test; frontend 217, AI service 271, Flask 480)
+- [x] Fine-tuning phase (Nov 26, 2026): precise questions about the owner's transactions.
+  - Flask `GET /transactions/query` replaced `/transactions/summary`. The model fills in a validated structured query, never SQL.
+  - The AI tool `query_transactions` replaced two tools.
+  - Chat history: the last 3 turns, not stored.
+  - Money movement (transfers, card bills, investments) is kept out of spending totals, configured by `MONEY_MOVEMENT_CATEGORIES`.
+  - Help mode points to "My data" when it finds nothing.
+  - Tests: Flask 491, AI service 288, frontend 221 (223 after round 2: named things searched by name, follow-ups keep the previous search, double welcome fixed).
+  - Rounds 3–4: `must_match` (AND search), and "the model picks rows by meaning, the code adds them up" (`add_up_transactions`) for small sets such as one trip. Tests: AI service 297, frontend 224.
+  - Before deploying: set `MONEY_MOVEMENT_CATEGORIES` on Render.
+  - Before deploying: `ASSISTANT_LIMITS_ENABLED` must be `true` (or unset); it is `false` locally only for testing (Nov 26).
+  - Nov 27: code writes My-data answers (1 trip for simple questions, 2 for picks); Gemini takes any trip Groq fails; tokens per trip logged.
+  - Before deploying: apply AI migration `0005_audit_trips` on Supabase.
+  - Before deploying: `MONEY_MOVEMENT_CATEGORIES` on Render must include `repayment` (owner's change, Nov 27).
+  - To do: savings transactions in the transaction query (deposit/withdrawal mapping).
+  - Done (Nov 27): savings transactions in the transaction query; open question: should savings deposits count as income?
+  - Nov 27: savings deposits left out of totals (owner's decision); the chat is on every signed-in page; three help-mode notes added (money basics, payments in India, PPA terms). The owner runs `python -m app.rag.ingest`; before deploying, ingest into Supabase too.
+  - Nov 27: help-mode "Click here" links to the right page, form and account (action names from code, fixed destinations in the browser, live user-specific account picker).
+  - Full test run before step 6 (Nov 27): Flask 497, AI service 385, frontend 244, all passing; frontend production build succeeds.
+- [ ] Step 6: measure, then choose hosting
+  - Nov 27: measured in a 512 MB / 0.1 CPU Linux container: 45 MB idle, 47 MB peak at about 99 requests/s, about 10 s startup, 261 MB image. Recommended: Render free web service (root `ai_service`) plus the Supabase `ai` schema with a restricted role. Watch: 750 free instance hours a month are shared by Flask and the AI service.
+  - Nov 27: AI service deploys like Flask: `ai_service/Dockerfile` + `start.sh` apply AI migrations and sync help notes to Supabase on every deploy. One-time Supabase setup in `ai_service/db/supabase_setup.sql` (restricted login `ppa_ai_app`, owns only the `ai` schema). Rehearsed locally; the migration runner fix found there is in `app/migrate.py`. Exact steps: `ai_service/README.md`, "Deploying: Render (free) + Supabase".
+  - Follow-up: the CI workflow does not run the AI service tests yet.
+
+Root `pytest.ini` now has `testpaths = tests`, so Flask's test run does not collect the AI service tests. Details are in `ai_service/README.md`.
 
 ### Remaining Roadmap
 
@@ -281,7 +332,24 @@ Optional cleanup: delete the leftover `~*` folders in `venv\Lib\site-packages` f
 
 ### RAG and AI Integration (after Phase 3)
 
-**Status: Planned. Not implemented.**
+**Status (November 24, 2026): in progress, local only. Steps 1–3 done; see "Planned After Phase 3 — RAG and AI Integration" above and `AI_AND_RAG.md`.** The original plan below is kept for reference.
+
+**Update (later on November 24, 2026): step 4 done.**
+
+- **"My data" mode:** five read-only tools over Flask's GET endpoints, called with the user's token.
+  - Groq only; Python computes; a number check.
+  - At most 3 tool calls; the figures are returned with every answer.
+- **AI-service logging:** structured logs, request id, allowlist and redaction, a Groq quota warning, and an audit report.
+- **Tests:** 269 (AI service), 468 (Flask).
+
+**Update (November 25, 2026):** new Flask endpoint `GET /transactions/summary` (`app/transactions/transaction_summary.py`).
+
+- PostgreSQL computes totals by type, category, India-time month and account, plus the largest 5, for the logged-in user's bank and card transactions.
+- The AI tool uses it instead of paging through rows, so totals cover thousands of transactions; measured at 26 ms for 5,000 rows.
+- 12 new Flask tests.
+- No migration needed.
+
+**Original status: Planned. Not implemented.**
 
 The goal is to develop two related projects:
 
@@ -338,6 +406,7 @@ Personalized financial analysis is a later extension. The backend must calculate
 
 * [ ] Application logs
 * [x] Server-side logging of unexpected 500 errors (details no longer sent to clients)
+* [x] AI service only (local, Nov 24, 2026): structured application logs with request ids, an allowlist of fields and redaction; a Groq quota warning; an audit-table report (`python -m app.report`)
 * [ ] Database error visibility
 * [ ] Health monitoring
 * [ ] Alerts
@@ -392,14 +461,21 @@ Phase 3 — Testing + Auth/API Security  ✅ COMPLETE (Nov 23, 2026)
     First green CI run                 ✅ 465 + 201 passed
     TRUSTED_PROXY_COUNT                ✅ 3 (measured on Render)
 
-RAG & AI Integration                   ← NEXT (planned)
+RAG & AI Integration                   🟡 IN PROGRESS (local only, nothing committed)
+    Step 1 Foundation                  ✅ Nov 23
+    Step 2 Knowledge base + retrieval  ✅ hit@5 1.00, MRR 0.97
+    Step 3 Grounded answers API        ✅ Nov 24, 216 tests
+    Step 4 Agent tools (own data)      ✅ Nov 24, "My data" mode + logging, 269 tests
+    Step 5 Chat panel + E2E            ✅ Nov 25, real-login E2E passed
+    Fine-tuning (precise questions)    ✅ Nov 26, structured queries + chat history
+    Step 6 Hosting decision            ← NEXT
 Phase 4 — Docker in CI                 ⏳
 Phase 5 — Automated deployment         ⏳
 Phase 6 — Security / configuration     🟡 Started (Phase 3B)
 Phase 7 — Reliability                  ⏳
-Phase 8 — Logging / monitoring         ⏳
+Phase 8 — Logging / monitoring         🟡 Started (AI service logging, local)
 Phase 9 — System design / scalability  🟡 IN PROGRESS
 Phase 10 — Advanced engineering        🟡 PARTIALLY COMPLETE
 ```
 
-Phase 3 is complete. Deferred security items (refresh tokens, token storage, frontend CSP, leaving Create React App) are tracked under Phase 6. The next planned phase is RAG and AI Integration.
+Phase 3 is complete. Deferred security items (refresh tokens, token storage, frontend CSP, leaving Create React App) are tracked under Phase 6. The RAG and AI Integration phase is in progress locally (see `AI_AND_RAG.md`).

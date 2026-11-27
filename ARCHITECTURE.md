@@ -457,7 +457,9 @@ The SQLAlchemy event listeners are attached during app creation only when the di
 
 # Planned RAG / AI Extension (after Phase 3)
 
-**Status: Planned; not implemented in the reviewed repository.**
+**Status (November 24, 2026): partly implemented locally; see "AI Service Architecture" below for what exists now.** The original plan is kept here for reference.
+
+**Original status: Planned; not implemented in the reviewed repository.**
 
 The initial PPA Knowledge Copilot will use approved project documentation and trusted financial-education material.
 
@@ -509,6 +511,172 @@ A later personalized-financial-analysis extension must use controlled, read-only
 That extension is dependent on the required security controls in Phase 6.
 
 This diagram is a planned target architecture, not a description of the current running application.
+
+---
+
+# AI Service Architecture (local, steps 1–3 done)
+
+**Status: running locally only; not committed or deployed.** Full reasoning and history: `AI_AND_RAG.md`. Setup and API: `ai_service/README.md`.
+
+How it differs from the plan above:
+
+- It is a **separate async FastAPI service** (`ai_service/`), not part of Flask. LLM calls are slow network waits, so async fits; failures and heavy dependencies stay away from the finance app.
+- Flask is unchanged. The AI service checks each user's token by calling Flask `GET /me`, so it never holds the JWT secret.
+- It owns only the `ai` schema in its own Postgres + pgvector database (Docker, `127.0.0.1:5434`).
+
+```text
+React (CRA) ── step 5 ──►  FastAPI AI service :8001
+                              │        │        │
+          token check ────────┘        │        └──► Groq gpt-oss-120b (fallback: Gemini 3.5 Flash Lite)
+          Flask GET /me                │
+               │                       └──► Postgres 17 + pgvector (ai.documents, ai.chunks,
+               ▼                                                    ai.usage_daily, ai.audit_log)
+          Flask API :5000 (system of record)        Gemini gemini-embedding-001 (768-d) for search
+```
+
+Request pipeline (cheap checks first, so refused and off-topic questions cost no model tokens):
+
+```text
+per-minute + daily quota (atomic SQL)          -> 429
+injection / investment-advice checks (regex)   -> refusal, 0 tokens
+embed question + hybrid search (vector + keyword, RRF)
+best similarity < 0.61                          -> "not covered", 0 LLM tokens
+fit sources into ~1,800 tokens
+Groq, fallback Gemini, max 700 output tokens    -> both down: 503 with wait time
+verify citations; block ungrounded answers
+-> answer + citations (+ disclaimer, + notice if cut short); usage + audit row
+```
+
+Personalized financial analysis (step 4) will follow the boundary stated above: read-only tools that call Flask's APIs with the user's own token, so Flask enforces authorization; code computes exact numbers; the model only explains them and never gets SQL access.
+
+## Step 4: "My data" mode (local, November 24, 2026)
+
+This is built exactly on that boundary. The user turns it on (`"mode": "my_data"`), and it uses **Groq only**, because Gemini's free-tier terms allow human review of submitted content.
+
+```text
+React ──► AI service /v1/ask {mode: "my_data"}
+              │  quota + guardrails (same as help mode)
+              ├──► Groq gpt-oss-120b: picks tools + arguments (sees the question and tool list only)
+              │      arguments validated (Pydantic)
+              ├──► Flask GET (user's own token; Flask checks ownership)
+              │      /dashboard/summary, /dashboard/spending, /dashboard/asset-allocation,
+              │      /banks, /banks/dropdown, /banks/<id>/transactions,
+              │      /credit_cards, /credit_cards/<id>/transactions, /savings
+              │      (Nov 25: transaction totals come from the new GET /transactions/summary instead
+              │       of paging /banks/<id>/transactions and /credit_cards/<id>/transactions)
+              │      Python computes totals, shares, by category / month, largest 5
+              ├──► Groq writes the answer (at most 3 tool calls in 2 rounds)
+              │      number check: every figure must be in the tool results
+              ▼
+          answer + the tables it came from; audit row (mode, tool names, request id)
+```
+
+## Chat Panel (React, local, November 25, 2026, step 5)
+
+```text
+Browser (React :3000, Dashboard → AssistantChat)
+   │  Authorization: Bearer <same login token>     CORS: AI_CORS_ORIGINS, no cookies
+   ├──► AI service :8001  POST /v1/ask {question, mode: help | my_data}, GET /v1/usage
+   │        └──► Flask GET /me (token check), Flask GET data endpoints (my_data), Groq
+   └──► Flask :5000 (everything else, unchanged)
+```
+
+- **The panel is hidden when `REACT_APP_AI_API_URL` is unset,** so a production build without a deployed AI service shows nothing broken.
+- **Model text is rendered as React text, never as HTML.**
+- **A 401 from the AI service** uses the same session-expired handling as Flask.
+
+## My-data answer flow (AI service, local, November 27, 2026)
+
+```
+browser (AssistantChat.js) --POST /v1/ask + login token--> routes.py -> service.py (limits, guardrails)
+  -> data_agent.py
+       trip 1  Groq (or Gemini if Groq fails): choose tool + arguments   [system prompt ~450 tokens + tool menu ~1,350]
+       tools.py -> flask_data.py --GET /transactions/query (as the user)--> Flask -> PostgreSQL
+       trip 2  only to pick rows by meaning (pick rules arrive with the list), fix a bad call, or search again
+  -> answer_writer.py: code writes the sentence from the query + result (no model)
+  -> answer + figures/tables (model-only facts hidden) -> browser
+```
+
+- **Per-trip tokens:** stored in `ai.audit_log.trips` (migration 0005).
+- **Where data goes:** questions, rows and figures may go to Groq and to Gemini (owner's decision, Nov 27). Keys and tokens never go to either.
+
+## Transaction Query Endpoint (Flask, local, November 26, 2026)
+
+*Update, November 27, 2026:* savings transactions are included (`account_kind` savings, and in all). A withdrawal is mapped to expense and a deposit to income. Savings rows in money-movement categories are always left out. The response has a `savings` section (rows matched, transfers left out).
+
+`GET /transactions/query` (`app/transactions/transaction_query.py`, JWT required) answers precise, read-only questions over the user's bank and card transactions. It **replaced** `GET /transactions/summary` (described below, kept for history), whose code and tests were removed.
+
+```
+AI model ── fills in QueryArgs (validated, extra=forbid)
+     │
+AI service ── GET /transactions/query?terms=goa&terms=trip&type=expense&sort=date_desc&limit=10
+     │          (user's own Bearer token)
+Flask ─────── parse_query(): allowlists, lengths, ranges, dates → 400 on anything else
+     │        _conditions(): user_id = me, bank+card only, ILIKE with escaped wildcards,
+     │                       IST day bounds, amounts, money-movement categories
+PostgreSQL ── totals per type · matches per word · excluded money movement · groups · rows
+```
+
+- **Two kinds of search words** (since round 3, Nov 26): `terms` (any may match) and `must_match` (up to 3, all must match), so "food in the Goa trip" is `must_match=goa` AND any of the food words.
+- **Row ids and up to 30 rows** (round 4, Nov 26): rows carry `id`, so the AI service's `add_up_transactions` step can sum rows the model picked by meaning from a complete list, without another database call.
+- **Alternatives** (round 5, Nov 26): a `must_match` entry may be `shree|shreya`, meaning either one, still ANDed with everything else (at most 4 alternatives).
+- **Never SQL from the model:** every value becomes a bound parameter. Column and sort choices come from fixed maps.
+- **Money movement:** categories in `MONEY_MOVEMENT_CATEGORIES` (env or app config, comma-separated, case-insensitive) can be included, excluded (with what was left out reported) or queried alone.
+- **Limits:** 6 search words, 20 rows, 12 groups (plus an "other" amount).
+- **Tests:** 23 (`tests/test_transaction_query.py`), covering:
+  - another user's rows never counted;
+  - savings rows excluded;
+  - wildcard escaping;
+  - India-time month boundaries;
+  - money movement modes;
+  - every grouping;
+  - 13 kinds of invalid parameters.
+
+## Transaction Summary Endpoint (Flask, local, November 25, 2026)
+
+*Superseded on November 26, 2026 by `GET /transactions/query` (above); the text below is the original description.*
+
+`GET /transactions/summary` (`app/transactions/transaction_summary.py`, JWT required) aggregates in PostgreSQL. It was added for the AI service, and any client can use it.
+
+**Query parameters:**
+
+| Parameter | Values |
+|---|---|
+| `account_kind` | `bank`, `credit_card` or `all` |
+| `account_name` | text contained in an account name |
+| `search` | text in the description or category |
+| `type` | `expense`, `income` or `payment` |
+| `start_date`, `end_date` | `YYYY-MM-DD`, as India-time calendar days |
+
+**Response:**
+
+- `transactions_found`, `first_date` and `last_date`;
+- `by_type`: count, total and average for each type;
+- `focus_type`: the type the groupings below describe;
+- `by_category`: top 8, plus `other_categories_total`;
+- `by_month`: India-time months, the last 12;
+- `by_account`;
+- `largest`: the 5 largest.
+
+```text
+WHERE user_id = <token user> AND type IN (bank_transaction, credit_card_transaction) [AND filters]
+  -> SUM / COUNT by transaction_type
+  -> focus type: GROUP BY category, IST month, account; ORDER BY amount LIMIT 5
+```
+
+- **Why SQL:** totals cover every row (thousands), take one request (26 ms for 5,000 rows) and return a ~2 KB body.
+- **Amounts:** shown as positive numbers (card expenses are stored negative).
+- **No new index or migration:** existing indexes cover account and date filters. An index on `(user_id, date)` is the next step if measurements on production data show it is needed.
+
+## AI service logging (local, November 24, 2026)
+
+```text
+request ──► RequestContextMiddleware: request id (X-Request-ID), one "request finished" line
+              └─► service: one "assistant request" line (labels and counts only)
+                    └─► audit row with the same request_id (the only place that links to a user)
+formatter: allowlist of fields + redaction (tokens, keys, emails, IPs, DB URLs)
+output:    text locally (terminal); JSON lines in production (Render → Logs)
+```
 
 ---
 

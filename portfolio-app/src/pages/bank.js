@@ -12,6 +12,7 @@ import {
   exportUserTransactionsPdf
 } from '../services/api';
 import { useAuth } from '../AuthContext';
+import useAssistantLink from '../hooks/useAssistantLink';
 
 import Button from '../components/ui/Button';
 import SearchBar from '../components/ui/SearchBar';
@@ -717,6 +718,25 @@ export default function Bank() {
 
   const bankPendingDeletion = banks.find(b => b.id === deletingBankId) || null;
 
+  const openAddForm = () => {
+    setFormError(null);
+    setShowForm(true);
+  };
+
+  // PPA Assistant "Click here" links (Nov 27): open the form the link asked for, for one of
+  // the accounts this page loaded for the logged-in user (see hooks/useAssistantLink.js).
+  useAssistantLink({
+    ready: !loading,
+    items: banks,
+    actions: {
+      add: openAddForm,
+      'add-transaction': bank => handleAddTransaction(bank.id),
+      'view-transactions': bank => handleViewTransactions(bank.id),
+      delete: bank => handleDeleteBank(bank.id),
+    },
+    onMissing: setError,
+  });
+
   // ---------- Render ----------
   if (loading && banks.length === 0) return <div className="loading">Loading banks...</div>;
 
@@ -742,10 +762,7 @@ export default function Bank() {
         <Button
           type="button"
           variant="primary"
-          onClick={() => {
-            setFormError(null);
-            setShowForm(true);
-          }}
+          onClick={openAddForm}
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Bank'}

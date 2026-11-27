@@ -13,6 +13,7 @@ jest.mock('./pages/savings', () => () => <h1>Savings page</h1>);
 jest.mock('./pages/creditcard', () => () => <h1>Credit cards page</h1>);
 jest.mock('./pages/bank', () => () => <h1>Banks page</h1>);
 jest.mock('./components/dialogs/ProfileDialog', () => () => null);
+jest.mock('./components/AssistantChat', () => () => <aside aria-label="PPA Assistant" />);
 
 const TEST_USER = {
   id: 1,
@@ -89,6 +90,18 @@ describe('App routing and session handling', () => {
     ['Overview', 'Assets', 'Savings', 'Credit Cards', 'Banks'].forEach(label => {
       expect(nav).toHaveTextContent(label);
     });
+  });
+
+  test('the assistant is on every signed-in page and not on the login page', async () => {
+    renderApp('/');
+    await screen.findByRole('heading', { name: 'Login' });
+    expect(screen.queryByRole('complementary', { name: 'PPA Assistant' })).not.toBeInTheDocument();
+
+    localStorage.setItem('token', 'stored-token');
+    global.fetch = mockFetchResponse(200, TEST_USER);
+    renderApp('/assets');
+    expect(await screen.findByRole('heading', { name: 'Assets page' })).toBeInTheDocument();
+    expect(await screen.findByRole('complementary', { name: 'PPA Assistant' })).toBeInTheDocument();
   });
 
   test('clears an expired stored token (401 from /me) and shows login', async () => {

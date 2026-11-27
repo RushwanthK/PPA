@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 
 import Savings from './savings';
 import {
@@ -48,7 +49,7 @@ const rowValues = name =>
 
 const renderPage = async () => {
   const user = userEvent.setup();
-  render(<Savings />);
+  render(<MemoryRouter><Savings /></MemoryRouter>);
   await screen.findByRole('heading', { name: 'Savings Accounts' });
   await screen.findByRole('cell', { name: 'Emergency Fund' });
   return user;
@@ -108,7 +109,7 @@ describe('Savings page', () => {
         { ...VACATION, name: 'Small', balance: 9000 },
       ]);
       const user = userEvent.setup();
-      render(<Savings />);
+      render(<MemoryRouter><Savings /></MemoryRouter>);
       await screen.findByRole('cell', { name: 'Big' });
 
       await user.click(screen.getByRole('columnheader', { name: 'Balance' }));
@@ -120,7 +121,7 @@ describe('Savings page', () => {
     test('shows the error when loading fails', async () => {
       getSavings.mockRejectedValue(new Error('Failed to fetch savings: boom'));
 
-      render(<Savings />);
+      render(<MemoryRouter><Savings /></MemoryRouter>);
 
       expect(await screen.findByText('Failed to fetch savings: boom')).toBeInTheDocument();
       expect(screen.getByText('No savings accounts found')).toBeInTheDocument();

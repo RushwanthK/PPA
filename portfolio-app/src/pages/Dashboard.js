@@ -10,7 +10,6 @@ import {
   BarChart, Bar, PieChart, Pie,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell
 } from 'recharts';
-import DummyChatbot from '../components/Dummychatbot';
 
 // Module-level constants: created once when the file is loaded, not on
 // every render of the component (previously these were declared inside
@@ -178,9 +177,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Frontend-only placeholder for a future LLM-powered financial
-          assistant. No network calls, purely local UI state. */}
-      <DummyChatbot />
+      {/* The PPA Assistant moved to App.js (Nov 27) so it is on every signed-in page. */}
     </div>
   );
 }

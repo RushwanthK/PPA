@@ -11,6 +11,7 @@ node_modules/
 # Virtual Environment
 venv/
 portfolio-app/venv/
+ai_service/.venv/
 
 # IDE
 .vscode/
@@ -33,3 +34,5 @@ portfolio-app/venv/
 
 # Patch file
 *.patch
+# Test caches (any folder)
+.pytest_cache/

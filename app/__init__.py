@@ -156,6 +156,7 @@ def create_app():
     from .assets.assets_routes import assets_routes
     from .credit_cards.credit_card_routes import credit_card_routes
     from .login.login_routes import login_routes
+    from .transactions.transaction_query import transaction_query_routes
 
 
     app.register_blueprint(routes)
@@ -166,6 +167,7 @@ def create_app():
     app.register_blueprint(assets_routes)
     app.register_blueprint(credit_card_routes)
     app.register_blueprint(login_routes)
+    app.register_blueprint(transaction_query_routes)
 
     @app.before_request
     def start_performance_measurement():

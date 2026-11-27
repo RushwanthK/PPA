@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 
 import Bank from './bank';
 import {
@@ -49,7 +50,7 @@ const rowFor = name => screen.getByRole('cell', { name }).closest('tr');
 
 const renderBankPage = async () => {
   const user = userEvent.setup();
-  render(<Bank />);
+  render(<MemoryRouter><Bank /></MemoryRouter>);
   await screen.findByRole('heading', { name: 'Banks' });
   await screen.findByRole('cell', { name: 'HDFC' });
   return user;
@@ -82,7 +83,7 @@ describe('Bank page', () => {
   test('shows the error when banks fail to load', async () => {
     getBanks.mockRejectedValue(new Error('Failed to fetch banks'));
 
-    render(<Bank />);
+    render(<MemoryRouter><Bank /></MemoryRouter>);
 
     expect(await screen.findByText('Failed to fetch banks')).toBeInTheDocument();
     expect(screen.getByText('No banks found')).toBeInTheDocument();

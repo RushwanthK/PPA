@@ -57,6 +57,15 @@ Although initially developed as a personal finance application, the project is p
 * Rate limiting on login, registration and password change
 * Request size limit, generic 500 replies, CORS without credentials, API security headers
 
+## AI Service (RAG and AI phase — local only, not yet deployed)
+
+* FastAPI + uvicorn (async), in `ai_service/` with its own venv
+* asyncpg, PostgreSQL 17 + pgvector 0.8.1 (local Docker container)
+* httpx clients for Groq (`openai/gpt-oss-120b`, primary) and Gemini (`gemini-3.5-flash-lite` fallback, `gemini-embedding-001` embeddings)
+* pydantic / pydantic-settings, pytest + pytest-asyncio
+* Standard-library `logging`, structured (JSON in production) with a request id, an allowlist of fields and redaction (step 4)
+* Full decisions and history: `AI_AND_RAG.md`
+
 ## Testing
 
 * Backend: pytest against a dedicated PostgreSQL test database
@@ -141,6 +150,32 @@ Vercel deploys on push at the same time as CI runs, so CI does not block the fro
 - CI runs on the production branch; deploy the backend on Render only after a green run.
 
 Next: the RAG and AI Integration phase. Deferred security items are listed under Phase 6.
+
+# Current Work — RAG and AI Integration (local only)
+
+Started November 23, 2026. **Local development only: nothing from this phase is committed, pushed or deployed** until the owner decides it is production-worthy.
+
+- A separate async **FastAPI AI service** (`ai_service/`) answers PPA how-to and finance-education questions with RAG, with verified citations. Flask is unchanged.
+- Steps 1–3 done (foundation, knowledge base + hybrid retrieval, grounded answers API). Retrieval on 36 test questions: right article first 94% of the time, in the top 5 100%.
+- Security, safety, accuracy and token controls: auth through Flask `/me` with no shared JWT secret, deterministic investment-advice refusal, calibrated relevance gate, blocked ungrounded answers, atomic per-user quotas, output cap.
+- 216 AI service tests; Flask's 468 unchanged.
+- Next: step 4 (agent tools over the user's own data), step 5 (chat panel), step 6 (hosting decision).
+- **Update, November 24, 2026: step 4 is done.**
+  - **"My data" mode:** answers questions about the user's own finances, using five read-only tools that call Flask's GET endpoints with the user's own token.
+    - Python computes the figures, and a number check blocks invented ones.
+    - It uses Groq only, so personal data never goes to the Gemini free tier.
+  - **Logging and monitoring for the AI service:** structured logs, request ids, no personal data in logs, and an audit report.
+  - **Tests:** 269 for the AI service; Flask's 468 unchanged.
+  - **Nov 25, step 5:** the Dashboard's placeholder chatbot is now the real PPA Assistant, with Help and "My data" modes. It was tested end to end with a real login. Tests: frontend 217, AI service 271, Flask 480.
+  - **Nov 25 update:** a new read-only Flask endpoint, `GET /transactions/summary`, computes transaction totals in PostgreSQL. "My data" totals now cover every transaction, not just the latest 1,000: 5,000 rows in 26 ms. Flask gained 12 tests for it.
+  - **Next:** step 5 (chat panel and end-to-end test), then step 6 (hosting).
+  - **Nov 26, fine-tuning phase:** "My data" now answers precise questions, such as "my last transaction", "how much on the Goa trip" or "did my friend send me money?".
+    - The model fills in a small structured query. Flask's new `GET /transactions/query` validates it and runs it as parameterised SQL scoped to the user; the model never writes SQL. It replaced `/transactions/summary`.
+    - Follow-up questions work: the last 3 turns are sent and not stored.
+    - Transfers, card bills and investments are kept out of spending totals (`MONEY_MOVEMENT_CATEGORIES`).
+    - Tests: Flask 491, AI service 288, frontend 221.
+
+Read **`AI_AND_RAG.md`** for the decisions and why, measurements and interview notes, and `ai_service/README.md` for setup and API details.
 
 # Current Features
 
@@ -227,6 +262,7 @@ PPA
 │   ├── dashboard/       # Dashboard API and aggregation services
 │   └── utils/           # Shared utilities: dashboard_cache, auth_tokens, rate_limit, errors
 ├── portfolio-app/       # React frontend
+├── ai_service/          # FastAPI AI service (RAG), own venv and tests — local only so far
 ├── migrations/          # Alembic migrations (pg_trgm search indexes, token revocation)
 ├── tests/               # Backend automated tests
 ├── .github/workflows/   # GitHub Actions CI
@@ -237,6 +273,7 @@ PPA
 ├── ARCHITECTURE.md
 ├── PROJECT_STATUS.md
 ├── LEARNING_NOTES.md
+├── AI_AND_RAG.md        # AI phase: decisions, history, measurements, interview notes
 └── .env                 # local only, never committed
 ```
 
@@ -282,6 +319,15 @@ Optional performance diagnostics can be enabled in the backend environment with:
 PPA_PERF_DIAGNOSTICS=true
 ```
 
+AI service (from `ai_service/`, its own venv; see `ai_service/README.md`)
+
+```bash
+docker compose up -d                 # Postgres 17 + pgvector on 127.0.0.1:5434
+.venv\Scripts\python -m app.migrate
+.venv\Scripts\python -m uvicorn app.main:create_app --factory --port 8001 --reload
+.venv\Scripts\python -m pytest -q
+```
+
 Dashboard caching uses the Render Redis service in production through `REDIS_URL`. The reviewed `docker-compose.yml` does not pass `REDIS_URL` to the backend container or define a Redis service, so the local Docker Compose stack bypasses Redis. Testing configuration explicitly disables the external Redis dependency.
 
 ---
@@ -318,22 +364,36 @@ Dashboard caching uses the Render Redis service in production through `REDIS_URL
 
 Phase 3 was completed on November 23, 2026. Refresh tokens and a frontend CSP are deliberately deferred to later security work.
 
-## RAG and AI Integration (Planned, after Phase 3)
+## RAG and AI Integration (In progress since November 23, 2026 — local only)
 
-This phase will follow Phase 3 and precede Phase 4.
+This phase follows Phase 3 and precedes Phase 4. Details: `AI_AND_RAG.md`.
 
-- [ ] Build a separate project-document learning chatbot
-- [ ] Learn document ingestion, extraction, chunking and metadata
-- [ ] Evaluate embeddings and PostgreSQL `pgvector`
-- [ ] Implement semantic retrieval and PostgreSQL full-text search
-- [ ] Build the initial PPA Knowledge Copilot using approved documentation and trusted financial-education material
-- [ ] Generate grounded answers with source references and insufficient-evidence handling
-- [ ] Integrate the initial copilot with React and Flask
-- [ ] Add automated RAG tests and a repeatable evaluation dataset
-- [ ] Add appropriate model credential, usage and cost controls
-- [ ] Document the architecture and prepare for subsequent CI and deployment work
+- [ ] Build a separate project-document learning chatbot — *replaced (November 23, 2026): RAG was learnt directly inside a separate PPA AI service, which gives the same learning plus a real use case*
+- [x] Learn document ingestion, extraction, chunking and metadata (step 2)
+- [x] Evaluate embeddings and PostgreSQL `pgvector` (step 2: Gemini `gemini-embedding-001`, 768 dimensions, HNSW)
+- [x] Implement semantic retrieval and PostgreSQL full-text search (step 2: hybrid, merged with RRF)
+- [x] Build the initial PPA Knowledge Copilot using approved documentation and trusted financial-education material (16 articles)
+- [x] Generate grounded answers with source references and insufficient-evidence handling (step 3)
+- [ ] Integrate the initial copilot with React and Flask — Flask auth done (step 3); React chat panel is step 5
+  - *Done locally, Nov 25, 2026 (step 5). Deploying it is part of step 6.*
+- [x] Add automated RAG tests and a repeatable evaluation dataset (36 questions; 216 tests)
+- [x] Add appropriate model credential, usage and cost controls (step 3)
+- [x] Document the architecture (`AI_AND_RAG.md`, `ai_service/README.md`); CI and deployment work comes after step 6
+- [x] Step 4: agent tools over the user's own data (Flask APIs + pandas). Done on Nov 24, 2026 as "My data" mode: plain Python instead of pandas, Groq only, a number check, and AI-service logging
+- [x] Step 5: chat panel and end-to-end test. Done on Nov 25, 2026: an AssistantChat panel on the Dashboard (help + "My data"), CORS on the AI service, and a real-login end-to-end test with a seeded test user
+- [ ] Step 6: measure, then choose hosting
 
 Personalized financial analysis using private user transactions must wait until the required security and authorization controls in Phase 6 are implemented.
+
+*Status note (November 24, 2026):*
+
+- **What runs:** step 4 runs **locally only**.
+- **Controls already in place for the AI endpoints:**
+  - login checked through Flask;
+  - Flask's own per-user authorization on every read;
+  - per-user quotas;
+  - no database access for the model.
+- **Remaining Phase 6 items** (refresh tokens, safer token storage, a frontend CSP) are app-wide. The owner decides on them before anything is deployed.
 
 ## Phase 4 — Docker Integrated into CI
 
@@ -375,8 +435,15 @@ Personalized financial analysis using private user transactions must wait until 
 - [ ] Improve application and API error logging
 - [ ] Improve database and deployment error visibility
 - [ ] Introduce appropriate health monitoring and alerts
-- [ ] Monitor AI latency, failures and usage if the copilot is deployed
+- [ ] Monitor AI latency, failures and usage if the copilot is deployed — the AI service already writes an audit row per question (outcome, provider, tokens, latency, finish reason; no question text)
+  - *Nov 24, 2026, AI service only (local):*
+    - structured logs with a request id per request;
+    - a Groq "quota running low" warning;
+    - `python -m app.report` for outcomes, fallbacks, tokens and p50/p95 latency.
+  - Dashboards and alerts are still open.
 - [ ] Prevent sensitive data from leaking into logs
+  - *Done for the AI service (Nov 24, 2026):* an allowlist of log fields; redaction of tokens, keys, emails and IPs; no user identity, question text or amounts in logs; uvicorn's IP-logging access log turned off.
+  - Flask is not changed yet.
 
 ## Phase 9 — System Design and Scalability
 

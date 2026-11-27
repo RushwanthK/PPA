@@ -13,6 +13,7 @@ import {
   exportUserTransactionsPdf,
 } from '../services/api';
 import { useAuth } from '../AuthContext';
+import useAssistantLink from '../hooks/useAssistantLink';
 
 import Button from '../components/ui/Button';
 import SearchBar from '../components/ui/SearchBar';
@@ -699,6 +700,25 @@ export default function Savings() {
     saving => String(saving.id) === String(deletingSavingId)
   );
 
+  const openAddForm = () => {
+    setFormError(null);
+    setShowForm(true);
+  };
+
+  // PPA Assistant "Click here" links (Nov 27): open the form the link asked for, for one of
+  // the accounts this page loaded for the logged-in user (see hooks/useAssistantLink.js).
+  useAssistantLink({
+    ready: !loading,
+    items: savings,
+    actions: {
+      add: openAddForm,
+      'add-transaction': saving => handleAddTransaction(saving),
+      'view-transactions': saving => handleViewTransactions(saving.id),
+      delete: saving => handleDeleteSaving(saving.id),
+    },
+    onMissing: setError,
+  });
+
   if (loading && savings.length === 0) {
     return <div className="savings-loading">Loading savings accounts...</div>;
   }
@@ -725,10 +745,7 @@ export default function Savings() {
         <Button
           type="button"
           variant="primary"
-          onClick={() => {
-            setFormError(null);
-            setShowForm(true);
-          }}
+          onClick={openAddForm}
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Savings'}

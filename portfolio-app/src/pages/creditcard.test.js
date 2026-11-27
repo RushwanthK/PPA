@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 
 import CreditCard from './creditcard';
 import {
@@ -64,7 +65,7 @@ const rowValues = name =>
 
 const renderPage = async (waitForCard = 'HDFC Regalia') => {
   const user = userEvent.setup();
-  render(<CreditCard />);
+  render(<MemoryRouter><CreditCard /></MemoryRouter>);
   await screen.findByRole('heading', { name: 'Credit Cards' });
   await screen.findByRole('cell', { name: waitForCard });
   return user;
@@ -77,6 +78,40 @@ const openDetails = async (user, name) => {
 };
 
 describe('Credit card page', () => {
+  describe('PPA Assistant links (Nov 27)', () => {
+    const renderAt = async url => {
+      render(<MemoryRouter initialEntries={[url]}><CreditCard /></MemoryRouter>);
+      await screen.findByRole('cell', { name: 'HDFC Regalia' });
+    };
+
+    test('opens Add Transaction for the linked card', async () => {
+      await renderAt('/creditcard?open=add-transaction&id=2');
+      expect(await screen.findByRole('dialog')).toHaveTextContent('Add Transaction - Axis Ace');
+    });
+
+    test('opens Card Details for the linked card, where Process Billing is', async () => {
+      await renderAt('/creditcard?open=details&id=2');
+      expect(await screen.findByRole('dialog', { name: 'Card Details: Axis Ace' })).toBeInTheDocument();
+      expect(processBilling).not.toHaveBeenCalled();
+    });
+
+    test('opens the Add Credit Card form', async () => {
+      await renderAt('/creditcard?open=add');
+      expect(await screen.findByRole('dialog', { name: 'Add Credit Card' })).toBeInTheDocument();
+    });
+
+    test("another user's or a deleted card opens nothing and says so", async () => {
+      await renderAt('/creditcard?open=delete&id=999');
+      expect(await screen.findByText("That account wasn't found. It may have been deleted.")).toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    test('an unknown form name is ignored', async () => {
+      await renderAt('/creditcard?open=drop-tables&id=1');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
   beforeEach(() => {
     getCreditCards.mockResolvedValue([{ ...HDFC }, { ...AXIS }]);
     getCreditCardTransactions.mockResolvedValue({
@@ -151,7 +186,7 @@ describe('Credit card page', () => {
     test('shows the error when cards fail to load', async () => {
       getCreditCards.mockRejectedValue(new Error('Failed to fetch credit cards: boom'));
 
-      render(<CreditCard />);
+      render(<MemoryRouter><CreditCard /></MemoryRouter>);
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'Failed to fetch credit cards: boom'

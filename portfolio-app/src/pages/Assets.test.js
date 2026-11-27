@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 
 import Assets from './Assets';
 import {
@@ -55,7 +56,7 @@ const rowValues = name =>
 
 const renderPage = async (waitForAsset = 'Nifty Index Fund') => {
   const user = userEvent.setup();
-  render(<Assets />);
+  render(<MemoryRouter><Assets /></MemoryRouter>);
   await screen.findByRole('heading', { name: 'Assets' });
   await screen.findByRole('cell', { name: waitForAsset });
   return user;
@@ -120,7 +121,7 @@ describe('Assets page', () => {
     test('shows the error when assets fail to load', async () => {
       getAssets.mockRejectedValue(new Error('Network Error'));
 
-      render(<Assets />);
+      render(<MemoryRouter><Assets /></MemoryRouter>);
 
       expect(await screen.findByRole('alert')).toHaveTextContent('Network Error');
       expect(screen.getByText('No assets found')).toBeInTheDocument();

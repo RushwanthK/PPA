@@ -11,6 +11,7 @@ import {
   exportUserTransactionsPdf,
 } from '../services/api';
 import { useAuth } from '../AuthContext';
+import useAssistantLink from '../hooks/useAssistantLink';
 
 import Button from '../components/ui/Button';
 import SearchBar from '../components/ui/SearchBar';
@@ -645,6 +646,25 @@ export default function Assets() {
   const selectedAsset =
     assets.find(asset => String(asset.id) === String(selectedAssetId)) || null;
 
+  const openAddForm = () => {
+    setFormError(null);
+    setShowForm(true);
+  };
+
+  // PPA Assistant "Click here" links (Nov 27): open the form the link asked for, for one of
+  // the accounts this page loaded for the logged-in user (see hooks/useAssistantLink.js).
+  useAssistantLink({
+    ready: !loading,
+    items: assets,
+    actions: {
+      add: openAddForm,
+      'add-transaction': asset => handleAddTransaction(asset.id),
+      'view-transactions': asset => handleViewTransactions(asset.id),
+      delete: asset => handleDeleteAsset(asset.id),
+    },
+    onMissing: setError,
+  });
+
   if (loading && assets.length === 0) {
     return <div className="loading">Loading assets...</div>;
   }
@@ -671,10 +691,7 @@ export default function Assets() {
         <Button
           type="button"
           variant="primary"
-          onClick={() => {
-            setFormError(null);
-            setShowForm(true);
-          }}
+          onClick={openAddForm}
           disabled={loading}
         >
           {loading ? 'Processing...' : 'Add Asset'}
