@@ -3,6 +3,8 @@
     docker compose -f ai_service/docker-compose.yml up -d
 """
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -13,11 +15,18 @@ from app.main import create_app
 pytestmark = pytest.mark.integration
 
 
+def _unavailable(reason: str):
+    # In CI (CI=true) the database must be there: fail rather than skip (see conftest.py).
+    if os.environ.get("CI", "").lower() == "true":
+        pytest.fail(f"{reason} (CI)")
+    pytest.skip(reason)
+
+
 @pytest.fixture
 def settings():
     s = Settings()  # reads ai_service/.env
     if s.database_url is None:
-        pytest.skip("AI_DATABASE_URL is not set")
+        _unavailable("AI_DATABASE_URL is not set")
     return s
 
 
@@ -25,7 +34,7 @@ def settings():
 async def database(settings):
     db = Database(settings.database_url.get_secret_value(), timeout=3.0)
     if not await db.connect():
-        pytest.skip("local pgvector database is not running")
+        _unavailable("local pgvector database is not running")
     yield db
     await db.close()
 

@@ -80,3 +80,56 @@ jobs:
       - name: Build frontend
         working-directory: ./portfolio-app
         run: npm run build
+
+  # PPA AI service (ai_service/, FastAPI). Added Nov 27, 2026, before its first deploy.
+  # Runs in parallel with the job above. Its database tests need Postgres with pgvector,
+  # the same image as the local container (ai_service/docker-compose.yml). No Groq or
+  # Gemini key is used: the tests use fake models and a fake embedder.
+  ai-service:
+    runs-on: ubuntu-latest
+
+    services:
+      ai-postgres:
+        image: pgvector/pgvector:0.8.1-pg17
+        env:
+          POSTGRES_USER: ppa_ai
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: ppa_ai
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd="pg_isready -U ppa_ai -d ppa_ai"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      AI_ENV: test
+      AI_DATABASE_URL: postgresql://ppa_ai:ci-only-not-a-secret@localhost:5434/ppa_ai
+
+    defaults:
+      run:
+        working-directory: ./ai_service
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install AI service dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Validate AI service
+        run: python -m compileall -q app
+
+      # Database tests fail (not skip) here if the pgvector service is missing (tests/conftest.py).
+      - name: Run AI service tests
+        run: pytest -q
+
+      # The image Render deploys: catches a broken Dockerfile or start script before a deploy.
+      - name: Build AI service image
+        run: docker build -t ppa-ai-service:ci .

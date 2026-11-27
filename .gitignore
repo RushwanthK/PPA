@@ -36,3 +36,6 @@ ai_service/.venv/
 *.patch
 # Test caches (any folder)
 .pytest_cache/
+
+# Local Claude Code settings (per developer, not project code)
+.claude/

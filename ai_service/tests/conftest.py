@@ -5,6 +5,7 @@ container, so running tests never touches the real knowledge base in `ppa_ai`.
 """
 
 import asyncio
+import os
 from urllib.parse import urlsplit, urlunsplit
 
 import asyncpg
@@ -42,13 +43,21 @@ async def _prepare_test_database(admin_dsn: str, test_dsn: str) -> None:
 @pytest.fixture(scope="session")
 def test_dsn() -> str:
     settings = Settings()
+    # Locally, database tests are skipped when the pgvector container is not running. In CI
+    # (GitHub sets CI=true) they must run, so a missing database fails the job instead of
+    # quietly skipping a third of the suite.
+    in_ci = os.environ.get("CI", "").lower() == "true"
     if settings.database_url is None:
+        if in_ci:
+            pytest.fail("AI_DATABASE_URL is not set in CI")
         pytest.skip("AI_DATABASE_URL is not set")
     admin_dsn = settings.database_url.get_secret_value()
     dsn = _with_database(admin_dsn, TEST_DB)
     try:
         asyncio.run(_prepare_test_database(admin_dsn, dsn))
     except (OSError, asyncio.TimeoutError, asyncpg.PostgresError) as exc:
+        if in_ci:
+            pytest.fail(f"pgvector database is not available in CI ({type(exc).__name__})")
         pytest.skip(f"local pgvector database is not available ({type(exc).__name__})")
     return dsn
 

@@ -106,6 +106,7 @@ A separate project-document learning chatbot and the PPA Knowledge Copilot are p
   - Nov 27: measured in a 512 MB / 0.1 CPU Linux container: 45 MB idle, 47 MB peak at about 99 requests/s, about 10 s startup, 261 MB image. Recommended: Render free web service (root `ai_service`) plus the Supabase `ai` schema with a restricted role. Watch: 750 free instance hours a month are shared by Flask and the AI service.
   - Nov 27: AI service deploys like Flask: `ai_service/Dockerfile` + `start.sh` apply AI migrations and sync help notes to Supabase on every deploy. One-time Supabase setup in `ai_service/db/supabase_setup.sql` (restricted login `ppa_ai_app`, owns only the `ai` schema). Rehearsed locally; the migration runner fix found there is in `app/migrate.py`. Exact steps: `ai_service/README.md`, "Deploying: Render (free) + Supabase".
   - Follow-up: the CI workflow does not run the AI service tests yet.
+  - Done (Nov 27): CI job `ai-service` (parallel with the Flask/frontend job) runs the AI service tests against a `pgvector/pgvector:0.8.1-pg17` service container and builds the AI service Docker image. In CI, missing-database tests fail instead of skipping. `.claude/` is git-ignored.
 
 Root `pytest.ini` now has `testpaths = tests`, so Flask's test run does not collect the AI service tests. Details are in `ai_service/README.md`.
 

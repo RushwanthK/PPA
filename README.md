@@ -131,6 +131,8 @@ The workflow in `.github/workflows/ci.yml`:
 - Uses Python 3.12, installs dependencies, compiles the backend and runs `pytest -q`.
 - Uses Node.js 22, runs `npm ci`, runs the frontend tests and then `npm run build`.
 
+*Update, November 27, 2026 (CI):* `.github/workflows/ci.yml` has a second job, **`ai-service`**, running in parallel with the Flask and frontend job. It starts Postgres with pgvector (`pgvector/pgvector:0.8.1-pg17`, the same image as the local container), installs `ai_service/requirements-dev.txt`, runs `compileall` and `pytest`, then builds the Docker image Render deploys, so a broken Dockerfile or `start.sh` is caught before a deploy. No Groq or Gemini key is used: the tests use fake models and a fake embedder. With `CI=true`, the database tests **fail** instead of skipping when the database is missing (`tests/conftest.py`, `tests/test_database_integration.py`), so the suite can't pass with a third of it silently skipped.
+
 Vercel deploys on push at the same time as CI runs, so CI does not block the frontend deploy. It does tell you whether the backend is safe to deploy manually on Render: only deploy after a green run.
 
 ### Security Summary
