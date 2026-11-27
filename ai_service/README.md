@@ -923,6 +923,8 @@ A help answer about a PPA page now ends with buttons such as "Click here: Add a 
 
 *Update, November 27, 2026 (CI):* `.github/workflows/ci.yml` has a second job, **`ai-service`**, running in parallel with the Flask and frontend job. It starts Postgres with pgvector (`pgvector/pgvector:0.8.1-pg17`, the same image as the local container), installs `ai_service/requirements-dev.txt`, runs `compileall` and `pytest`, then builds the Docker image Render deploys, so a broken Dockerfile or `start.sh` is caught before a deploy. No Groq or Gemini key is used: the tests use fake models and a fake embedder. With `CI=true`, the database tests **fail** instead of skipping when the database is missing (`tests/conftest.py`, `tests/test_database_integration.py`), so the suite can't pass with a third of it silently skipped.
 
+*Update, November 27, 2026 (first CI run):* 382 passed, 4 failed in `test_database_integration.py`: no `vector` extension and no `ai` schema in the CI database. Locally, Docker runs `db/init/001_extensions.sql` on the container's first start; a CI service container can't mount it. The `ai-service` job now runs that file with `psql` before the tests (rehearsed on a fresh local database: 386 passed).
+
 ## Deploying: Render (free) + Supabase (step 6, November 27, 2026)
 
 **Same pattern as the Flask backend.** Flask's `Dockerfile` runs `start.sh`, which runs `flask db upgrade` and then starts the app. The AI service's `ai_service/Dockerfile` runs `ai_service/start.sh`, which on every deploy:

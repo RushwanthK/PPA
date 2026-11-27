@@ -126,6 +126,11 @@ jobs:
       - name: Validate AI service
         run: python -m compileall -q app
 
+      # Locally, Docker runs db/init/001_extensions.sql on the container's first start (the vector
+      # extension and the ai schema). A CI service container cannot mount it, so run it here.
+      - name: Prepare AI database (vector extension, ai schema)
+        run: psql "$AI_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/init/001_extensions.sql
+
       # Database tests fail (not skip) here if the pgvector service is missing (tests/conftest.py).
       - name: Run AI service tests
         run: pytest -q
