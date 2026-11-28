@@ -996,6 +996,73 @@ The first copilot should use approved documentation and trusted financial-educat
 - **StrictMode runs state updaters twice.** An updater that sets other state, such as adding a message inside `setMode(prev => …)`, does it twice in development. Keep updaters pure.
 - **Every capability costs tokens.** A richer tool definition, history and rows raised a data question from about 2,000 to about 3,200 input tokens. That is fine for personal use, but it is the first thing to trim if usage grows.
 
+## Agent frameworks: Pydantic, PydanticAI, Google ADK, LangGraph (November 28, 2026)
+
+**Question:** the PPA Assistant uses no agent framework, so when would each of these be the right choice?
+
+They sit at different layers, so ask "which layer am I working on?" rather than "which one wins?". One name clash first: **Pydantic** (data validation, used in PPA) is different from **PydanticAI** (an agent framework from the same team).
+
+### What each one is
+
+| | What it is | Layer |
+|---|---|---|
+| **Pydantic** | A library that checks data against a declared shape: types, allowed values, lengths, ranges. | Data and validation. Used *inside* any of the others. |
+| **PydanticAI** | A light agent framework: a model, tools with Pydantic-checked arguments and replies, and a simple loop. | One agent, kept simple. |
+| **Google ADK** | Google's Agent Development Kit: agents, tools, multi-agent teams, sessions and memory, a developer UI, and deployment on Google Cloud. | Building and running agents, especially Gemini and Google Cloud ones. |
+| **LangGraph** | Runs a workflow as a graph: steps are nodes, arrows are transitions, with shared state, loops, branches and saved checkpoints. | Orchestrating complex or long-running flows. |
+
+### When to use each
+
+**Pydantic: always**, whatever else is used, wherever data crosses a trust boundary:
+
+- an HTTP request body (PPA: `AskRequest` in `ai_service/app/assistant/routes.py`);
+- **a model's tool-call arguments** (PPA: `QueryArgs` and `PickArgs` in `tools.py`: the model's JSON is checked before anything runs);
+- settings from the environment (PPA: `ai_service/app/config.py`).
+
+It decides nothing about how an agent behaves; it makes sure data has the right shape.
+
+**A hand-written loop (what PPA has)** when:
+
+- there is one agent, a few tools and a short, predictable flow (PPA: plan → maybe pick → code writes the answer);
+- you need exact control over tokens, retries and provider fallback;
+- dependencies and memory must stay small (PPA's AI service peaks at 47 MB);
+- you want to learn how agents work underneath.
+
+**PydanticAI** when you want the same simple agent with less boilerplate: typed tools, typed results and a tested loop, with little hidden magic. It is the smallest step up from what PPA does today.
+
+**Google ADK** when:
+
+- you want **several cooperating agents**, e.g. a coordinator handing work to a "transactions agent" and a "help agent";
+- you are building on **Gemini or Vertex AI and Google Cloud** (Agent Engine, Cloud Run) and want deployment, sessions and evaluation ready-made;
+- you want a built-in web UI to trace and replay agent runs while developing.
+
+It is strongest inside Google's ecosystem; other models are possible but not its main path.
+
+**LangGraph** when the *flow itself* is the hard part:
+
+- many steps with **branches and loops** ("draft → check → if it fails, revise → check again");
+- **long-running or resumable** work: save the state, wait for a person to approve, then continue (human in the loop);
+- **durable state across turns**, with checkpoints you can inspect or rewind;
+- many agents passing control in a defined order.
+
+It is model-agnostic and pairs with LangSmith for tracing.
+
+### Quick way to decide
+
+1. Is it only about data shape? **Pydantic**, and nothing else is needed.
+2. One agent, a short flow, and cost or size matter? **A hand-written loop** (or **PydanticAI** for less code).
+3. Several agents, mostly Gemini or Google Cloud? **ADK**.
+4. A complex flow with branches, loops, pauses for approval or resumable state, on any model? **LangGraph**.
+
+### Applied to PPA
+
+- **Today:** Pydantic plus a hand-written loop is the right fit. The flow is at most 2–3 model trips, and the token budget and Render's 512 MB matter. The loop lives in `ai_service/app/assistant/data_agent.py`, and the model calls are plain HTTP in `app/llm/groq.py` (Gemini fallback through the same OpenAI-compatible format).
+- **LangGraph**, if PPA grows features like "plan a monthly budget, ask me to approve each category, then save it", which is multi-step, waits for the user, and has to resume.
+- **ADK**, if the assistant moves to Gemini on Google Cloud, or splits into separate help, data and planning agents coordinated by one.
+- **Pydantic stays in every case:** tool arguments are checked the same way, whichever framework runs the loop.
+- **Interview point:** a framework is a trade. You get ready-made orchestration, tracing and deployment, and you give up some control over prompts, tokens and dependencies. Choose by the shape of the flow, not by popularity.
+- **Possible exercise:** rebuild the My-data agent in ADK (or LangGraph) on a separate branch and compare answers, tokens per question and memory with the current loop. Both would read from the same Flask `GET /transactions/query`, so the comparison is fair.
+
 ## DevOps Progression
 
 The intended progression remains:
